@@ -1,1 +1,1 @@
-# temp
+{"message":"Paste not found or expired"}
