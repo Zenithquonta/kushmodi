@@ -1,0 +1,32 @@
+# Commits new archive frames to GitHub with the deploy key that only the obsync user can read.
+# Started by observatory-archive.service on success; it only runs git and the read-only archive_tool.py.
+[Unit]
+Description=Commit the observatory archive to GitHub
+
+[Service]
+Type=oneshot
+User=obsync
+Group=obsync
+ExecStart=/bin/bash /opt/observatory/repo/deploy/sync.sh
+TimeoutStartSec=600
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/obsync
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=

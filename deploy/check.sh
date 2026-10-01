@@ -22,6 +22,19 @@ for name in live.svg live.png live.json; do
   fi
 done
 
+if id obsync >/dev/null 2>&1; then
+  echo "archive"
+  systemctl is-active --quiet observatory-archive.timer; report $? "archive timer active" "archive timer not active"
+  [[ "$(stat -c %a /var/lib/obsync)" == 700 ]]; report $? "/var/lib/obsync is private (700)" "/var/lib/obsync is not 700"
+  [[ "$(stat -c '%a %U' /var/lib/obsync/.ssh/deploy_key 2>/dev/null)" == "600 obsync" ]]
+  report $? "deploy key is 600 and owned by obsync" "deploy key missing or not 600/obsync"
+  for unit in observatory-archive observatory-sync; do
+    result="$(systemctl show -p Result --value "$unit.service")"
+    ran="$(systemctl show -p ExecMainExitTimestamp --value "$unit.service")"
+    [[ "$result" == success ]]; report $? "$unit: last run ${ran:-never} succeeded" "$unit: $result (journalctl -u $unit.service)"
+  done
+fi
+
 if [[ -n "$HOST" ]]; then
   echo "https://$HOST"
   for name in live.svg live.png live.json; do

@@ -9,8 +9,8 @@ serves exactly three files over HTTPS:
 | `https://<your-host>/live.png` | still image of the same moment (840 px) |
 | `https://<your-host>/live.json` | the scene state (time, season, sun, moon, planets) |
 
-Everything else on the host returns 404. Nothing here touches GitHub yet; the README switches to these URLs in
-Phase 12, and the daily archive sync (Phase 11) adds its own, separately scoped key.
+Everything else on the host returns 404. The live part never touches GitHub; the README switches to these URLs in
+Phase 12. The daily archive (below) is a separate, optional step with its own key.
 
 ## Before you start (once, in the Oracle console)
 
@@ -61,11 +61,49 @@ systemctl list-timers observatory-live.timer                       # next run
 The code never updates itself: someone who could push to the repository must not be able to run code on the server
 without you running `update.sh`.
 
+## Daily archive (Phase 11)
+
+Once a day at 21:10 Mumbai time the server renders that day's two archive frames (solar noon and 21:00, plus any of
+the two days before that were missed) and commits them to `archive/` in this repository. One commit a day, never a
+force-push.
+
+```bash
+sudo bash /opt/observatory/repo/deploy/install-archive.sh     # first run: creates the key and prints it
+```
+
+1. Copy the printed public key (one line starting `ssh-ed25519`).
+2. On GitHub: **Zenithquonta/kushmodi -> Settings -> Deploy keys -> Add deploy key**, title `observatory archive`,
+   paste the key, tick **Allow write access**, save.
+3. Run the same command again. It clones an archive-only copy and enables `observatory-archive.timer`.
+4. Optional: run it now with `sudo systemctl start observatory-archive.service`, then
+   `journalctl -u observatory-sync.service -n 20`. The commit appears on GitHub as *Archive YYYY-MM-DD*.
+
+How it is kept safe:
+
+- The key is created on the server and never leaves it: `/var/lib/obsync/.ssh/deploy_key`, mode 600, owned by a
+  separate user `obsync` (home 700). The renderer user cannot read it.
+- Rendering runs as `observatory` with no network. The sync runs as `obsync`, only runs git and
+  `deploy/archive_tool.py` from the root-owned code checkout, and copies only files named like
+  `2026/2026-12-14-day.webp` that really are WebP (size-capped), plus a merged `index.json`.
+- Its clone checks out `archive/` only (no code), every run starts again from `main`, and it refuses to commit
+  anything outside `archive/` or more than 6 MB at once.
+- GitHub's SSH host keys are taken from `https://api.github.com/meta` over TLS and pinned.
+
+What a deploy key can and cannot do: it works for this repository only, but with write access it can push anything
+to it. If the server is ever compromised, delete the key under Settings -> Deploy keys. `update.sh` shows every
+non-archive change and asks before applying it, so a bad push is never run on the server unseen.
+
+If you later protect `main` so that changes need a pull request, the archive push will be refused; allow the deploy
+key to bypass the rule or keep `main` unprotected. After 2027-09-30 (the end of the configured year) the daily run
+renders nothing and exits cleanly.
+
 ## Remove
 
 ```bash
 sudo systemctl disable --now observatory-live.timer
 sudo rm /etc/systemd/system/observatory-live.{service,timer} && sudo systemctl daemon-reload
 sudo mv /etc/caddy/Caddyfile.orig /etc/caddy/Caddyfile && sudo systemctl reload caddy
-sudo rm -rf /opt/observatory /var/lib/observatory && sudo userdel observatory
+sudo systemctl disable --now observatory-archive.timer 2>/dev/null; sudo rm -f /etc/systemd/system/observatory-{archive,sync}.*
+sudo rm -rf /opt/observatory /var/lib/observatory /var/lib/obsync && sudo userdel observatory; sudo userdel obsync
+# and delete the deploy key on GitHub (Settings -> Deploy keys)
 ```

@@ -177,6 +177,8 @@ def main():
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--date', type=date.fromisoformat, help='one local date (default: today in Mumbai)')
     group.add_argument('--range', nargs=2, type=date.fromisoformat, metavar=('START', 'END'), help='inclusive')
+    group.add_argument('--recent', type=int, metavar='N',
+                       help='today and the N-1 days before it that fall in the year window (catches up missed days)')
     parser.add_argument('--out', default=str(ROOT/'archive'))
     parser.add_argument('--width', type=int)
     parser.add_argument('--force', action='store_true', help='re-render dates that are already archived')
@@ -187,9 +189,19 @@ def main():
         if end < start:
             parser.error('END is before START')
         dates = [start+timedelta(days=i) for i in range((end-start).days+1)]
+    elif args.recent:
+        dates = recent_dates(today_local(config), args.recent, config)
+        if not dates:
+            print('nothing to render: today is outside the year window (archive year complete or not started)')
+            return
     else:
         dates = [args.date or today_local(config)]
     run(dates, args.out, config, args.width, force=args.force)
+
+
+def recent_dates(today, count, config):
+    """Today and the ``count``-1 days before it, oldest first, keeping only dates inside the year window."""
+    return [d for d in (today-timedelta(days=i) for i in range(count-1, -1, -1)) if in_window(d, config)]
 
 
 if __name__ == '__main__':

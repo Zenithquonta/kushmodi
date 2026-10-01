@@ -46,3 +46,9 @@ Use the state machine in `docs/AGENT-LOOP.md`. Preserve completed tasks with evi
 The original photograph, approved concept, background plate, transparent sprite sheet, and square profile artwork are supplied. Retain their originals. Use an image-generation/editing capability for further artistic image edits, and reference the approved image. The Python builder composes independently authored layers into SVG animation and exports frames through FFmpeg/librsvg. Pillow in the quality gate inspects image metadata and sampled frames; it is not the artwork editor.
 
 No unrequested email, Slack, comments to third parties, site deployment, or public announcements are part of this task.
+
+## Daily archive commits on main (Phase 11)
+
+Once the VPS archive sync is installed, `main` receives one commit a day ("Archive YYYY-MM-DD", author
+"Observatory archive", only files under `archive/`). Always fetch and merge `origin/main` before pushing; never
+force-push or rewrite those commits. Do not edit `archive/` by hand: the VPS is its only writer.

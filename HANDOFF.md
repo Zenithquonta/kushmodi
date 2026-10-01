@@ -247,3 +247,9 @@ Use `AGENTS.md` as the entry gate and `docs/AGENT-LOOP.md` for delegation. The u
 The next supervisor should first inspect the already-working scene, rather than remake it. `TASKS.md` is the authority on open work: T00-T08, T13, T14, T02-R1 and T02-R2 are marked done there with review records, and the remaining rows (regression-test review, documentation/reproducibility review, publication and CI verification) carry their own current states there. Likely remaining items are the planned `main` cleanup above, a check of the live 2×2 card table and CI result for the latest commit, and refreshing `assets/MANIFEST.json` after any further asset change.
 
 The endpoint is a verified, visually reviewed profile and complete handoff in the actual repository. Do not present local files as a successful Git push; check `origin` before saying what is published.
+
+## Daily archive commits on main (Phase 11)
+
+Once the VPS archive sync is installed, `main` receives one commit a day ("Archive YYYY-MM-DD", author
+"Observatory archive", only files under `archive/`). Always fetch and merge `origin/main` before pushing; never
+force-push or rewrite those commits. Do not edit `archive/` by hand: the VPS is its only writer.

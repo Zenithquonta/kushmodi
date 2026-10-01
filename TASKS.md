@@ -572,3 +572,18 @@ Commands and outcomes: 136 tests pass; quality gate passes; default scene byte-i
 Not verified: a real install on the VPS (user runs install.sh and check.sh); GitHub image proxy behaviour (Phase 12).
 Decision: approve
 ```
+
+### LO-P11 — Daily git sync (2026-10-01)
+
+```text
+Requested by: user ("yes start phase 11 yourself, don't wait")
+Implemented and reviewed by: supervisor agent (user-selected "Opus 5.5"); design reviewed by the advisor before coding
+Files: deploy/sync.sh, deploy/archive_tool.py, deploy/install-archive.sh, deploy/observatory-archive.service,
+  deploy/observatory-archive.timer, deploy/observatory-sync.service, deploy/update.sh (non-archive diff + confirm),
+  deploy/check.sh (archive section), deploy/README.md, scripts/render_daily.py (--recent), scripts/test_sync.py (7),
+  scripts/test_render_daily.py (+1), scripts/test_deploy.py (+3), AGENTS.md, HANDOFF.md, docs
+Commands and outcomes: 147 tests pass; quality gate passes; shellcheck clean; systemd-analyze verify clean apart from
+  absent server paths; `systemd-analyze calendar '*-*-* 21:10:00 Asia/Kolkata'` -> 15:40 UTC.
+Not verified: GitHub host-key fetch (api.github.com/meta is blocked from this session); a real run on the VPS.
+Decision: approve
+```

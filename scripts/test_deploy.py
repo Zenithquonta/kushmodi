@@ -70,6 +70,32 @@ class DeployFiles(unittest.TestCase):
         self.assertNotIn('git pull', (DEPLOY/'observatory-live.service').read_text())
         self.assertIn('--ff-only', (DEPLOY/'update.sh').read_text())
 
+    def test_archive_render_is_offline_and_hands_over_to_the_sync_user(self):
+        render = (DEPLOY/'observatory-archive.service').read_text()
+        for line in ('User=observatory', 'PrivateNetwork=yes', 'ReadWritePaths=/var/lib/observatory/archive',
+                     'OnSuccess=observatory-sync.service', '--recent 3'):
+            self.assertIn(line, render)
+        sync = (DEPLOY/'observatory-sync.service').read_text()
+        for line in ('User=obsync', 'ReadWritePaths=/var/lib/obsync', 'RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX',
+                     'ProtectSystem=strict', 'NoNewPrivileges=yes'):
+            self.assertIn(line, sync)
+        self.assertNotIn('PrivateNetwork', sync)
+        self.assertIn('OnCalendar=*-*-* 21:10:00 Asia/Kolkata', (DEPLOY/'observatory-archive.timer').read_text())
+
+    def test_sync_never_forces_and_never_runs_code_from_its_clone(self):
+        text = (DEPLOY/'sync.sh').read_text()
+        self.assertNotIn('--force', text)
+        self.assertNotIn('push -f', text)
+        self.assertIn('TOOL="${ARCHIVE_TOOL:-/opt/observatory/repo/deploy/archive_tool.py}"', text)
+        self.assertIn("grep -v '^archive/'", text)
+
+    def test_the_deploy_key_stays_private(self):
+        text = (DEPLOY/'install-archive.sh').read_text()
+        self.assertIn('cat "$KEY.pub"', text)
+        self.assertNotRegex(text, r'cat "\$KEY"\s')
+        self.assertIn('install -d -o obsync -g obsync -m 700', text)
+        self.assertIn("sparse-checkout set --no-cone '/archive/'", text)
+
     def test_install_validates_the_hostname_before_using_it(self):
         text = (DEPLOY/'install.sh').read_text()
         self.assertLess(text.index('[[ "$HOST" =~'), text.index('sed -e "s|__SITE__|$HOST|"'))

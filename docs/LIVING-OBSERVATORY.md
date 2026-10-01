@@ -89,7 +89,8 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 8 Real Moon and planets | done: true Moon position and phase with the lit side towards the sun, moonlight on the ground, Mercury/Venus/Mars/Jupiter/Saturn by magnitude; dome projection; no real star field (no verifiable catalogue); 10 tests |
 | 9 Daily day/night generator | done: `scripts/render_daily.py` (--date/--range), WebP frames at solar noon and 21:00, atomic + locked + idempotent, `archive/index.json`; 7 tests; no frames committed yet |
 | 10 VPS deployment | done in the repo, not yet run on the VPS: compact live SVG (1.7-2.3 MB), `deploy/` (install, update, check, sandboxed systemd timer, Caddy template); 9 tests; Caddy rules verified locally |
-| 11–14 | pending |
+| 11 Daily git sync | done in the repo, not yet run on the VPS: offline archive render at 21:10 IST, separate `obsync` user with a deploy key created on the server, archive-only clone, validated copy + index union, one commit a day; 13 tests incl. a bare-repo end-to-end |
+| 12–14 | pending |
 
 ## Phase 2 implementation notes
 
@@ -290,3 +291,28 @@ amendments that follow from measured facts, open decisions, and phase status.
   takes about 26 s in this container (slower on a small ARM core; the timeout is 240 s).
 - **Not verified:** `install.sh` has not run on a real server; `check.sh` is how the user confirms it. Whether GitHub's
   image proxy accepts a 2 MB SVG and how often it refreshes it is still to be tested with the real URL (Phase 12).
+
+## Phase 11 notes — daily git sync
+
+- `observatory-archive.timer` (21:10 Asia/Kolkata, persistent) starts `observatory-archive.service`: as `observatory`,
+  no network, `render_daily.py --recent 3` into `/var/lib/observatory/archive` (missed days in the last three are
+  filled; outside the year window it renders nothing and exits 0). On success it starts `observatory-sync.service`.
+- `observatory-sync.service` runs `deploy/sync.sh` as `obsync` (home 700, deploy key 600, network limited to
+  IP/Unix sockets). Each run: fetch, reset its branch to `origin/main`, clean `archive/`, stage with
+  `deploy/archive_tool.py` (from the root-owned code checkout; frames must match `YYYY/YYYY-MM-DD-(day|night).webp`,
+  be regular files with WebP magic bytes and at most 2 MB; shared flock on the source; index merged as a union,
+  server wins per date), refuse anything outside `archive/` or over 6 MB, commit once as
+  `Observatory archive <archive@observatory.invalid>`, push; on rejection start again from the new main, at most
+  three times. Never force.
+- The sync clone is partial (`--filter=blob:none`) and sparse (`/archive/` only): no code in its working tree.
+- `deploy/install-archive.sh` is two-pass: it creates the user, the key (on the server) and pinned GitHub host keys
+  (from `https://api.github.com/meta` over TLS; that endpoint is not reachable from the build session, so the
+  cross-check happens on the server), prints the public key with instructions, and on the second run clones and
+  enables the timer. `update.sh` now shows every non-archive change and asks before merging; `check.sh` reports the
+  archive timer, last results and key permissions.
+- Tested here: `scripts/test_sync.py` runs the real `sync.sh` against a local bare repository: first run commits only
+  archive paths with the archive identity, a rerun is a no-op, a rejected push is retried into one clean commit,
+  upstream edits are kept, the index keeps older dates, junk names and non-WebP files stop the sync, the clone holds
+  no code. Unit/config tests, shellcheck and `systemd-analyze verify` pass.
+- Not run on a server yet. Agents working in this repository must fetch and merge before pushing once it is (noted in
+  AGENTS.md and HANDOFF.md).

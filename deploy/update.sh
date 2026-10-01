@@ -8,10 +8,16 @@ die() { echo "update: $*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || die "run it with sudo"
 cd "$APP/repo"
 git fetch --quiet origin main
-echo "==> changes:"; git log --oneline HEAD..origin/main
+echo "==> commits:"; git log --oneline HEAD..origin/main -- . ':!archive'
+echo "==> code and config changes (review these before continuing; archive frames are not listed):"
+git diff --stat HEAD origin/main -- . ':!archive'
+if [[ -t 0 ]]; then read -r -p "Apply these changes? [y/N] " answer; [[ "$answer" == [yY] ]] || die "not updated"; fi
 git merge --quiet --ff-only origin/main || die "main has diverged from the server copy; not updating"
 "$APP/venv/bin/pip" install --quiet -r requirements.txt
 install -m 644 deploy/observatory-live.service deploy/observatory-live.timer /etc/systemd/system/
+if [[ -f /etc/systemd/system/observatory-archive.timer ]]; then
+  install -m 644 deploy/observatory-archive.service deploy/observatory-archive.timer deploy/observatory-sync.service /etc/systemd/system/
+fi
 systemctl daemon-reload
 systemctl start observatory-live.service
 echo "==> updated to $(git log -1 --format='%h %s')"

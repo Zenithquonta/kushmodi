@@ -35,6 +35,11 @@ class Times(unittest.TestCase):
         self.assertEqual(render_daily.today_local(CFG, datetime(2026, 10, 1, 20, 0, tzinfo=timezone.utc)), date(2026, 10, 2))
         self.assertEqual(render_daily.today_local(CFG, datetime(2026, 10, 1, 18, 0, tzinfo=timezone.utc)), date(2026, 10, 1))
 
+    def test_recent_catches_up_inside_the_year_window_only(self):
+        self.assertEqual(render_daily.recent_dates(date(2026, 10, 2), 3, CFG), [date(2026, 10, 1), date(2026, 10, 2)])
+        self.assertEqual(render_daily.recent_dates(date(2027, 10, 1), 3, CFG), [date(2027, 9, 29), date(2027, 9, 30)])
+        self.assertEqual(render_daily.recent_dates(date(2027, 10, 4), 3, CFG), [])   # year complete: nothing, no error
+
     def test_night_frames_are_dark_and_day_frames_are_at_the_highest_sun(self):
         d = date.fromisoformat(CFG['year_window']['start'])
         while d < date.fromisoformat(CFG['year_window']['end']):

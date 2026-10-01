@@ -1,0 +1,38 @@
+# Renders today's archive frames, plus any missed in the two days before, then starts the GitHub sync.
+# Same sandbox as the live renderer: no network, writes only to /var/lib/observatory/archive.
+[Unit]
+Description=Render the observatory's daily archive frames
+OnSuccess=observatory-sync.service
+
+[Service]
+Type=oneshot
+User=observatory
+Group=observatory
+WorkingDirectory=/opt/observatory/repo
+Environment=XDG_CACHE_HOME=/tmp
+ExecStart=/opt/observatory/venv/bin/python /opt/observatory/repo/scripts/render_daily.py --recent 3 --out /var/lib/observatory/archive
+Nice=10
+CPUQuota=80%
+MemoryMax=1G
+TimeoutStartSec=900
+UMask=0022
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/observatory/archive
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
