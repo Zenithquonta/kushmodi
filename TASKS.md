@@ -9,7 +9,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T00 | Recover package into the cloud runtime | done | Package was not present in the container; recovered from user uploads and verified against `MANIFEST.json` (see review record). |
 | T01 | Inspect supplied project and approved references | done | Read the gate and handoff; open reference photo, approved concept, current poster and square image. Record actual runtime/model IDs. Do not rebuild from scratch. |
 | T02 | Review the layered scene and animation geometry | ready_for_review | Background, sprites, galaxy rotation, moon orbits, ship traffic, twinkles, print head, wireframe cube and LEDs exist in the builder. Inspect 0/3/6/12/18/23.9 second frames for clipping, artifacts, title collisions and horizon crossings. |
-| T03 | Review and refine the square profile picture | ready_for_review | `assets/profile-picture.png` exists. Check telescope/galaxy readability at 96px and 192px, and in a circular crop preview. Keep source image unchanged. |
+| T03 | Review and refine the square profile picture | done | `assets/profile-picture.png` exists. Check telescope/galaxy readability at 96px and 192px, and in a circular crop preview. Keep source image unchanged. |
 | T04 | Review README content, employer removal and scope | done | Name is Kush Modi; astronomy-first profile; four expandable sections; AstroFixxer project links; aviation/LEGO/CAD/printing interests; no removed-work references. Existing robotics/education/contact facts are grounded in the original README. |
 | T05 | Verify actual GitHub README interactions | pending | Render on GitHub after push, verify picture fallback, image links, section anchors and details. GitHub README must not depend on JavaScript, image maps or iframe controls. |
 | T06 | Browser-test and refine the local interactive preview | pending | At desktop and mobile widths, check inline SVG playback, pause/resume, keyboard focus, clickable scene areas, mission panels, reduced-motion behavior and no horizontal overflow. Save screenshots/evidence. |
@@ -151,4 +151,21 @@ reviewed T02-R1 builder/tests. New on this branch from main: approved-concept.pn
 reference-telescope.jpg, assets/legacy/*, assets/MANIFEST.json.
 Consequence for T11: the original package is published on main by the user. Reviewed refinements on this
 branch still need to reach main (normal merge, no force-push).
+```
+
+### T03 — profile picture review (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: none (review of existing artifact)
+Attempt: 1
+Files changed: none (assets/profile-picture.png unchanged, sha256 8c45c4c7… == MANIFEST)
+Commands and outcomes: Pillow LANCZOS downscale to 460/192/96/48 px with anti-aliased circular mask.
+Visual evidence: supervisor inspected the circular contact sheet (scratchpad, not committed).
+  460/192: galaxy core and telescope silhouette fully inside the circle; ringed planet partly cut by the rim.
+  96: galaxy, telescope against horizon glow and warm workshop remain readable.
+  48: reads as galaxy + horizon glow; telescope barely discernible (expected at that size).
+Decision: approve
+Reason: focal points survive circular cropping at GitHub's avatar sizes; no edit warranted.
+Remaining caveats: static image; uploading it as the GitHub avatar is a manual account-settings step for the user.
 ```
