@@ -414,3 +414,10 @@ Decision: approve
 Open: CV contacts (kushsmodi@gmail.com, linkedin.com/in/kushsmodi) differ from README contacts; unchanged
   until the user confirms which are correct.
 ```
+
+### T16 follow-up — contact email (2026-10-01)
+
+```text
+User instruction: "use kushmodi@gmail.com". README footer mailto changed from kushmodi13@gmail.com to
+kushmodi@gmail.com. LinkedIn link unchanged (linkedin.com/in/kushmodi) pending user confirmation.
+```
