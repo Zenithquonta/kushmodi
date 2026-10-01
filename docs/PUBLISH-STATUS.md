@@ -1,15 +1,11 @@
 # Publication state
 
-Recorded on 2026-10-01 during preparation of the handoff.
+Updated 2026-10-01.
 
-**Target:** `Zenithquonta/kushmodi`, existing `main` branch and `README.md`.
+**Target:** `Zenithquonta/kushmodi`, branch `main`.
 
-**Confirmed state:** the observatory project and handoff are prepared locally. No remote commit or branch update containing this project has been confirmed. The actual GitHub README must not be described as updated.
+- `316e993` — original observatory package pushed to `main` by the user (CI run 36819742217: success).
+- Reviewed refinements are developed on `ccr-19e1f533-c4auq1` and fast-forwarded to `main` as each part is approved
+  and its assets are regenerated (no force-push). See the git log and `TASKS.md` review records for the exact commits.
 
-Earlier repository metadata reported `push:false`. GitHub's installation settings later showed all-repository selection, but the active connection's writes still returned 403 `Resource not accessible by integration` for both Git Trees and Contents endpoints.
-
-A later attempt to check access and prepare a handoff blob did not complete before the user interrupted it. That incomplete operation is not evidence of successful publication. No branch/ref update was performed in that attempt.
-
-The next runtime should fetch current repository metadata, branch HEAD and README before an authorized write. Do not assume the earlier permission state persists, but do not repeatedly retry a denied request without a relevant access change.
-
-When publication succeeds, replace this status with the actual commit SHA, changed-file inventory, GitHub Actions run URL/result and README rendering evidence. Until then, deliver the package and preserve T11/T12 as blocked.
+Live README rendering was verified from github.com in T05 (see `TASKS.md`).
