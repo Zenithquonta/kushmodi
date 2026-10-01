@@ -528,3 +528,19 @@ Commands and outcomes: 110 tests pass; quality gate passes; default scene byte-i
 Visual evidence: 4x zooms of each object at noon, golden hour, winter night and monsoon morning; 840 px crops.
 Decision: approve
 ```
+
+### LO-P8 — Real Moon and planets (2026-10-01)
+
+```text
+Requested by: user ("yes start phase 8 yourself, don't wait")
+Implemented and reviewed by: supervisor agent (user-selected "Opus 5.5"); approach reviewed by the advisor before coding
+Files: scripts/scene_state.py (planets), scripts/build_animation.py (dome projection, in_view, moon_cells,
+  sun_direction, moon_markup, planets_markup, moonlight, sky_bodies), scripts/test_sky_bodies.py (10 tests), docs
+Findings during the phase: the first projection dropped a high full moon off the canvas (replaced by a dome
+  projection); planets at 2-4 px were invisible at 840 px; the planet visibility curve hid Venus in civil twilight.
+Not done: a real star field (no verifiable catalogue; would contradict the painted sky). Recorded for the user.
+Commands and outcomes: 120 tests pass; quality gate passes; default scene byte-identical to published assets;
+  Chromium vs librsvg on the 27 Oct 2026 full-moon night: worst cell 0 to 8 px; moonlight A/B difference 86.
+Visual evidence: dusk crescent 13 Dec 2026, daytime quarter moon 18 Oct 2026, full moon 27 Oct 2026, 24 Jan 2027.
+Decision: approve
+```

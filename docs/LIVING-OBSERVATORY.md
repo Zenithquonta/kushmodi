@@ -86,7 +86,8 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 5 Mumbai skyline, haze and urban glow | done: fixed pixel skyline on both shores, sea link, night windows and blinking aviation lights, sodium glow on the low sky and cloud undersides; 6 tests |
 | 6 Daily seed variation | done: seeded twinkles, meteors, sky crosses, clouds; 4 checked airliner timings and 4 satellite passes; more meteors on approximate shower peaks; 10 tests |
 | 7 Portfolio objects | done: drone pad and hovering quadcopter, field ground station with telemetry trace, tracker controller on the tripod, PCB and soldering iron on the lantern crate; 8 tests |
-| 8–14 | pending |
+| 8 Real Moon and planets | done: true Moon position and phase with the lit side towards the sun, moonlight on the ground, Mercury/Venus/Mars/Jupiter/Saturn by magnitude; dome projection; no real star field (no verifiable catalogue); 10 tests |
+| 9–14 | pending |
 
 ## Phase 2 implementation notes
 
@@ -221,3 +222,27 @@ amendments that follow from measured facts, open decisions, and phase status.
   columns would have stood still for up to 3 s in a browser). Rain is exempt from the loop-jump check: it shifts by
   exactly one tile of identical streaks, so its wrap is seamless by construction.
 - Browser parity (winter night, 7 times): worst cell 0 to 9 px; 0 differing pixels around the objects.
+
+## Phase 8 notes — real Moon and planets
+
+- `scene_state` adds `astronomy.planets` (Mercury, Venus, Mars, Jupiter, Saturn: altitude, azimuth, magnitude) from
+  astronomy-engine, the same geometric altitudes as the sun and moon.
+- **Projection changed for every sky object, the sun included:** the south-facing dome puts east at the left edge,
+  west at the right and the zenith at the top centre (x = centre + sin(az - 180) x cos(alt) x half width, y linear in
+  altitude up to 90 degrees). The old mapping (x from azimuth only, 60 degrees at the top) dropped a high moon off the
+  canvas. Objects in the northern half below 60 degrees are behind the viewer and are not drawn. Phase 3 sun positions
+  moved slightly.
+- **Moon:** a 2 px pixel disc of radius 18. A cell is lit when, in the moon's frame with x towards the sun,
+  x >= -cos(phase angle) x sqrt(1 - y^2), so the lit share equals the illuminated fraction (tested at 15-degree steps
+  and three directions). The sun direction is the great circle from the moon to the sun, projected, so a waxing
+  crescent after sunset is lit on its lower right. Five fixed maria, a faint earthshine side, a halo by phase. By day
+  it is a pale disc at 0.55 opacity. It sits in its own sky-masked group (so it shows at deep night too), behind
+  trees, clouds and the name.
+- **Moonlight:** a blue lift on the ground of 0.2 x illuminated fraction x sin(moon altitude) at night. A/B at 840 px on
+  the 27 Oct 2026 full moon: ground mean summed-RGB difference 86.
+- **Planets:** steady pixel points (8/6/4 px by magnitude) with a soft glow; each appears when the sun is low enough
+  for its brightness (Venus by -1 degree, Saturn near -12), scaled by the season's night visibility.
+- **Kept as art:** painted stars, Milky Way, the two spiral galaxies and the ringed planet with its moons. No real star
+  catalogue is drawn: none could be verified in this environment, and real constellations turning across the fixed
+  painted sky would show two skies that disagree.
+- Browser parity on the full-moon night (t = 0, 3, 12, 18 s): worst cell 0 to 8 px.

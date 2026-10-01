@@ -126,6 +126,9 @@ def scene_state(when, config=None):
                      'phase_angle_deg': round(illum.phase_angle, 3),  # 0 = full, 180 = new
                      'illuminated_fraction': round(illum.phase_fraction, 4),
                      'waxing': ae.MoonPhase(t) < 180},
+            'planets': {body.name: {'altitude_deg': alt, 'azimuth_deg': az,
+                                    'magnitude': round(ae.Illumination(body, t).mag, 2)}
+                        for body in PLANETS for alt, az in [_horizon(body, t, observer)]},
             'local_sidereal_time_hours': round((ae.SiderealTime(t) + loc['longitude'] / 15) % 24, 4),
             'twilight': twilight_label(sun_alt),
             'sun_times': {  # local ISO timestamps for the local calendar date
@@ -141,6 +144,9 @@ def scene_state(when, config=None):
         'seed_int': seed_int,
         'renderer_version': cfg['renderer_version'],
     }
+
+
+PLANETS = (ae.Body.Mercury, ae.Body.Venus, ae.Body.Mars, ae.Body.Jupiter, ae.Body.Saturn)
 
 
 def meteor_shower_for(d, cfg=None):

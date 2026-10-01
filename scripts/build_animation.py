@@ -1018,7 +1018,7 @@ def layers(t, animated, light=None):
     return (night_group('twinkles', twinkles(t, animated, day['twinkles']), night)+overlay
             +night_group('celestial', celestial(t, animated), night)
             +night_group('satellite', satellite(t, animated, SATELLITE_PATHS[day['satellite']]), night)
-            +weather+city+('' if light is None else light['title'])
+            +('' if light is None else light['bodies'])+weather+city+('' if light is None else light['title'])
             +traffic(t, animated, night, routes_for(day['airliner']))
             +night_group('sky-details', sky_details(t, animated, day['crosses']), night)
             +night_group('meteors', meteors(t, animated, day['meteors'], day['meteor_count']), night)
@@ -1094,10 +1094,22 @@ def night_factor(altitude):
     return 1-_smooth((altitude-CELESTIAL_FADE[0])/(CELESTIAL_FADE[1]-CELESTIAL_FADE[0]))
 
 
+SKY_TOP_ALT = 90           # altitude drawn at y=40 (the zenith), so a high moon or sun stays in the picture
+
+
+OVERHEAD_ALT = 60          # above this altitude an object is in view whatever its azimuth
+
+
 def sun_screen(altitude, azimuth):
-    """Scene position of the sun: the view faces due south, east on the left, 60 degrees up reaches y=40."""
-    x = W/2+(((azimuth-180+180) % 360)-180)/90*(W/2)
-    return x, HORIZON_Y-altitude/60*(HORIZON_Y-40)
+    """Scene position of a sky object on the south-facing dome: east at the left edge, west at the right, the zenith
+    at the top centre (x follows the east-west direction, so objects near the zenith converge on the middle)."""
+    x = W/2+math.sin(math.radians(azimuth-180))*math.cos(math.radians(altitude))*(W/2)
+    return x, HORIZON_Y-altitude/SKY_TOP_ALT*(HORIZON_Y-40)
+
+
+def in_view(altitude, azimuth):
+    """The southern half of the sky, plus everything high overhead; the northern sky is behind the viewer."""
+    return altitude >= OVERHEAD_ALT or 90 <= azimuth % 360 <= 270
 
 
 def lighting(state):
@@ -1107,7 +1119,7 @@ def lighting(state):
     daylight = state['lighting']['daylight']
     top, top_a, horizon, horizon_a = sky_colours(altitude)
     x, y = sun_screen(altitude, azimuth)
-    visible = altitude > SUN_VISIBLE_ALT and -60 <= x <= W+60 and y >= -60
+    visible = altitude > SUN_VISIBLE_ALT and in_view(altitude, azimuth)
     glow = GLOW_PEAK*math.exp(-((altitude-GLOW_CENTRE_ALT)/GLOW_SPREAD)**2)
     light = dict(daylight=daylight, night=round(night_factor(altitude), 4), altitude=altitude, azimuth=azimuth,
                  top=top, top_opacity=top_a, horizon=horizon, horizon_opacity=horizon_a,
@@ -1288,6 +1300,7 @@ def season(light, state):
     light['deck'] = _colour_for(light, (18, 22, 34), (150, 158, 170), (190, 130, 128))
     light['city'] = city_markup(light)+city_glow(light)
     light['weather'] = season_markup(light)
+    light['bodies'] = sky_bodies(light, state)
     return light
 
 
@@ -1752,6 +1765,132 @@ def pcb_bench(t, animated):
 def portfolio(t, animated, light):
     return (f'<g data-portfolio="objects">{drone(t, animated, light)}{ground_station(t, animated, light)}'
             f'{tracker_controller(t, animated, light)}{pcb_bench(t, animated)}</g>')
+
+
+# ---------------------------------------------------------------------------
+# Real Moon and planets (Phase 8), placed with the same south-facing projection as the sun. The painted stars, Milky
+# Way, spiral galaxies and ringed planet stay as art; no real star catalogue is drawn.
+# ---------------------------------------------------------------------------
+MOON_RADIUS = 18
+MOON_CELL = 2
+MOONLIGHT = (.2, (150, 172, 214))         # night ground lift at a full moon overhead, colour
+DAY_MOON = .55                            # opacity of the pale daytime moon
+PLANET_COLOURS = dict(Mercury=(232, 222, 210), Venus=(255, 250, 232), Mars=(255, 156, 112),
+                      Jupiter=(255, 238, 208), Saturn=(240, 222, 172))
+
+
+def _vector(alt, az):
+    a, z = math.radians(alt), math.radians(az)
+    return (math.cos(a)*math.sin(z), math.cos(a)*math.cos(z), math.sin(a))
+
+
+def _horizontal(v):
+    x, y, z = v
+    return math.degrees(math.asin(max(-1, min(1, z)))), math.degrees(math.atan2(x, y)) % 360
+
+
+def sun_direction(moon_alt, moon_az, sun_alt, sun_az, step=4):
+    """Screen-space unit vector from the moon towards the sun along the great circle joining them."""
+    m, s = _vector(moon_alt, moon_az), _vector(sun_alt, sun_az)
+    dot = sum(a*b for a, b in zip(m, s))
+    d = [b-dot*a for a, b in zip(m, s)]
+    norm = math.sqrt(sum(c*c for c in d)) or 1
+    p = [a*math.cos(math.radians(step))+c/norm*math.sin(math.radians(step)) for a, c in zip(m, d)]
+    (x0, y0), (x1, y1) = sun_screen(moon_alt, moon_az), sun_screen(*_horizontal(p))
+    length = math.hypot(x1-x0, y1-y0) or 1
+    return (x1-x0)/length, (y1-y0)/length
+
+
+def moon_cells(phase_angle, direction, radius=MOON_RADIUS, cell=MOON_CELL):
+    """Pixel cells of the disc as (dx, dy, lit, mare) around its centre, lit towards ``direction`` (screen vector).
+
+    In the moon's own frame (x towards the sun) a point is lit when x >= -cos(phase_angle) * sqrt(1 - y^2), so the lit
+    share is (1 + cos(phase_angle)) / 2: all of it at full moon (0 degrees), none at new moon (180 degrees).
+    """
+    ux, uy = direction
+    k = -math.cos(math.radians(phase_angle))
+    mare_rng = random.Random(1969)
+    maria = [(mare_rng.uniform(-.6, .5), mare_rng.uniform(-.6, .5), mare_rng.uniform(.18, .32)) for _ in range(5)]
+    cells = []
+    for gy in range(-radius, radius, cell):
+        for gx in range(-radius, radius, cell):
+            cx, cy = (gx+cell/2)/radius, (gy+cell/2)/radius
+            if cx*cx+cy*cy > 1:
+                continue
+            along, across = cx*ux+cy*uy, -cx*uy+cy*ux
+            lit = along >= k*math.sqrt(max(0, 1-across*across))
+            mare = any((cx-a)**2+(cy-b)**2 < r*r for a, b, r in maria)
+            cells.append((gx, gy, lit, mare))
+    return cells
+
+
+def moon_markup(light, state):
+    moon, sun = state['astronomy']['moon'], state['astronomy']['sun']
+    if moon['altitude_deg'] < -1 or not in_view(moon['altitude_deg'], moon['azimuth_deg']):
+        return ''
+    x, y = (round(v/MOON_CELL)*MOON_CELL for v in sun_screen(moon['altitude_deg'], moon['azimuth_deg']))
+    if not (-MOON_RADIUS < x < W+MOON_RADIUS and y > -MOON_RADIUS):
+        return ''
+    direction = sun_direction(moon['altitude_deg'], moon['azimuth_deg'], sun['altitude_deg'], sun['azimuth_deg'])
+    darkness = 1-light['daylight']
+    bright = _mix((214, 226, 240), (246, 244, 230), darkness)
+    mare = _mix(bright, (120, 128, 140), .35)
+    shadow = (40, 48, 70)
+    paths = {'bright': '', 'mare': '', 'shadow': ''}
+    for gx, gy, lit, is_mare in moon_cells(moon['phase_angle_deg'], direction):
+        key = ('mare' if is_mare else 'bright') if lit else 'shadow'
+        paths[key] += f'M{x+gx} {y+gy}h{MOON_CELL}v{MOON_CELL}h{-MOON_CELL}z'
+    fraction = moon['illuminated_fraction']
+    opacity = DAY_MOON+(1-DAY_MOON)*darkness
+    halo = .5*fraction*darkness
+    out = f'<g data-moon="disc" opacity="{_num(opacity, 4)}">'
+    if halo > .01:
+        out += (f'<circle cx="{x}" cy="{y}" r="{MOON_RADIUS*3.2:.0f}" fill="{_rgb(bright)}" opacity="{_num(halo*.18, 4)}"/>'
+                f'<circle cx="{x}" cy="{y}" r="{MOON_RADIUS*1.8:.0f}" fill="{_rgb(bright)}" opacity="{_num(halo*.3, 4)}"/>')
+    out += (f'<path d="{paths["shadow"]}" fill="{_rgb(shadow)}" opacity="{_num(.35*darkness, 4)}"/>'
+            f'<path d="{paths["bright"]}" fill="{_rgb(bright)}"/><path d="{paths["mare"]}" fill="{_rgb(mare)}"/></g>')
+    return out
+
+
+def planet_visibility(magnitude, sun_altitude):
+    """0..1: a planet appears once the sun is low enough for its brightness (Venus in twilight, Saturn at dark)."""
+    limit = -1-2.2*(magnitude+4.5)   # Venus (-4.5) once the sun is 1 degree down, Saturn (+0.7) near -12
+    return _smooth((limit-sun_altitude)/3)
+
+
+def planets_markup(light, state):
+    sun_alt = state['astronomy']['sun']['altitude_deg']
+    visibility = VISIBILITY_FLOOR+(1-VISIBILITY_FLOOR)*light['env']['night_visibility']
+    out = ''
+    for name, body in state['astronomy'].get('planets', {}).items():
+        seen = planet_visibility(body['magnitude'], sun_alt)*visibility
+        if body['altitude_deg'] <= 0 or seen < .02 or not in_view(body['altitude_deg'], body['azimuth_deg']):
+            continue
+        x, y = (round(v) for v in sun_screen(body['altitude_deg'], body['azimuth_deg']))
+        if not (0 < x < W and y > 0):
+            continue
+        size = 8 if body['magnitude'] < -3 else 6 if body['magnitude'] < -1 else 4   # readable at 840 px
+        colour = _rgb(PLANET_COLOURS[name])
+        out += (f'<g data-planet="{name.lower()}" opacity="{_num(seen, 4)}">'
+                f'<circle cx="{x}" cy="{y}" r="{size*1.6:.1f}" fill="{colour}" opacity=".22"/>'
+                f'<rect x="{x-size/2:g}" y="{y-size/2:g}" width="{size}" height="{size}" fill="{colour}"/></g>')
+    return out
+
+
+def moonlight(light, state):
+    moon = state['astronomy']['moon']
+    lift = MOONLIGHT[0]*moon['illuminated_fraction']*max(0, math.sin(math.radians(moon['altitude_deg'])))*(1-light['daylight'])
+    if lift < .005:
+        return ''
+    return (f'<rect data-moon="light" width="{W}" height="{H}" fill="{_rgb(MOONLIGHT[1])}" '
+            f'opacity="{_num(lift, 4)}" mask="url(#ground-mask)"/>')
+
+
+def sky_bodies(light, state):
+    """Real Moon and planets in front of the painted sky, behind the trees, clouds and the name."""
+    inner = planets_markup(light, state)+moon_markup(light, state)
+    sky = f'<g data-sky="bodies" mask="url(#sky-mask)">{inner}</g>' if inner else ''
+    return sky+moonlight(light, state)
 
 
 def feather_defs():
