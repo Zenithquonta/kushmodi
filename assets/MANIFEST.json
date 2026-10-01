@@ -83,8 +83,8 @@
     },
     {
       "path": "assets/observatory-poster.png",
-      "bytes": 1352399,
-      "sha256": "39051d6b8acde923fbe6494607681fa536460f10a96aee7079bcc96a590797a5",
+      "bytes": 1352055,
+      "sha256": "1707f0559297d9553973c7390c040eea637c814218f7367b78fbd0f04318df85",
       "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
       "width": 1000,
       "height": 563,
@@ -93,8 +93,8 @@
     },
     {
       "path": "assets/observatory.gif",
-      "bytes": 11333450,
-      "sha256": "f6e35e36ae3cef1c4d2217103ab90d7bcaae1c75313e8453f60ead9491ba6013",
+      "bytes": 11336782,
+      "sha256": "15875b7bc3f188ebf3a9f1c809869f6ec045924c05c39bb97da3198fe2c26763",
       "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
       "width": 1000,
       "height": 563,
@@ -106,18 +106,18 @@
     },
     {
       "path": "assets/observatory.svg",
-      "bytes": 5881320,
-      "sha256": "6bc87c4a5490a87d1ab471e31d85fa143e5662cdc19a2c1a79c65bd3b0f0ce3c",
+      "bytes": 5917456,
+      "sha256": "dacd7ede653c2636fcbd65e93339624fcfa92c7479c938dbb6a7b726f51e7600",
       "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
       "width": "1672",
       "height": "941",
       "viewBox": "0 0 1672 941",
-      "animation_elements": 102
+      "animation_elements": 206
     },
     {
       "path": "assets/poster.svg",
-      "bytes": 5850930,
-      "sha256": "5b62bc796f55f441c91213e368e05ba5b4f1b0bcbda53ca4309195b873f84308",
+      "bytes": 5856120,
+      "sha256": "4518149707196fac23c42223aa176e8ef335b94a0cc269f3c1b800b19fba689e",
       "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
       "width": "1672",
       "height": "941",
