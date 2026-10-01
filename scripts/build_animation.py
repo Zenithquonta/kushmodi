@@ -453,7 +453,7 @@ STROBE_PERIOD = 1.5  # divides the 24 s master cycle exactly (16 double flashes 
 STROBE_KEYS = [(0, 0), (.02, 0), (.1, 1), (.18, 0), (.22, 0), (.3, 1), (.38, 0), (STROBE_PERIOD, 0)]
 
 
-def nav_lights(t, animated):
+def nav_lights(t, animated, night=None):
     strobe = Track([v for _, v in STROBE_KEYS], [s/STROBE_PERIOD for s, _ in STROBE_KEYS], STROBE_PERIOD)
     parts = []
     for (x, y), colour, glow, phase in ((NAV_RED, '#ff3b3b', '#ff7070', 0), (NAV_GREEN, '#38ff7a', '#8dffb2', .5)):
@@ -465,7 +465,7 @@ def nav_lights(t, animated):
     parts.append(f'<g opacity="{strobe.value_text(t)}">{strobe.smil("opacity") if animated else ""}'
                  f'<rect x="{_num(x-4)}" y="{_num(y-4)}" width="8" height="8" fill="#ffffff" opacity=".28"/>'
                  f'<rect x="{_num(x-1.5)}" y="{_num(y-1.5)}" width="3" height="3" fill="#ffffff"/></g>')
-    return f'<g data-lights="airplane">{"".join(parts)}</g>'
+    return night_group('nav-lights', f'<g data-lights="airplane">{"".join(parts)}</g>', night)
 
 
 def _warp_streaks(warp, t, animated):
@@ -515,7 +515,7 @@ def _ship_markup(route, t, animated):
     return f'<g opacity="{ship.value_text(t)}">{ship.smil("opacity") if animated else ""}{body}</g>'
 
 
-def traffic(t, animated):
+def traffic(t, animated, night=None):
     parts = []
     for route, state in zip(ROUTES, traffic_state(t)):
         motion = fade = ''
@@ -538,7 +538,7 @@ def traffic(t, animated):
             if route['warp']['flash']:
                 parts.append(_warp_flash(route['warp'], t, animated))
         if route['sprite'] == 'airplane':
-            parts.append(nav_lights(t, animated))
+            parts.append(nav_lights(t, animated, night))
         parts.append('</g></g>')
     return ''.join(parts)
 
@@ -963,9 +963,150 @@ def satellite(t, animated):
             '<circle r="4" fill="#d9f4ff" opacity=".2"/><rect x="-1.5" y="-1.5" width="3" height="3" fill="#e9f8ff"/></g></g>')
 
 
-def layers(t, animated):
-    return (twinkles(t,animated)+celestial(t,animated)+satellite(t,animated)+traffic(t,animated)
-            +sky_details(t,animated)+meteors(t,animated)+workshop(t,animated))
+def night_group(name, markup, night):
+    """Celestial markup that fades with the night factor; unchanged when no lighting is in force."""
+    return markup if night is None else f'<g data-night="{name}" opacity="{_num(night, 4)}">{markup}</g>'
+
+
+def layers(t, animated, light=None):
+    """All animated layers.  ``light`` (see ``lighting``) adds the sky overlay and fades the celestial ones."""
+    night = None if light is None else light['night']
+    overlay = '' if light is None else light['markup']
+    return (night_group('twinkles', twinkles(t, animated), night)+overlay
+            +night_group('celestial', celestial(t, animated), night)+night_group('satellite', satellite(t, animated), night)
+            +traffic(t, animated, night)+night_group('sky-details', sky_details(t, animated), night)
+            +night_group('meteors', meteors(t, animated), night)+workshop(t, animated))
+
+
+# ---------------------------------------------------------------------------
+# Day/night lighting (Phase 3): continuous functions of the sun's altitude and azimuth.
+# ---------------------------------------------------------------------------
+# The night plate is the only artwork, so a state-dependent overlay is drawn over it: a sky gradient clipped to the
+# region above SKYLINE (so trees, telescope and roof occlude it), a warm glow under the sun, a pixel-styled sun, and a
+# faint uniform lift on everything below SKYLINE.  This is an interim tint until deliberate day art exists.
+HORIZON_Y = 690            # the plate's distant horizon (mountain and city line)
+SUN_RADIUS = 22
+SUN_VISIBLE_ALT = -2       # degrees; below this the disc is never drawn
+SUN_PIXEL = 4              # sun centre and rings snap to this grid for a pixel-art look
+FOREGROUND_LIFT = (.34, (170, 190, 225))   # opacity at full daylight, colour
+TITLE_CARVE_PAD, TITLE_CARVE_BLUR = 24, 16
+SKY_TITLE_KEEP = .22       # fraction of the sky overlay left over the name block so the lettering stays readable
+# (sun altitude, top rgb, top opacity, horizon rgb, horizon opacity), interpolated linearly in between.  Both
+# opacities never decrease as the sun climbs.  Nautical dusk lifts only the low sky; civil twilight deepens the blue
+# above; by +12 degrees the overlay is opaque, which hides the painted stars and Milky Way.
+SKY_KEYS = [(-18, (8, 14, 40), 0, (12, 30, 70), 0),
+            (-12, (14, 26, 78), .04, (30, 64, 140), .38),
+            (-6, (26, 52, 128), .32, (74, 104, 176), .78),
+            (-.8, (54, 98, 186), .74, (190, 150, 160), .92),
+            (4, (68, 124, 210), .92, (238, 208, 178), .98),
+            (12, (66, 138, 226), 1, (166, 208, 246), 1),
+            (30, (52, 124, 220), 1, (150, 200, 245), 1)]
+GLOW_CENTRE_ALT, GLOW_SPREAD, GLOW_PEAK = -1.0, 5.5, .85   # warm band: strongest at sunrise/sunset
+GLOW_RADII = (860, 300)
+
+
+def _mix(a, b, f):
+    return tuple(x+(y-x)*f for x, y in zip(a, b)) if isinstance(a, tuple) else a+(b-a)*f
+
+
+def _smooth(x):
+    x = min(1.0, max(0.0, x))
+    return x*x*(3-2*x)
+
+
+def sky_colours(altitude):
+    """(top rgb, top opacity, horizon rgb, horizon opacity) for a sun altitude in degrees."""
+    keys = SKY_KEYS
+    if altitude <= keys[0][0]:
+        return keys[0][1:]
+    for lo, hi in zip(keys, keys[1:]):
+        if altitude <= hi[0]:
+            f = (altitude-lo[0])/(hi[0]-lo[0])
+            return tuple(_mix(a, b, f) for a, b in zip(lo[1:], hi[1:]))
+    return keys[-1][1:]
+
+
+def sun_screen(altitude, azimuth):
+    """Scene position of the sun: the view faces due south, east on the left, 60 degrees up reaches y=40."""
+    x = W/2+(((azimuth-180+180) % 360)-180)/90*(W/2)
+    return x, HORIZON_Y-altitude/60*(HORIZON_Y-40)
+
+
+def lighting(state):
+    """Everything the renderer needs for one moment, from a SceneState dict (computed once per render)."""
+    sun = state['astronomy']['sun']
+    altitude, azimuth = sun['altitude_deg'], sun['azimuth_deg']
+    daylight = state['lighting']['daylight']
+    top, top_a, horizon, horizon_a = sky_colours(altitude)
+    x, y = sun_screen(altitude, azimuth)
+    visible = altitude > SUN_VISIBLE_ALT and -60 <= x <= W+60 and y >= -60
+    glow = GLOW_PEAK*math.exp(-((altitude-GLOW_CENTRE_ALT)/GLOW_SPREAD)**2)
+    light = dict(daylight=daylight, night=round(1-daylight, 4), altitude=altitude, azimuth=azimuth,
+                 top=top, top_opacity=top_a, horizon=horizon, horizon_opacity=horizon_a,
+                 glow=glow, glow_x=min(max(x, -400), W+400), sun=(x, y) if visible else None,
+                 foreground=FOREGROUND_LIFT[0]*daylight)
+    light['markup'] = lighting_markup(light)
+    return light
+
+
+def _rgb(c):
+    return 'rgb(%d,%d,%d)' % tuple(round(v) for v in c)
+
+
+def _sky_polygon():
+    return 'M'+'L'.join(f'{x} {y}' for x, y in [(0, 0), (W, 0)]+SKYLINE[::-1])+'Z'
+
+
+def lighting_defs(light):
+    """Gradients, clip paths and the name-block carve; their ids are unique, so layers() may repeat the markup."""
+    top, horizon = light['top'], light['horizon']
+    stops = ''.join(f'<stop offset="{o}" stop-color="{_rgb(_mix(top, horizon, o**2.2))}" '
+                    f'stop-opacity="{_num(_mix(light["top_opacity"], light["horizon_opacity"], o**2.2), 3)}"/>'
+                    for o in (0, .35, .65, .85, 1))
+    warm = _rgb(_mix((255, 112, 118), (255, 196, 122), _smooth((light['altitude']+3)/8)))
+    x0, y0, x1, y1 = TEXT_RECT
+    carve = (x0-TITLE_CARVE_PAD, y0-TITLE_CARVE_PAD, x1-x0+2*TITLE_CARVE_PAD, y1-y0+2*TITLE_CARVE_PAD)
+    pad = 3*TITLE_CARVE_BLUR
+    masks = ''.join(
+        f'<mask id="{name}" maskUnits="userSpaceOnUse" x="0" y="0" width="{W}" height="{H}">'
+        f'<rect width="{W}" height="{H}" fill="#fff"/><rect x="{carve[0]}" y="{carve[1]}" width="{carve[2]}" height="{carve[3]}" '
+        f'fill="#000" opacity="{1-keep}" filter="url(#title-blur)"/></mask>'
+        for name, keep in (('title-carve-sky', SKY_TITLE_KEEP), ('title-carve-sun', 0)))
+    return (f'<linearGradient id="sky-grad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="{HORIZON_Y}">{stops}</linearGradient>'
+            f'<radialGradient id="sky-glow"><stop offset="0" stop-color="{warm}" stop-opacity="1"/>'
+            f'<stop offset=".4" stop-color="{warm}" stop-opacity=".55"/><stop offset="1" stop-color="{warm}" stop-opacity="0"/></radialGradient>'
+            f'<clipPath id="sky-clip"><path d="{_sky_polygon()}"/></clipPath>'
+            f'<filter id="title-blur" filterUnits="userSpaceOnUse" x="{carve[0]-pad}" y="{carve[1]-pad}" width="{carve[2]+2*pad}" height="{carve[3]+2*pad}">'
+            f'<feGaussianBlur stdDeviation="{TITLE_CARVE_BLUR}"/></filter>{masks}')
+
+
+def sun_markup(light):
+    x, y = (round(v/SUN_PIXEL)*SUN_PIXEL for v in light['sun'])
+    colour = _rgb(_mix((255, 150, 70), (255, 246, 206), _smooth((light['altitude']-2)/22)))
+    halo = ''.join(f'<circle cx="{x}" cy="{y}" r="{r}" fill="{colour}" opacity="{o}"/>'
+                   for r, o in ((92, .10), (68, .14), (48, .2), (34, .32)))
+    return (f'<g data-sun="disc" mask="url(#title-carve-sun)">{halo}'
+            f'<circle cx="{x}" cy="{y}" r="{SUN_RADIUS}" fill="{colour}"/>'
+            f'<circle cx="{x}" cy="{y}" r="{SUN_RADIUS-8}" fill="#fffbe6" opacity=".7"/></g>')
+
+
+def lighting_markup(light):
+    """Sky overlay (clipped to the sky), sun, and foreground lift, drawn between the plate and the moving art."""
+    gx, gr = light['glow_x'], GLOW_RADII
+    sky = ''
+    if light['top_opacity'] > 0 or light['horizon_opacity'] > 0:
+        sky += f'<g data-light="sky" mask="url(#title-carve-sky)"><rect width="{W}" height="{HORIZON_Y+8}" fill="url(#sky-grad)"/></g>'
+    if light['glow'] > .005:
+        sky += (f'<g mask="url(#title-carve-sky)"><ellipse data-light="glow" cx="{_num(gx, 1)}" cy="{HORIZON_Y+30}" rx="{gr[0]}" ry="{gr[1]}" '
+                f'fill="url(#sky-glow)" opacity="{_num(light["glow"], 4)}"/></g>')
+    if light['sun']:
+        sky += sun_markup(light)
+    out = f'<g data-light="sky-group" clip-path="url(#sky-clip)">{sky}</g>' if sky else ''
+    if light['foreground'] > .001:
+        edge = 'M'+'L'.join(f'{x} {y}' for x, y in SKYLINE+[(W, H), (0, H)])+'Z'
+        out += (f'<path data-light="foreground" d="{edge}" fill="{_rgb(FOREGROUND_LIFT[1])}" '
+                f'opacity="{_num(light["foreground"], 4)}"/>')
+    return out
 
 
 def feather_defs():
@@ -983,19 +1124,21 @@ def feather_defs():
             f'<rect x="{x}" y="{top}" width="{w}" height="{y+h-top}" fill="url(#cube-fade)" filter="url(#cube-blur)"/></mask>')
 
 
-def scene(t=0, animated=False, embedded=True):
+def scene(t=0, animated=False, embedded=True, state=None):
     parts=[f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" aria-labelledby="title desc">',
            '<title id="title">Kush Modi — building toward the unexplored</title>',
            '<desc id="desc">Pixel observatory based on Kush\'s telescope photograph. Slowly turning galaxies, twinkling stars, shooting stars, a satellite, planetary moons, exploration spacecraft, an airplane and a working maker workshop.</desc>',
            '<defs>',
            f'<image id="atlas" width="1536" height="1024" href="{ATLAS}" xlink:href="{ATLAS}"/>']
-    parts+=[feather_defs(),twinkle_defs(),meteor_defs(),'</defs>',
+    light=None if state is None else lighting(state)
+    parts+=[feather_defs(),twinkle_defs(),meteor_defs()]+([] if light is None else [lighting_defs(light)])
+    parts+=['</defs>',
             f'<image id="plate" width="{W}" height="{H}" href="{BACKGROUND}" xlink:href="{BACKGROUND}"/>']
     if animated:
         parts.append('<style>.still{display:none}@media(prefers-reduced-motion:reduce){.moving{display:none}.still{display:inline}}</style>')
-        parts.append('<g class="moving">'+layers(t,True)+'</g><g class="still">'+layers(0,False)+'</g>')
+        parts.append('<g class="moving">'+layers(t,True,light)+'</g><g class="still">'+layers(0,False,light)+'</g>')
     else:
-        parts.append(layers(t,False))
+        parts.append(layers(t,False,light))
     parts.append('</svg>')
     # SVG2 href and xlink fallback need only one copy of raster data.
     result=''.join(parts)
