@@ -11,7 +11,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T02 | Review the layered scene and animation geometry | ready_for_review | Background, sprites, galaxy rotation, moon orbits, ship traffic, twinkles, print head, wireframe cube and LEDs exist in the builder. Inspect 0/3/6/12/18/23.9 second frames for clipping, artifacts, title collisions and horizon crossings. |
 | T03 | Review and refine the square profile picture | done | `assets/profile-picture.png` exists. Check telescope/galaxy readability at 96px and 192px, and in a circular crop preview. Keep source image unchanged. |
 | T04 | Review README content, employer removal and scope | done | Name is Kush Modi; astronomy-first profile; four expandable sections; AstroFixxer project links; aviation/LEGO/CAD/printing interests; no removed-work references. Existing robotics/education/contact facts are grounded in the original README. |
-| T05 | Verify actual GitHub README interactions | pending | Render on GitHub after push, verify picture fallback, image links, section anchors and details. GitHub README must not depend on JavaScript, image maps or iframe controls. |
+| T05 | Verify actual GitHub README interactions | done | Render on GitHub after push, verify picture fallback, image links, section anchors and details. GitHub README must not depend on JavaScript, image maps or iframe controls. |
 | T06 | Browser-test and refine the local interactive preview | pending | At desktop and mobile widths, check inline SVG playback, pause/resume, keyboard focus, clickable scene areas, mission panels, reduced-motion behavior and no horizontal overflow. Save screenshots/evidence. |
 | T07 | Align SVG and GIF animation timings | pending | The same scene functions render both versions, but some workshop SMIL motion interpolates linearly while raster frames use sine. Review resulting differences and make them intentional or identical. Compare selected times and the wrap at 24 seconds. |
 | T08 | Optimize size without damaging the approved look | pending | Current GIF: 1000×563, 240 frames at 10fps, 24s, 11,744,470 bytes. Review 840/1000px and 8/10/12fps tradeoffs if needed. Prefer one accepted version, no noisy blur or flickering palettes. Document final output dimensions, bytes, duration and tool versions. |
@@ -168,4 +168,30 @@ Visual evidence: supervisor inspected the circular contact sheet (scratchpad, no
 Decision: approve
 Reason: focal points survive circular cropping at GitHub's avatar sizes; no edit warranted.
 Remaining caveats: static image; uploading it as the GitHub avatar is a manual account-settings step for the user.
+```
+
+### T05 — live GitHub README verification (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: delegated coder agent (user-selected "Sonnet 5.5")
+Attempt: 1
+Target: https://github.com/Zenithquonta/kushmodi main @ 316e993 (README identical to this branch)
+Files changed: none
+Commands and outcomes:
+  - github.com page HTML fetched (200). In article.markdown-body: <picture> (wrapped in <themed-picture>),
+    <source media="(prefers-reduced-motion: reduce)">, GIF <img>, 3 linked card <img>s, 4 <details>,
+    anchors user-content-{observatory,flight-deck,fab-lab,mission-log}; 7/7 hrefs match; no script/iframe/map.
+  - Images via /raw/main -> 302 -> raw.githubusercontent.com: GIF 200, 11,744,470 bytes, sha256 b50e46da…
+    (served as application/octet-stream; Chromium decodes it, 1000x563); poster PNG and 3 card SVGs 200.
+  - Chromium (Playwright 1.56.1, real GitHub HTML + bytes): currentSrc = GIF normally, = poster PNG under
+    emulated prefers-reduced-motion:reduce, at 1280 and 390 widths. <summary> click opens <details>.
+    Article width 390 == viewport at mobile: no horizontal overflow.
+Visual evidence: supervisor inspected desktop-A-top.png and mobile-A-top.png (scratchpad/t05).
+Decision: approve
+Reason: every README interaction GitHub supports is present and works; none relies on JavaScript.
+Remaining caveats: github.githubassets.com is blocked by the sandbox egress policy, so GitHub's own CSS/JS
+  (short-hash -> user-content- scrolling, dark theme) was not exercised live; anchor ids verified instead.
+  On ~390px phones the three cards render ~92x35px and their text is unreadable; the text nav row above
+  them provides the same links. GIF content-type is octet-stream (GitHub raw behaviour).
 ```
