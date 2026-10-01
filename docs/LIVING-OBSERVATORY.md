@@ -82,7 +82,8 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 2 SceneState (time, season, astronomy, seed) | done: `scripts/scene_state.py`, `config/observatory.json`, 22 tests; supervisor-verified sunset 14 Dec 2026 18:02 IST independently |
 | 3 Day/night lighting on existing art | done: optional `state` path in the renderer, pixel-exact plate masks, `scripts/render_live.py`, 11 tests |
 | 3b Day and golden-hour foreground art | done: `scripts/build_day_art.py`, `assets/observatory-day.png` and `-golden.png`, 6 tests |
-| 4–14 | pending |
+| 4 Six-season visuals | done: dry vegetation plate, pixel clouds, monsoon overcast and seeded showers, wet ground and puddles, horizon haze, night visibility; 9 tests |
+| 5–14 | pending |
 
 ## Phase 2 implementation notes
 
@@ -132,3 +133,23 @@ amendments that follow from measured facts, open decisions, and phase status.
   through a sunlit sky.
 - Size: a live SVG with a day plate is 8.7 MB as PNG. The WebP re-encode (amendment 2) is part of Phase 10.
 - This is a derived relight, not a new painting; a hand-painted day plate can replace the files without code changes.
+
+## Phase 4 notes — six seasons
+
+- Every effect is a continuous function of `SceneState['environment']`, never of the season's name, so seasons blend
+  day by day (tested: overcast, haze and dryness change by less than 0.05 a day).
+- **Greenery:** `assets/observatory-dry.png` (vegetation only, straw hue, built by `build_day_art.py`) lies over the
+  day plate with opacity 0.9 x smoothstep((0.85 - greenery) / 0.6). Grishma and Shishira read dry, Varsha and Sharad green.
+- **Cloud density:** pixel clouds on a 6 px grid, one path per tone (lit top, body, shadowed base) so cells merge without
+  seams. Count and size grow with density; positions come from the daily seed; the name block stays clear. Colours
+  follow daylight and the sunrise/sunset glow; rain clouds are darker than the grey overcast deck that starts at
+  density 0.6. Clouds are masked by the plate's sky mask, so trees and the roof stay in front.
+- **Rain:** likely only above cloud density 0.62; the seed decides which hours shower (chance rises with ground
+  wetness). Two layers of streaks loop seamlessly (0.75 s and 1 s periods divide the 24 s cycle) and are masked out
+  under the workshop roof.
+- **Ground wetness:** darkened ground and three puddles on the earth path that reflect the sky colour.
+- **Haze:** a horizon gradient on the sky, dusty in Grishma, blue-grey otherwise.
+- **Night visibility:** stars and sky art keep 0.3 + 0.7 x night_visibility; a night murk veil dims the painted Milky Way.
+- The redrawn name is now drawn above clouds, haze and overcast.
+- Browser parity (monsoon rain at 09:00 and Grishma noon, t = 0, 3 and 12 s): worst cell 0 to 10 px (limit 150).
+- Implemented by the supervisor agent at the user's request ("start phase 4 yourself, don't wait").

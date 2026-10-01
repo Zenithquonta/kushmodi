@@ -9,7 +9,7 @@
 | `assets/reference-telescope.jpg` | User-uploaded source photograph | Preserve; foundation of the personal scene, not a human portrait |
 | `assets/approved-concept.png` | User-approved still banner | Preserve as the visual baseline |
 | `assets/observatory-background.png` | Edited stable scene plate | Typography, telescope, foreground and workshop stay here |
-| `assets/observatory-day.png`, `assets/observatory-golden.png` | Day and golden-hour ground plates derived from the night plate by `scripts/build_day_art.py` | RGBA, ground only; used by the live renderer, not by the published GIF |
+| `assets/observatory-day.png`, `assets/observatory-golden.png`, `assets/observatory-dry.png` | Day, golden-hour and dry-season (vegetation only) ground plates derived from the night plate by `scripts/build_day_art.py` | RGBA, ground only; used by the live renderer, not by the published GIF |
 | `assets/space-sprites.png` | Transparent moving-object atlas | Galaxy, planet, exploration ship, fighter, plane and moon |
 | `assets/profile-picture.png` | Square matching pixel profile image, 1254×1254 | Static image; reviewed and unchanged (T03, see below) |
 | `assets/observatory.svg` | Self-contained animated scene, 1672×941 | All motion is declarative SVG (504 animation elements); no JavaScript dependency |

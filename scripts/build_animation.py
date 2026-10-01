@@ -972,10 +972,12 @@ def layers(t, animated, light=None):
     """All animated layers.  ``light`` (see ``lighting``) adds the sky overlay and fades the celestial ones."""
     night = None if light is None else light['night']
     overlay = '' if light is None else light['markup']
+    weather = '' if light is None else light['weather']
+    showers = '' if light is None else rain(t, animated, light)
     return (night_group('twinkles', twinkles(t, animated), night)+overlay
             +night_group('celestial', celestial(t, animated), night)+night_group('satellite', satellite(t, animated), night)
-            +traffic(t, animated, night)+night_group('sky-details', sky_details(t, animated), night)
-            +night_group('meteors', meteors(t, animated), night)+workshop(t, animated))
+            +weather+('' if light is None else light['title'])+traffic(t, animated, night)+night_group('sky-details', sky_details(t, animated), night)
+            +night_group('meteors', meteors(t, animated), night)+showers+workshop(t, animated))
 
 
 # ---------------------------------------------------------------------------
@@ -985,6 +987,7 @@ def layers(t, animated, light=None):
 # region above SKYLINE (so trees, telescope and roof occlude it), a warm glow under the sun, a pixel-styled sun, and a
 # faint uniform lift on everything below SKYLINE.  This is an interim tint until deliberate day art exists.
 HORIZON_Y = 690            # the plate's distant horizon (mountain and city line)
+FAR_BAND = [(330, 655), (1190, 655), (1190, 742), (1040, 742), (1040, 798), (865, 798), (865, 742), (330, 742)]
 SUN_RADIUS = 22
 SUN_VISIBLE_ALT = -2       # degrees; below this the disc is never drawn
 SUN_PIXEL = 4              # sun centre and rings snap to this grid for a pixel-art look
@@ -1065,7 +1068,8 @@ def lighting(state):
                  glow=glow, glow_x=min(max(x, -400), W+400), sun=(x, y) if visible else None,
                  plates={'golden': _keyed(GOLDEN_KEYS, altitude), 'day': _keyed(DAY_KEYS, altitude)})
     light['foreground'] = FOREGROUND_LIFT[0]*daylight*(1-max(light['plates'].values()))
-    light['markup'] = lighting_markup(light)
+    season(light, state)
+    light['markup'], light['title'] = lighting_markup(light)
     return light
 
 
@@ -1152,7 +1156,7 @@ def lighting_defs(light):
                      f'xlink:href="{day_plate(name)}"/>' for name, opacity in light['plates'].items() if opacity > 0)
     masks = ''.join(f'<mask id="{name}-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="{W}" height="{H}">'
                     f'<image width="{W}" height="{H}" href="{uri}" xlink:href="{uri}"/></mask>'
-                    for name, uri in plate_masks().items())
+                    for name, uri in plate_masks().items())+season_defs(light)
     return (f'<linearGradient id="sky-grad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="{HORIZON_Y}">{stops}</linearGradient>'
             f'<radialGradient id="sky-glow"><stop offset="0" stop-color="{warm}" stop-opacity="1"/>'
             f'<stop offset=".4" stop-color="{warm}" stop-opacity=".55"/><stop offset="1" stop-color="{warm}" stop-opacity="0"/></radialGradient>'
@@ -1170,7 +1174,7 @@ def sun_markup(light):
 
 
 def lighting_markup(light):
-    """Sky overlay (clipped to the sky), sun, and foreground lift, drawn between the plate and the moving art."""
+    """(Sky overlay with sun, day plates and foreground lift; the redrawn name), drawn between the plate and the moving art."""
     gx, gr = light['glow_x'], GLOW_RADII
     sky = ''
     if light['top_opacity'] > 0 or light['horizon_opacity'] > 0:
@@ -1180,15 +1184,16 @@ def lighting_markup(light):
                 f'fill="url(#sky-glow)" opacity="{_num(light["glow"], 4)}"/>')
     if light['sun']:
         sky += sun_markup(light)
-    out = ''
-    if sky:
-        # The plate's own silhouettes occlude the sky pixel for pixel; the painted name is redrawn on top with a
-        # dark pixel outline whose strength follows how much sky now sits behind it.
-        outline = max(light['top_opacity'], light['glow'])
-        out = (f'<g data-light="sky-group" mask="url(#sky-mask)">{sky}</g>'
-               f'<g data-light="title"><rect width="{W}" height="{H}" fill="{TITLE_OUTLINE}" '
-               f'opacity="{_num(min(.9, outline), 4)}" mask="url(#outline-mask)"/>'
-               f'<use href="#plate" xlink:href="#plate" mask="url(#glyphs-mask)"/></g>')
+    # The plate's own silhouettes occlude the sky pixel for pixel. The painted name is returned separately so the
+    # renderer can redraw it above sky, clouds and haze, with a dark pixel outline whose strength follows how much
+    # bright sky sits behind it.
+    out = f'<g data-light="sky-group" mask="url(#sky-mask)">{sky}</g>' if sky else ''
+    outline = max(light['top_opacity'], light['glow'])
+    title = '<g data-light="title">'
+    if outline > .001:
+        title += (f'<rect width="{W}" height="{H}" fill="{TITLE_OUTLINE}" opacity="{_num(min(.9, outline), 4)}" '
+                  f'mask="url(#outline-mask)"/>')
+    title += '<use href="#plate" xlink:href="#plate" mask="url(#glyphs-mask)"/></g>'
     # Day and golden-hour foregrounds (transparent sky) replace the moonlit ground; day is drawn over golden.
     for name, opacity in light['plates'].items():
         if opacity > 0:
@@ -1197,7 +1202,197 @@ def lighting_markup(light):
     if light['foreground'] > .001:
         out += (f'<rect data-light="foreground" width="{W}" height="{H}" fill="{_rgb(FOREGROUND_LIFT[1])}" '
                 f'opacity="{_num(light["foreground"], 4)}" mask="url(#ground-mask)"/>')
+    return out, title
+
+
+# ---------------------------------------------------------------------------
+# Seasons (Phase 4): continuous effects of SceneState['environment'], never keyed on the season's name, so the six
+# seasons blend into each other day by day.  Cloud layout and showers come from the daily seed.
+# ---------------------------------------------------------------------------
+CLOUD_CELL = 6                       # clouds are drawn on this pixel grid
+CLOUD_BAND = (36, 540)               # y range clouds may occupy
+CLOUD_CLEAR = (TEXT_RECT[0]-24, TEXT_RECT[1]-24, TEXT_RECT[2]+24, TEXT_RECT[3]+24)   # the name stays clear
+OVERCAST = (.6, .9, .62)             # cloud density where the grey deck starts, where it is full, its full opacity
+DRY = (.85, .6, .9)                  # greenery where drying starts, span to full dryness, maximum dry-plate opacity
+HAZE_PEAK = .55                      # horizon haze opacity at haze = 1
+HAZE_TOP, HAZE_BOTTOM = HORIZON_Y-320, HORIZON_Y+110
+WET_DARKEN = .2                      # ground darkening at wetness = 1
+VISIBILITY_FLOOR = .3                # stars at night_visibility = 0 keep this share
+RAIN = dict(start=.62, span=.25, tile=320, slant=.22)
+SHELTER = [(1162, 612), (1672, 478), (1672, 941), (1162, 941)]       # under the workshop roof: no rain
+PUDDLES = [(930, 904, 66, 6), (1004, 924, 44, 4), (1268, 916, 40, 4)]   # x, y, width, height on the earth path
+
+
+def season(light, state):
+    """Add the season's values and its static markup (sky veils, clouds, haze, wet ground) to ``light``."""
+    env = state['environment']
+    light['env'] = env
+    light['seed'] = state['seed_int']
+    visibility = VISIBILITY_FLOOR+(1-VISIBILITY_FLOOR)*env['night_visibility']
+    light['night'] = round(light['night']*visibility, 4)
+    light['overcast'] = OVERCAST[2]*_smooth((env['cloud_density']-OVERCAST[0])/(OVERCAST[1]-OVERCAST[0]))
+    light['dry'] = round(DRY[2]*_smooth((DRY[0]-env['greenery'])/DRY[1])*light['plates']['day'], 4)
+    light['rain'] = shower(state, env)
+    light['haze'] = HAZE_PEAK*env['haze']
+    light['haze_colour'] = _colour_for(light, (40, 46, 70), _mix((214, 220, 226), (226, 210, 180),
+                                                                 _smooth((env['haze']-.5)/.3)), (240, 176, 150))
+    light['weather'] = season_markup(light)
+    return light
+
+
+def shower(state, env):
+    """Rain amount 0..1: heavy cloud and a wet season make showers likely; the seed decides which hours rain."""
+    likely = _smooth((env['cloud_density']-RAIN['start'])/RAIN['span'])
+    if likely <= 0:
+        return 0
+    import hashlib
+    hour = state['time'][:2]
+    roll = int(hashlib.sha256(f"{state['seed']}-rain-{hour}".encode()).hexdigest()[:8], 16)/0xffffffff
+    chance = .35+.55*env['ground_wetness']
+    return round(likely*(.55+.45*roll/chance), 4) if roll < chance else 0
+
+
+def _colour_for(light, night, day, warm):
+    """Interpolate a colour from night to day by daylight, then towards warm by the sunrise/sunset glow."""
+    return _mix(_mix(night, day, light['daylight']), warm, .7*light['glow'])
+
+
+def cloud_shapes(seed, density):
+    """Cloud boxes and puffs for the day: positions come from the seed, the count and size from the density."""
+    rng = random.Random(seed)
+    count = round(2+14*density)
+    clouds = []
+    for _ in range(200):
+        if len(clouds) >= count:
+            break
+        w = rng.uniform(150, 240+420*density)
+        h = w*rng.uniform(.26, .36)
+        x = rng.uniform(-w*.3, W-w*.7)
+        y = rng.uniform(CLOUD_BAND[0], CLOUD_BAND[1]-h)
+        puffs = [(x+w*f, y+h*rng.uniform(.3, .6), h*rng.uniform(.34, .5))
+                 for f in (rng.uniform(.18, .3), rng.uniform(.42, .58), rng.uniform(.68, .82))]
+        a, b, c, d = CLOUD_CLEAR
+        if x < c and x+w > a and y < d and y+h > b:
+            continue
+        clouds.append(((x, y, w, h), puffs))
+    return clouds
+
+
+def cloud_cells(box, puffs):
+    """Pixel cells of one cloud: (row y, [(x0, x1, tone)]) where tone 0 = lit top, 1 = body, 2 = shadowed base."""
+    x, y, w, h = box
+    bottom = y+h*.8
+    base = (x+w/2, y+h*.6, w*.48, h*.22)
+    inside = lambda cx, cy: cy <= bottom and (
+        any((cx-px)**2+(cy-py)**2 <= r*r for px, py, r in puffs)
+        or ((cx-base[0])/base[2])**2+((cy-base[1])/base[3])**2 <= 1)
+    rows = []
+    gx0 = int(x//CLOUD_CELL)*CLOUD_CELL
+    for gy in range(int(y//CLOUD_CELL)*CLOUD_CELL, int(bottom)+CLOUD_CELL, CLOUD_CELL):
+        runs = []
+        for gx in range(gx0, int(x+w)+CLOUD_CELL, CLOUD_CELL):
+            cx, cy = gx+CLOUD_CELL/2, gy+CLOUD_CELL/2
+            if not inside(cx, cy):
+                continue
+            tone = 0 if not inside(cx, cy-CLOUD_CELL) else (2 if cy > y+h*.58 else 1)
+            if runs and runs[-1][1] == gx and runs[-1][2] == tone:
+                runs[-1][1] = gx+CLOUD_CELL
+            else:
+                runs.append([gx, gx+CLOUD_CELL, tone])
+        if runs:
+            rows.append((gy, runs))
+    return rows
+
+
+def season_defs(light):
+    """The rain mask (everywhere but under the roof), the haze gradient and, when it is drawn, the dry plate."""
+    roof = ' '.join(f'{x},{y}' for x, y in SHELTER)
+    return (f'<mask id="rain-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="{W}" height="{H}">'
+            f'<rect width="{W}" height="{H}" fill="#fff"/><polygon points="{roof}" fill="#000"/></mask>'
+            f'<linearGradient id="haze-grad" gradientUnits="userSpaceOnUse" x1="0" y1="{HAZE_TOP}" x2="0" y2="{HAZE_BOTTOM}">'
+            f'<stop offset="0" stop-color="{_rgb(light["haze_colour"])}" stop-opacity="0"/>'
+            f'<stop offset=".74" stop-color="{_rgb(light["haze_colour"])}" stop-opacity="1"/>'
+            f'<stop offset="1" stop-color="{_rgb(light["haze_colour"])}" stop-opacity="1"/></linearGradient>'
+            + (f'<image id="plate-dry" width="{W}" height="{H}" href="{day_plate("dry")}" xlink:href="{day_plate("dry")}"/>'
+               if light['dry'] > 0 else ''))
+
+
+def season_markup(light):
+    env = light['env']
+    out = ''
+    if light['dry'] > 0:
+        out += f'<use data-season="dry" href="#plate-dry" xlink:href="#plate-dry" opacity="{_num(light["dry"], 4)}"/>'
+    wet = env['ground_wetness']
+    if wet > .01:
+        out += (f'<rect data-season="wet" width="{W}" height="{H}" fill="rgb(8,18,26)" '
+                f'opacity="{_num(WET_DARKEN*wet, 4)}" mask="url(#ground-mask)"/>')
+        sky = _colour_for(light, (22, 30, 56), light['horizon'], (255, 180, 140))
+        shine = _colour_for(light, (60, 74, 110), (236, 244, 252), (255, 214, 170))
+        out += f'<g data-season="puddles" opacity="{_num(.85*wet, 4)}">'
+        for x, y, w, h in PUDDLES:
+            out += (f'<rect x="{x+4}" y="{y}" width="{w-8}" height="{h}" fill="{_rgb(sky)}"/>'
+                    f'<rect x="{x}" y="{y+2}" width="{w}" height="{h-2}" fill="{_rgb(sky)}"/>'
+                    f'<rect x="{x+w//3}" y="{y+1}" width="{w//4}" height="2" fill="{_rgb(shine)}"/>')
+        out += '</g>'
+    veil = ''
+    if light['overcast'] > .005:
+        deck = _colour_for(light, (18, 22, 34), (150, 158, 170), (190, 130, 128))
+        veil += (f'<rect data-season="overcast" width="{W}" height="{HORIZON_Y+10}" fill="{_rgb(deck)}" '
+                 f'opacity="{_num(light["overcast"], 4)}"/>')
+    murk = (1-env['night_visibility'])*.45*night_factor(light['altitude'])
+    if murk > .005:
+        veil += (f'<rect data-season="murk" width="{W}" height="{HORIZON_Y+10}" fill="rgb(10,16,32)" '
+                 f'opacity="{_num(murk, 4)}"/>')
+    density = env['cloud_density']
+    grey = _smooth((density-.4)/.5)
+    # Fair-weather clouds are white with blue-grey bases; rain clouds are darker than the overcast deck behind them.
+    tones = (_colour_for(light, (52, 60, 88), _mix((250, 250, 252), (168, 176, 188), grey), (255, 196, 160)),
+             _colour_for(light, (36, 42, 66), _mix((226, 232, 240), (126, 134, 148), grey), (238, 150, 140)),
+             _colour_for(light, (24, 28, 46), _mix((184, 194, 210), (90, 98, 112), grey), (150, 96, 124)))
+    # One path per tone, so neighbouring cells merge without anti-aliased seams; later clouds cover earlier ones.
+    clouds = ''
+    for box, puffs in cloud_shapes(light['seed'], density):
+        paths = ['', '', '']
+        for gy, runs in cloud_cells(box, puffs):
+            for x0, x1, tone in runs:
+                paths[tone] += f'M{x0} {gy}h{x1-x0}v{CLOUD_CELL}h{x0-x1}z'
+        clouds += ''.join(f'<path d="{d}" fill="{_rgb(tones[tone])}"/>' for tone, d in enumerate(paths) if d)
+    if veil or clouds:
+        out += f'<g data-season="sky" mask="url(#sky-mask)">{veil}<g data-season="clouds" opacity=".96">{clouds}</g></g>'
+    if light['haze'] > .005:
+        out += (f'<rect data-season="haze" y="{HAZE_TOP}" width="{W}" height="{HAZE_BOTTOM-HAZE_TOP}" '
+                f'fill="url(#haze-grad)" opacity="{_num(light["haze"], 4)}" mask="url(#sky-mask)"/>')
     return out
+
+
+@functools.lru_cache(maxsize=8)
+def rain_paths(seed):
+    """Two layers of streaks (near and far) as single paths, tiled so a shift of one tile loops seamlessly."""
+    rng = random.Random(seed ^ 0x5EED)
+    tile, slant = RAIN['tile'], RAIN['slant']
+    copies = range(-1, math.ceil(H/tile)+1)
+    layers = []
+    for dur, count, length in ((.75, 70, 16), (1, 90, 9)):
+        streaks = [(rng.uniform(-60, W+slant*tile*(len(copies)+1)), rng.uniform(0, tile)) for _ in range(count)]
+        d = ''.join(f'M{_num(x-k*slant*tile, 1)} {_num(y+k*tile, 1)}l{_num(-slant*length, 1)} {length}'
+                    for k in copies for x, y in streaks)
+        layers.append((dur, d))
+    return layers
+
+
+def rain(t, animated, light):
+    """Falling rain over everything except the workshop interior; strength follows ``light['rain']``."""
+    amount = light['rain']
+    if amount <= 0:
+        return ''
+    colour = _colour_for(light, (120, 134, 162), (214, 224, 238), (236, 200, 180))
+    out = f'<g data-season="rain" mask="url(#rain-mask)" opacity="{_num(.25+.45*amount, 4)}">'
+    tile, slant = RAIN['tile'], RAIN['slant']
+    for (dur, d), width in zip(rain_paths(light['seed']), (2, 1.5)):
+        fall = Track([(0, 0), (-slant*tile, tile)], dur=dur)
+        out += (f'<g transform="translate({fall.value_text(t)})">{fall.smil("transform", "translate") if animated else ""}'
+                f'<path d="{d}" stroke="{_rgb(colour)}" stroke-width="{width}" fill="none"/></g>')
+    return out+'</g>'
 
 
 def feather_defs():

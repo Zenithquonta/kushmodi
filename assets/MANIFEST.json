@@ -122,6 +122,16 @@
       "format": "PNG"
     },
     {
+      "path": "assets/observatory-dry.png",
+      "bytes": 438460,
+      "sha256": "de658223b0e993a4699e45e3b2251e7aa12c39ff1110c29c48353e6de5e1562e",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "format": "PNG"
+    },
+    {
       "path": "assets/observatory-golden.png",
       "bytes": 900766,
       "sha256": "b07b102684cb4f4dabe90c0c828006212f59f4337804031e283417fd02001fa6",

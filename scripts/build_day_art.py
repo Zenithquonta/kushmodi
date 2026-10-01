@@ -5,7 +5,7 @@ derived per region rather than tinted: moonlit blues become sunlit foliage, wood
 and glowing screens keep their own colours, and a shadow floor stops pure black from reading as night. The result is
 an RGBA image covering only the ground (the sky mask is transparent), which the renderer fades in over the plate.
 
-    python scripts/build_day_art.py            # writes assets/observatory-day.png and observatory-golden.png
+    python scripts/build_day_art.py   # writes assets/observatory-day.png, -golden.png and -dry.png (vegetation only)
 
 Build-time dependencies: Pillow and NumPy. The renderer itself never needs NumPy.
 """
@@ -25,7 +25,7 @@ VAN = [(0, 572), (285, 572), (285, 778), (0, 778)]
 WORKSHOP = [(1162, 612), (1672, 478), (1672, 941), (1250, 941), (1250, 905), (1162, 905)]
 ROVER = [(1082, 796), (1262, 796), (1262, 908), (1082, 908)]
 ROCK = [(622, 770), (650, 702), (700, 682), (760, 690), (800, 712), (880, 740), (884, 805), (622, 805)]
-DISTANCE = [(330, 655), (1190, 655), (1190, 742), (1040, 742), (1040, 798), (865, 798), (865, 742), (330, 742)]   # mountains, city and the far tree line
+DISTANCE = scene.FAR_BAND   # mountains, city and the far tree line
 FEATHER = 4
 DISTANCE_FEATHER = 18
 
@@ -36,10 +36,12 @@ MATERIALS = dict(vegetation=(86, .85, .6, (.06, .085, .045)),
                  workshop=(30, .7, .5, (.10, .075, .05)),
                  rover=(40, .2, .15, (.14, .14, .14)),
                  rock=(34, .25, .16, (.11, .105, .095)))
+DRY_VEGETATION = (38, .9, .5, (.1, .08, .04))   # straw and dust for the dry seasons
 
 # (gamma, exposure, final rgb multiplier, haze rgb, haze share in the far band)
 GRADES = dict(day=(.5, 1.0, (1.0, 1.0, .95), (.66, .74, .84), .55),
               golden=(.6, .88, (1.14, .9, .64), (.78, .72, .74), .45))
+GRADES['dry'] = GRADES['day']   # vegetation only, laid over the day plate as the land dries out
 
 
 def _hsv(a):
@@ -95,7 +97,8 @@ def build(grade):
     weights['rock'] = weights['rock']*(1-weights['telescope'])
     weights['vegetation'] = np.clip(1-sum(weights.values()), 0, 1)
     out = np.zeros_like(plate)
-    for name, (hue, gain, cap, floor) in MATERIALS.items():
+    materials = dict(MATERIALS, vegetation=DRY_VEGETATION) if grade == 'dry' else MATERIALS
+    for name, (hue, gain, cap, floor) in materials.items():
         hue_map = np.where(cool, hue+(h-245)*.12, h)
         sat_map = np.where(cool, np.minimum(s*gain, cap), np.minimum(s, .75))
         relit = _rgb(hue_map, sat_map, lifted)
@@ -110,8 +113,12 @@ def build(grade):
     keep = (emissive & (far < .5))[..., None]
     out = np.where(keep, plate*.65+out*.35, out)
     ground = _ground()
-    rgb = (np.clip(out, 0, 1)*255).round().astype(np.uint8)*ground[..., None]   # zeroed sky compresses to nothing
-    rgba = np.dstack([rgb, (ground*255).astype(np.uint8)])
+    alpha = ground.astype(float)
+    if grade == 'dry':
+        alpha = alpha*weights['vegetation']*(1-far)*~emissive
+    alpha = (alpha*255).round().astype(np.uint8)
+    rgb = (np.clip(out, 0, 1)*255).round().astype(np.uint8)*(alpha > 0)[..., None]   # zeroed sky compresses to nothing
+    rgba = np.dstack([rgb, alpha])
     return Image.fromarray(rgba, 'RGBA')
 
 

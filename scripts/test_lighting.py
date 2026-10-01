@@ -1,6 +1,6 @@
 """Day/night lighting: unchanged default output, sky/title masks, fades, sun, day plates, atomic live render."""
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import importlib.util
 import io
@@ -46,7 +46,9 @@ class Lighting(unittest.TestCase):
     def test_night_keeps_the_sky_and_has_no_sun(self):
         svg = scene.scene(0, False, state=scene_state.scene_state(NIGHT))
         self.assertTrue(re.findall(r'data-night="[^"]+" opacity="([^"]+)"', svg))
-        self.assertTrue(all(float(v) == 1 for v in re.findall(r'data-night="[^"]+" opacity="([^"]+)"', svg)))
+        state = scene_state.scene_state(NIGHT)
+        visibility = scene.VISIBILITY_FLOOR+(1-scene.VISIBILITY_FLOOR)*state['environment']['night_visibility']
+        self.assertTrue(all(float(v) == round(visibility, 4) for v in re.findall(r'data-night="[^"]+" opacity="([^"]+)"', svg)))
         self.assertNotIn('data-sun', svg)
 
     def test_noon_hides_celestial_layers_and_shows_the_sun(self):
@@ -153,6 +155,13 @@ class DayPlates(unittest.TestCase):
     def test_twilight_lift_is_gone_once_a_day_plate_is_fully_in(self):
         self.assertNotIn('data-light="foreground"', scene.scene(0, False, state=scene_state.scene_state(NOON)))
 
+    def test_dry_plate_stays_inside_the_ground(self):
+        from PIL import Image, ImageChops
+        with Image.open(scene.ASSETS/'observatory-dry.png') as dry:
+            outside = ImageChops.multiply(dry.getchannel('A'), ImageChops.invert(mask_image('ground')))
+            self.assertIsNone(outside.getbbox())
+            self.assertIsNotNone(dry.getchannel('A').getbbox())
+
     def test_plates_cover_exactly_the_ground(self):
         from PIL import Image, ImageChops
         ground = mask_image('ground')
@@ -165,9 +174,76 @@ class DayPlates(unittest.TestCase):
     def test_committed_plates_match_the_builder(self):
         import build_day_art
         from PIL import Image, ImageChops
-        for name in ('day', 'golden'):
+        for name in ('day', 'golden', 'dry'):
             with Image.open(scene.ASSETS/f'observatory-{name}.png') as committed:
                 self.assertIsNone(ImageChops.difference(build_day_art.build(name), committed.convert('RGBA')).getbbox(), name)
+
+
+MONSOON_NOON = datetime(2027, 7, 15, 12, 0, tzinfo=IST)
+SUMMER_NOON = datetime(2027, 5, 10, 12, 0, tzinfo=IST)
+
+
+def light_at(when):
+    return scene.lighting(scene_state.scene_state(when))
+
+
+class Seasons(unittest.TestCase):
+    def test_dry_vegetation_shows_in_the_hot_season_only_by_day(self):
+        self.assertGreater(light_at(SUMMER_NOON)['dry'], .8)
+        self.assertEqual(light_at(MONSOON_NOON)['dry'], 0)
+        self.assertEqual(light_at(datetime(2027, 5, 10, 23, 0, tzinfo=IST))['dry'], 0)
+        self.assertIn('data-season="dry"', scene.scene(0, False, state=scene_state.scene_state(SUMMER_NOON)))
+        self.assertNotIn('plate-dry', scene.scene(0, False, state=scene_state.scene_state(MONSOON_NOON)))
+
+    def test_monsoon_brings_overcast_and_a_dry_winter_does_not(self):
+        self.assertGreater(light_at(MONSOON_NOON)['overcast'], .4)
+        self.assertEqual(light_at(NOON)['overcast'], 0)
+
+    def test_showers_need_monsoon_cloud_and_are_fixed_for_the_hour(self):
+        self.assertEqual(light_at(NOON)['rain'], 0)
+        self.assertEqual(light_at(SUMMER_NOON)['rain'], 0)
+        hours = [light_at(datetime(2027, 7, 15, h, 0, tzinfo=IST))['rain'] for h in range(24)]
+        self.assertGreater(sum(1 for r in hours if r > 0), 12, 'mid-monsoon rains most hours')
+        self.assertTrue(all(0 <= r <= 1 for r in hours))
+        self.assertEqual(light_at(datetime(2027, 7, 15, 9, 5, tzinfo=IST))['rain'],
+                         light_at(datetime(2027, 7, 15, 9, 55, tzinfo=IST))['rain'])
+
+    def test_rain_streaks_loop_and_stay_out_of_the_workshop(self):
+        rainy = next(datetime(2027, 7, 15, h, 0, tzinfo=IST) for h in range(24)
+                     if light_at(datetime(2027, 7, 15, h, 0, tzinfo=IST))['rain'] > 0)
+        svg = scene.scene(0, True, state=scene_state.scene_state(rainy))
+        self.assertIn('data-season="rain" mask="url(#rain-mask)"', svg)
+        tile, slant = scene.RAIN['tile'], scene.RAIN['slant']
+        for dur, _ in scene.rain_paths(1):
+            fall = scene.Track([(0, 0), (-slant*tile, tile)], dur=dur)
+            self.assertEqual(scene.PERIOD % dur, 0)
+            self.assertEqual(fall.at(0), (0, 0))
+
+    def test_clouds_never_cover_the_name_and_grow_with_density(self):
+        a, b, c, d = scene.TEXT_RECT
+        for seed in range(60):
+            for box, _ in scene.cloud_shapes(seed, .9):
+                x, y, w, h = box
+                self.assertFalse(x < c and x+w > a and y < d and y+h > b, seed)
+        self.assertLess(len(scene.cloud_shapes(7, .1)), len(scene.cloud_shapes(7, .9)))
+
+    def test_the_name_is_drawn_above_the_weather(self):
+        svg = scene.scene(0, False, state=scene_state.scene_state(MONSOON_NOON))
+        self.assertLess(svg.index('data-season="sky"'), svg.index('data-light="title"'))
+
+    def test_monsoon_nights_hide_more_of_the_sky_than_winter_nights(self):
+        self.assertLess(light_at(datetime(2027, 7, 15, 23, 0, tzinfo=IST))['night'],
+                        light_at(datetime(2027, 1, 10, 23, 0, tzinfo=IST))['night'])
+
+    def test_season_effects_change_smoothly_from_day_to_day(self):
+        previous = None
+        for day in range(0, 365, 3):
+            when = datetime(2026, 10, 1, 12, 0, tzinfo=IST)+timedelta(days=day)
+            light = light_at(when)
+            values = (light['overcast'], light['haze'], light['dry'])
+            if previous:
+                self.assertTrue(all(abs(x-y) < .15 for x, y in zip(values, previous)), when)   # < .05 a day
+            previous = values
 
 
 class LiveRender(unittest.TestCase):

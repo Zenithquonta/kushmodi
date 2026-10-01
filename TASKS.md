@@ -459,3 +459,20 @@ Known limits: live.svg is 8.7 MB with PNG plates (WebP re-encode belongs to Phas
   not a new painting.
 Decision: approve
 ```
+
+### LO-P4 — Six-season visuals (2026-10-01)
+
+```text
+Requested by: user ("start phase 4 yourself, don't wait"); coder agent usage-limited
+Implemented and reviewed by: supervisor agent (user-selected "Opus 5.5")
+Files: scripts/build_animation.py (season(), clouds, overcast, rain, wet ground, haze, night visibility; title drawn
+  above the weather), scripts/build_day_art.py (dry vegetation grade), assets/observatory-dry.png,
+  scripts/test_lighting.py (+9 tests), assets/MANIFEST.json, docs
+Self-review fixes during the phase: overcast washed out the name (title moved above weather); a hard haze block over
+  the far band (haze now on the sky mask only); fair-weather clouds on a monsoon sky (rain clouds darker than the deck);
+  anti-aliased seams between cloud rows (one path per tone).
+Commands and outcomes: 86 tests pass; quality gate passes; default scene byte-identical to published assets;
+  Chromium vs librsvg on monsoon rain and Grishma noon at t = 0/3/12 s: worst cell 0 to 10 px.
+Visual evidence: six-season sheet (10:00-10:30 for each season plus Varsha and Shishira nights), July and May day sheets.
+Decision: approve
+```
