@@ -10,7 +10,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T01 | Inspect supplied project and approved references | done | Read the gate and handoff; open reference photo, approved concept, current poster and square image. Record actual runtime/model IDs. Do not rebuild from scratch. |
 | T02 | Review the layered scene and animation geometry | ready_for_review | Background, sprites, galaxy rotation, moon orbits, ship traffic, twinkles, print head, wireframe cube and LEDs exist in the builder. Inspect 0/3/6/12/18/23.9 second frames for clipping, artifacts, title collisions and horizon crossings. |
 | T03 | Review and refine the square profile picture | ready_for_review | `assets/profile-picture.png` exists. Check telescope/galaxy readability at 96px and 192px, and in a circular crop preview. Keep source image unchanged. |
-| T04 | Review README content, employer removal and scope | ready_for_review | Name is Kush Modi; astronomy-first profile; four expandable sections; AstroFixxer project links; aviation/LEGO/CAD/printing interests; no removed-work references. Existing robotics/education/contact facts are grounded in the original README. |
+| T04 | Review README content, employer removal and scope | done | Name is Kush Modi; astronomy-first profile; four expandable sections; AstroFixxer project links; aviation/LEGO/CAD/printing interests; no removed-work references. Existing robotics/education/contact facts are grounded in the original README. |
 | T05 | Verify actual GitHub README interactions | pending | Render on GitHub after push, verify picture fallback, image links, section anchors and details. GitHub README must not depend on JavaScript, image maps or iframe controls. |
 | T06 | Browser-test and refine the local interactive preview | pending | At desktop and mobile widths, check inline SVG playback, pause/resume, keyboard focus, clickable scene areas, mission panels, reduced-motion behavior and no horizontal overflow. Save screenshots/evidence. |
 | T07 | Align SVG and GIF animation timings | pending | The same scene functions render both versions, but some workshop SMIL motion interpolates linearly while raster frames use sine. Review resulting differences and make them intentional or identical. Compare selected times and the wrap at 24 seconds. |
@@ -116,4 +116,24 @@ Decision: approve
 Reason: D1-D3 resolved; single route table drives both SMIL and raster; browser playback matches.
 Remaining caveats: explorer lane raised 385->338, fighter-b phase .20->.245; plane fades mid-sky by design
   (spec forbids painting over foreground). GIF/SVG assets not yet regenerated (after T07/T02-R2).
+```
+
+### T04 — README content review (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: none (user-supplied README.md from the package; supervisor review only)
+Attempt: 1
+Files changed: README.md (replaces the old public README on this branch)
+Commands and outcomes:
+  - python scripts/quality_gate.py -> passed (4/4): images/anchors resolve, four <details> logs, removed work absent.
+  - URL-decoded scan for clerical|GR Modi|CA Tech|Apps Script|SaaS|employ|pilot|SolidWorks|Fusion 360|AutoCAD -> none.
+  - Facts cross-checked against the original README (git show ab04e28..82dbf9a): NMIMS MPSTME CSE, Darwin Club,
+    IGVC regional 1st / IGVC 5th overall (kept as the user's own project-log claims), ROS Noetic, tools, hardware,
+    GitHub/LinkedIn/email links. Dropped: employer row, clerical SaaS, 80% workload claim, typing/capsule
+    taglines, stale exam/travel notes, Apps Script badge.
+Visual evidence: GitHub rendering not yet verified (T05, after publication).
+Decision: approve
+Reason: astronomy-first, no invented credentials, no removed-work references, only GitHub-supported interactions.
+Remaining caveats: <picture> reduced-motion behaviour and card links must be verified on github.com (T05).
 ```
