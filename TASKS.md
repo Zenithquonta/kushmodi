@@ -19,8 +19,8 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T02-R2 | Register the CAD cube to the painted cube; moons pass behind the planet | done | Found in T01 (double cube in every frame) and the known moon-occlusion item. |
 | T13 | Animated mission cards + fourth Rover Bay card (user-approved addition) | done | Subtle SMIL card motion with static <picture> fallbacks; 2x2 card grid. |
 | T14 | Scene additions: telescope lock-on, warp/hyperspace transitions, airplane nav lights (user-approved) | done | M51 lock-on with pixel readout; explorer warp exit; fighter drop-outs; nav lights + strobe. |
-| T09 | Review meaningful source regression tests | ready_for_review | Five tests now cover traffic period wrap, periodic/finite CAD geometry, deterministic and changing scene output, sprite crop bounds, and the observed open-path polygon regression. The quality gate additionally covers SVG references and removed live-content references. Review preview regeneration coverage and extend where meaningful. |
-| T10 | Review handoff, registry and reproducibility | ready_for_review | All supplied artwork, active SVGs, legacy SVGs, scripts, template, ledger, entry point and model loop are included. `assets/MANIFEST.json` should describe files and hashes. The handoff must accurately identify completed versus pending work. |
+| T09 | Review meaningful source regression tests | done | Five tests now cover traffic period wrap, periodic/finite CAD geometry, deterministic and changing scene output, sprite crop bounds, and the observed open-path polygon regression. The quality gate additionally covers SVG references and removed live-content references. Review preview regeneration coverage and extend where meaningful. |
+| T10 | Review handoff, registry and reproducibility | done | All supplied artwork, active SVGs, legacy SVGs, scripts, template, ledger, entry point and model loop are included. `assets/MANIFEST.json` should describe files and hashes. The handoff must accurately identify completed versus pending work. |
 | T11 | Commit and push the entire handoff and profile project | implementing | Target is only `Zenithquonta/kushmodi`. Earlier writes to both Git Trees and Contents APIs failed with 403 `Resource not accessible by integration`. Refresh live permissions before retrying. Preserve HEAD/unrelated files and do not force-push. |
 | T12 | Verify CI and live profile, then report | blocked | Depends on T11. Fetch pushed files, confirm the validation workflow run and inspect rendered README. Report actual commit SHA and repository URL. Do not claim a GitHub profile-top display: a `kushmodi` repository does not match the account name `Zenithquonta`. |
 
@@ -333,4 +333,29 @@ Visual evidence: supervisor inspected lock hold full frame, GIF-decoded line cro
   scale, explorer warp 5-frame strip (attempts 1 and 2).
 Decision: approve
 Remaining caveats: warp/drop-out are 4-5 GIF frames by design; line overlays ships passing at that moment.
+```
+
+### T09 — regression tests (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: n/a (tests were added and reviewed within T02-R1, T07, T02-R2, T14)
+Outcome: 5 -> 34 tests. Coverage: traffic text/skyline/overlap/fade guarantees over all 240 samples; generic
+  SMIL-vs-raster evaluation of every animation element; loop continuity; cube registration and 3D read; plate-only
+  patch; moon layer switching; lock-on placement/timeline/pixel font; warp geometry; nav-light periods. Mutation
+  checks by coders confirmed tests fail on injected regressions. CI runs them on every push.
+Decision: approve
+```
+
+### T10 — handoff, registry, reproducibility (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: delegated coder agent (user-selected "Sonnet 5.5")
+Attempt: 1
+Files changed: HANDOFF.md, docs/ANIMATION-SPEC.md, docs/ASSET-REGISTRY.md, docs/PUBLISH-STATUS.md, SUPERVISOR-PROMPT.md
+Commands and outcomes: gate 4/4; 34 tests; stale-number grep leaves only two lines explicitly labelled history; no
+  runtime model identifiers in docs. Supervisor corrected CI wording with the verified run #15 result.
+Decision: approve
+Remaining caveat: preview.html still shows three panels (the fourth card exists only in README).
 ```
