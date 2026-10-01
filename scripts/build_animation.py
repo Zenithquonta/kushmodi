@@ -81,27 +81,135 @@ def celestial(t, animated):
     return ''.join(parts)
 
 
+# ---------------------------------------------------------------------------
+# Space traffic: one route description drives both the sampled frames and SMIL.
+# ---------------------------------------------------------------------------
+# Quiet text block baked into the plate; no traffic may overlap it while visible.
+TEXT_RECT = (30, 218, 565, 375)
+VISIBLE_OPACITY = .02
+
+# Topmost foreground (trees, van, telescope finder, workshop roof) per column,
+# measured from assets/observatory-background.png and kept ~8px conservative
+# (it lies above the true silhouette).  Traffic boxes must stay above it.
+SKYLINE = [(0, 572), (132, 572), (138, 580), (236, 580), (244, 606), (290, 606), (298, 616), (340, 616),
+           (346, 640), (700, 648), (780, 690), (792, 540), (844, 540), (850, 600), (858, 690), (1092, 690),
+           (1100, 676), (1112, 636), (1162, 636), (1168, 602), (1222, 588), (1234, 550), (1292, 550),
+           (1302, 568), (1450, 533), (1456, 520), (1478, 496), (1494, 458), (1512, 450), (1524, 474),
+           (1540, 494), (1562, 472), (1584, 486), (1592, 498), (1606, 440), (1620, 442), (1624, 466),
+           (1636, 436), (1646, 405), (1672, 402)]
+
+# Painted (alpha > 8) extent of each atlas sprite, atlas pixels relative to its RECTS origin:
+# (left, top, right, bottom).  Scaled by width/source-width to give scene-space boxes.
+PAINTED = {'explorer': (-240, -89, 238, 86), 'fighter': (-210, -115, 204, 97), 'airplane': (-239, -84, 241, 59)}
+BOX_PAD = 2
+# Exhaust trails in the object's own frame: (left, top, right, bottom) including stroke width.
+TRAIL_BOX = {'explorer': (115, -18.5, 208, 8.5), 'fighter': (44, -10, 117, 10), 'airplane': (-174, 0, -57, 2)}
+
+
+def _x_keys(start, end, pairs):
+    """[(x, value)] along a straight route -> [(u, value)] padded to u=0 and u=1."""
+    keys = [((x-start)/(end-start), v) for x, v in pairs]
+    if keys[0][0] > 0:
+        keys.insert(0, (0, keys[0][1]))
+    if keys[-1][0] < 1:
+        keys.append((1, keys[-1][1]))
+    return keys
+
+
+def _interp(keys, u):
+    for (u0, v0), (u1, v1) in zip(keys, keys[1:]):
+        if u <= u1:
+            return v0 + (v1-v0)*(u-u0)/(u1-u0) if u1 > u0 else v1
+    return keys[-1][1]
+
+
+def _route(oid, sprite_name, width, y_at, fade_at, start, end, period, phase):
+    return dict(id=oid, sprite=sprite_name, width=width, start=start, end=end, period=period, phase=phase,
+                y_keys=_x_keys(start, end, y_at), fade_keys=_x_keys(start, end, fade_at))
+
+
+# Fades are written as (x, opacity); every key is a straight segment, so SMIL keyTimes reproduce them.
+ROUTES = [
+    # Hero ship: leaves visibility before the text block instead of being clipped by a hard edge.
+    _route('explorer', 'explorer', 295, [(1900, 338)], [(900, 1), (720, 0)], 1900, 490, 24, .31),
+    _route('fighter-a', 'fighter', 133, [(1840, 434)], [(1340, 0), (1170, 1)], 1840, -170, 12, .15),
+    _route('fighter-b', 'fighter', 103, [(1840, 458)], [(1330, 0), (1150, 1)], 1840, -170, 12, .245),
+    # Airliner stays in open sky and dissolves before the workshop roof and right-hand trees.
+    _route('airplane', 'airplane', 142, [(-200, 518)], [(1180, 1), (1330, 0)], -200, 1830, 24, .23),
+]
+
+
+def _box(rel, scale, node):
+    l, t, r, b = rel
+    return (node[0]+l*scale, node[1]+t*scale, node[0]+r*scale, node[1]+b*scale)
+
+
+def traffic_state(t):
+    """Pure description of every traffic object at time t (seconds)."""
+    states = []
+    for route in ROUTES:
+        u = (t/route['period']+route['phase']) % 1
+        x = route['start']+(route['end']-route['start'])*u
+        y = _interp(route['y_keys'], u)
+        opacity = _interp(route['fade_keys'], u)
+        l, tp, r, b = PAINTED[route['sprite']]
+        scale = route['width']/RECTS[route['sprite']][0][2]
+        sprite_box = _box((l-BOX_PAD/scale, tp-BOX_PAD/scale, r+BOX_PAD/scale, b+BOX_PAD/scale), scale, (x, y))
+        trail_box = _box(TRAIL_BOX[route['sprite']], 1, (x, y))
+        states.append(dict(id=route['id'], sprite=route['sprite'], width=route['width'], x=x, y=y, u=u,
+                           opacity=opacity, sprite_bbox=sprite_box, trail_bbox=trail_box,
+                           bbox=(min(sprite_box[0], trail_box[0]), min(sprite_box[1], trail_box[1]),
+                                 max(sprite_box[2], trail_box[2]), max(sprite_box[3], trail_box[3]))))
+    return states
+
+
+def skyline_top(x0, x1):
+    """Smallest SKYLINE y over [x0, x1] clamped to the canvas (None when entirely off canvas)."""
+    x0, x1 = max(x0, 0), min(x1, W)
+    if x0 > x1:
+        return None
+    ys = [_interp_pts(SKYLINE, x0), _interp_pts(SKYLINE, x1)]
+    ys += [y for x, y in SKYLINE if x0 < x < x1]
+    return min(ys)
+
+
+def _interp_pts(points, x):
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        if x <= x1:
+            return y0+(y1-y0)*(x-x0)/(x1-x0)
+    return points[-1][1]
+
+
+def _trail_markup(sprite_name):
+    if sprite_name == 'explorer':
+        return '<path d="M115 -17H208M115 7H192" stroke="#50d8f5" stroke-width="3" opacity=".65"/>'
+    if sprite_name == 'fighter':
+        return '<path d="M44 -9H117M44 9H104" stroke="#ed78fc" stroke-width="2" opacity=".55"/>'
+    return '<path d="M-57 1H-174" stroke="#dbf3fa" stroke-width="2" stroke-dasharray="14 7" opacity=".4"/>'
+
+
+def _key_times(keys):
+    return ';'.join(f'{u:.6f}' for u, _ in keys)
+
+
 def traffic(t, animated):
     parts = []
-    routes = [('explorer',295,385,1900,490,24,.31),
-              ('fighter',133,438,1840,-170,12,.15),
-              ('fighter',103,475,1840,-170,12,.20),
-              ('airplane',142,524,-200,1830,24,.23)]
-    for name,width,y,start,end,period,phase in routes:
-        u = (t/period+phase)%1
-        x = start+(end-start)*u
-        motion = (f'<animateTransform attributeName="transform" type="translate" from="{start} {y}" to="{end} {y}" '
-                  f'dur="{period}s" begin="{-phase*period:.4f}s" repeatCount="indefinite"/>' if animated else '')
-        clip = ' clip-path="url(#fleet-zone)"' if name=='explorer' else ''
-        parts.append(f'<g{clip}><g transform="translate({x:.3f} {y})">{motion}')
+    for route, state in zip(ROUTES, traffic_state(t)):
+        motion = fade = ''
+        if animated:
+            # Position breakpoints are the y_keys; x is linear in u so it needs no extra keys.
+            times = sorted({0, 1, *(u for u, _ in route['y_keys'])})
+            values = ';'.join(f'{route["start"]+(route["end"]-route["start"])*u:.3f} {_interp(route["y_keys"], u):.3f}'
+                              for u in times)
+            begin = f'{-route["phase"]*route["period"]:.4f}s'
+            motion = (f'<animateTransform attributeName="transform" type="translate" values="{values}" '
+                      f'keyTimes="{";".join(f"{u:.6f}" for u in times)}" dur="{route["period"]}s" begin="{begin}" repeatCount="indefinite"/>')
+            fade = (f'<animate attributeName="opacity" values="{";".join(f"{v:.4f}" for _, v in route["fade_keys"])}" '
+                    f'keyTimes="{_key_times(route["fade_keys"])}" dur="{route["period"]}s" begin="{begin}" repeatCount="indefinite"/>')
+        parts.append(f'<g data-traffic="{route["id"]}" opacity="{state["opacity"]:.4f}">{fade}'
+                     f'<g transform="translate({state["x"]:.3f} {state["y"]:.3f})">{motion}')
         # Exhaust is part of the moving object, rather than a fixed streak.
-        if name=='explorer':
-            parts.append('<path d="M115 -17H208M115 7H192" stroke="#50d8f5" stroke-width="3" opacity=".65"/>')
-        elif name=='fighter':
-            parts.append('<path d="M44 -9H117M44 9H104" stroke="#ed78fc" stroke-width="2" opacity=".55"/>')
-        else:
-            parts.append('<path d="M-57 1H-174" stroke="#dbf3fa" stroke-width="2" stroke-dasharray="14 7" opacity=".4"/>')
-        parts.append(sprite(name,width)+'</g></g>')
+        parts.append(_trail_markup(route['sprite'])+sprite(route['sprite'], route['width'])+'</g></g>')
     return ''.join(parts)
 
 
@@ -171,7 +279,7 @@ def scene(t=0, animated=False, embedded=True):
     parts=[f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" aria-labelledby="title desc">',
            '<title id="title">Kush Modi — building toward the unexplored</title>',
            '<desc id="desc">Pixel observatory based on Kush\'s telescope photograph. Rotating galaxies, planetary moons, exploration spacecraft, an airplane and a working maker workshop.</desc>',
-           '<defs><clipPath id="fleet-zone"><rect x="574" y="0" width="1098" height="510"/></clipPath>',
+           '<defs>',
            f'<image id="atlas" width="1536" height="1024" href="{ATLAS}" xlink:href="{ATLAS}"/></defs>',
            f'<image width="{W}" height="{H}" href="{BACKGROUND}" xlink:href="{BACKGROUND}"/>']
     if animated:

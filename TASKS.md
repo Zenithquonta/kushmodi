@@ -15,7 +15,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T06 | Browser-test and refine the local interactive preview | pending | At desktop and mobile widths, check inline SVG playback, pause/resume, keyboard focus, clickable scene areas, mission panels, reduced-motion behavior and no horizontal overflow. Save screenshots/evidence. |
 | T07 | Align SVG and GIF animation timings | pending | The same scene functions render both versions, but some workshop SMIL motion interpolates linearly while raster frames use sine. Review resulting differences and make them intentional or identical. Compare selected times and the wrap at 24 seconds. |
 | T08 | Optimize size without damaging the approved look | pending | Current GIF: 1000×563, 240 frames at 10fps, 24s, 11,744,470 bytes. Review 840/1000px and 8/10/12fps tradeoffs if needed. Prefer one accepted version, no noisy blur or flickering palettes. Document final output dimensions, bytes, duration and tool versions. |
-| T02-R1 | Fix traffic clip, overlap and foreground crossings found in T02 | implementing |  Explorer hard-clipped at x=574 (t≈14.7); fighters overlap explorer and trees (t≈0/23.9); airplane crosses right trees/workshop roof (t≈15.6). Route geometry/fades only. |
+| T02-R1 | Fix traffic clip, overlap and foreground crossings found in T02 | done |  Explorer hard-clipped at x=574 (t≈14.7); fighters overlap explorer and trees (t≈0/23.9); airplane crosses right trees/workshop roof (t≈15.6). Route geometry/fades only. |
 | T09 | Review meaningful source regression tests | ready_for_review | Five tests now cover traffic period wrap, periodic/finite CAD geometry, deterministic and changing scene output, sprite crop bounds, and the observed open-path polygon regression. The quality gate additionally covers SVG references and removed live-content references. Review preview regeneration coverage and extend where meaningful. |
 | T10 | Review handoff, registry and reproducibility | ready_for_review | All supplied artwork, active SVGs, legacy SVGs, scripts, template, ledger, entry point and model loop are included. `assets/MANIFEST.json` should describe files and hashes. The handoff must accurately identify completed versus pending work. |
 | T11 | Commit and push the entire handoff and profile project | blocked | Target is only `Zenithquonta/kushmodi`. Earlier writes to both Git Trees and Contents APIs failed with 403 `Resource not accessible by integration`. Refresh live permissions before retrying. Preserve HEAD/unrelated files and do not force-push. |
@@ -93,4 +93,27 @@ Findings fed to T02-R1 / later tasks:
   6. Nozzle/scan/LED SMIL vs sine raster mismatch (known, T07).
   Name/typography clear in all sampled frames; airplane clears telescope finder at t≈6.3.
 Model resolution: supervisor "Opus 5.5" → claude-opus-5-5 (session record); coder "Sonnet 5.5" → runtime alias `sonnet`, actual ID recorded per task from the coder's report.
+```
+
+### T02-R1 — traffic route refinement (2026-10-01)
+
+```text
+Reviewed by: supervisor claude-opus-5-5
+Coder: claude-sonnet-5-5 (Agent tool, model alias `sonnet`; ID self-reported by the coder)
+Attempt: 1
+Files changed: scripts/build_animation.py (traffic_state/ROUTES/SKYLINE; fleet-zone clipPath removed), scripts/test_scene.py (+7 tests)
+Commands and outcomes:
+  - unittest: 12/12 pass (supervisor re-run).
+  - Coder brute force at 0.005s steps: 0 text/skyline/sprite-overlap violations.
+  - Supervisor: sky empty of fully visible traffic 4% of the loop, longest gap 0.96s.
+  - Supervisor browser parity: Chromium 1194 (Playwright 1.56.1) setCurrentTime vs librsvg frames at
+    t=0,3,6,12,14.7,18,23.9 -> no traffic-region differences. Residual differences are confined to the
+    planet (x1336-1670,y94-282): pre-existing planet-bob SMIL/raster sign inversion -> T07.
+Visual evidence: supervisor inspected contact sheet (8 times) and SKYLINE overlay; skyline hugs van,
+  finder, workshop roof and right-hand trees. Explorer warps out between x=900..720 (no slice); fighters
+  fade in at x~1340 clear of trees; airplane dissolves before x=1330, clear of roof.
+Decision: approve
+Reason: D1-D3 resolved; single route table drives both SMIL and raster; browser playback matches.
+Remaining caveats: explorer lane raised 385->338, fighter-b phase .20->.245; plane fades mid-sky by design
+  (spec forbids painting over foreground). GIF/SVG assets not yet regenerated (after T07/T02-R2).
 ```
