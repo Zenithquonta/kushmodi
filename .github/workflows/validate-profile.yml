@@ -1,0 +1,40 @@
+name: Validate profile
+
+# Read-only validation. This workflow installs Pillow, runs the quality gate
+# and discovers the source regression tests. It does not regenerate images,
+# rewrite README text, fetch private GitHub activity or deploy anything.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-profile-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Quality gate and regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run quality gate
+        run: python scripts/quality_gate.py
+
+      - name: Run regression tests
+        run: python -m unittest discover -s scripts -p 'test_*.py' -v
