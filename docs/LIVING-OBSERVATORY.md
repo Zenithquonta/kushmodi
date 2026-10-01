@@ -91,7 +91,8 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 10 VPS deployment | done in the repo, not yet run on the VPS: compact live SVG (1.7-2.3 MB), `deploy/` (install, update, check, sandboxed systemd timer, Caddy template); 9 tests; Caddy rules verified locally |
 | 11 Daily git sync | done in the repo, not yet run on the VPS: offline archive render at 21:10 IST, separate `obsync` user with a deploy key created on the server, archive-only clone, validated copy + index union, one commit a day; 13 tests incl. a bare-repo end-to-end |
 | 12 README live switch | prepared, not switched: `scripts/readme_live.py` (live/repo/status, byte-exact revert), hero markers in README, gate accepts live mode for the configured host only, `scripts/probe_live.py`, `docs/LIVE-SWITCH.md`; 8 tests. Waiting on the host, check.sh, burn-in, the branch test on github.com, and the user's fallback choice |
-| 13–14 | pending |
+| 13 Archive gallery | done in the repo: `deploy/archive_gallery.py` builds `archive/README.md` and one page per month in the daily sync commit; validated fields only; deterministic; 4 tests. Pages appear with the first VPS archive commit |
+| 14 | pending |
 
 ## Phase 2 implementation notes
 
@@ -333,3 +334,18 @@ amendments that follow from measured facts, open decisions, and phase status.
   machine or the server; this session's proxy cannot reach arbitrary hosts), then a test on the development branch
   on github.com: camo serves the SVG and accepts ~2 MB, SMIL runs in `<img>`, reduced motion selects the PNG, and
   freshness after the 240 s max-age is measured. If the SVG fails, use `live.png` as the image.
+
+## Phase 13 notes — archive gallery
+
+- `deploy/archive_gallery.py` (stdlib, imported by `archive_tool.py` from the read-only code checkout) writes
+  `archive/README.md` (latest day large, up to six earlier days, links to months) and `archive/YYYY/YYYY-MM.md`
+  (a row per day: noon, 21:00, season, moon, meteor shower, planets) in the same daily sync commit.
+- Pages come from the merged index (so a reinstalled server cannot drop older months) and list a day only when both
+  its frames are present. No timestamps: an unchanged archive regenerates identical pages and the sync stays a no-op.
+- Index fields are checked against fixed vocabularies (six season ids, five planets, a capitalised shower name, a
+  moon fraction in 0..1); anything else is dropped, not escaped. Tested with hostile entries.
+- WebP in GitHub markdown was verified first on the development branch with a temporary 3 KB probe (both `![]()` and
+  `<img>` render; raw is served as `image/webp`); the probe was removed in the next commit.
+- The main README does not link the gallery yet: `archive/` does not exist until the first VPS archive commit. Add
+  the link together with the Phase 12 switch.
+- Sample output from the 13 scratchpad dates (Phase 9) was reviewed as text.

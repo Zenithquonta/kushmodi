@@ -23,6 +23,44 @@ def entry(day):
     return dict(date=day, files={kind: dict(path=f'{day[:4]}/{day}-{kind}.webp', bytes=len(WEBP)) for kind in ('day', 'night')})
 
 
+class Gallery(unittest.TestCase):
+    def setUp(self):
+        import sys
+        sys.path.insert(0, str(ROOT/'deploy'))
+        import archive_gallery
+        self.gallery = archive_gallery
+        self.tmp = Path(tempfile.mkdtemp())
+        (self.tmp/'2026').mkdir()
+        for day in ('2026-12-13', '2026-12-14'):
+            for kind in ('day', 'night'):
+                (self.tmp/'2026'/f'{day}-{kind}.webp').write_bytes(WEBP)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp)
+
+    def test_hostile_index_fields_never_reach_a_page(self):
+        evil = dict(entry('2026-12-14'), season='<img src=x onerror=alert(1)>', moon_illuminated='1; DROP',
+                    meteor_shower='](javascript:alert(1))', planets_at_night=['Venus', '<script>', 'Saturn'])
+        index = dict(frames={'2026-12-14': evil, '2026-12-13': entry('2026-12-13')})
+        text = ''.join(self.gallery.pages(index, self.tmp).values())
+        for bad in ('onerror', 'javascript', '<script', 'DROP', 'src=x'):
+            self.assertNotIn(bad, text)
+        self.assertIn('Venus, Saturn', text)
+
+    def test_sparse_entries_and_missing_frames(self):
+        index = dict(frames={'2026-12-14': entry('2026-12-14'), '2026-12-13': {}, '2026-12-20': entry('2026-12-20'),
+                             '../etc': entry('2026-12-14')})
+        pages = self.gallery.pages(index, self.tmp)
+        self.assertEqual(sorted(pages), ['2026/2026-12.md', 'README.md'])
+        self.assertNotIn('20 Dec', pages['2026/2026-12.md'])     # its frames are not present
+        self.assertIn('13 Dec', pages['2026/2026-12.md'])
+
+    def test_pages_are_deterministic(self):
+        index = dict(frames={'2026-12-14': dict(entry('2026-12-14'), season='hemanta', moon_illuminated=.257)})
+        self.assertEqual(self.gallery.pages(index, self.tmp), self.gallery.pages(index, self.tmp))
+        self.assertIn('Hemanta · moon 26%', self.gallery.pages(index, self.tmp)['README.md'])
+
+
 @unittest.skipUnless(shutil.which('git') and shutil.which('bash'), 'needs git and bash')
 class Sync(unittest.TestCase):
     def setUp(self):
@@ -82,6 +120,19 @@ class Sync(unittest.TestCase):
         self.assertEqual(self.sync().returncode, 0)
         self.assertEqual(len(self.origin_log()), len(log))
 
+    def test_gallery_pages_arrive_with_the_frames_and_a_rerun_changes_nothing(self):
+        self.assertEqual(self.sync().returncode, 0)
+        paths = self.changed_paths()
+        for page in ('archive/README.md', 'archive/2026/2026-10.md'):
+            self.assertIn(page, paths)
+        self.assertTrue(all(p.startswith('archive/') for p in paths))
+        front = git(self.origin, 'show', 'main:archive/README.md').stdout
+        self.assertIn('## 2 Oct 2026', front)
+        self.assertIn('[October 2026](2026/2026-10.md) (2 days)', front)   # the repo's 1 Oct is kept
+        commits = len(self.origin_log())
+        self.assertEqual(self.sync().returncode, 0)
+        self.assertEqual(len(self.origin_log()), commits)
+
     def test_the_index_keeps_dates_the_server_no_longer_has(self):
         self.assertEqual(self.sync().returncode, 0, )
         index = json.loads(git(self.origin, 'show', 'main:archive/index.json').stdout)
@@ -106,7 +157,7 @@ class Sync(unittest.TestCase):
         self.assertEqual(self.sync().returncode, 0)
         self.assertEqual(git(self.origin, 'show', 'main:README.md').stdout, 'profile, edited\n')
         self.assertEqual(self.changed_paths(), ['archive/2026/2026-10-02-day.webp', 'archive/2026/2026-10-02-night.webp',
-                                                'archive/index.json'])
+                                                'archive/2026/2026-10.md', 'archive/README.md', 'archive/index.json'])
 
     def test_junk_in_the_archive_stops_the_sync(self):
         (self.src/'2026'/'payload.webp').write_bytes(WEBP)

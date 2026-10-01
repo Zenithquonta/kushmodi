@@ -64,7 +64,7 @@ class DeployFiles(unittest.TestCase):
         self.assertIn('OnCalendar=*:0/5', (DEPLOY/'observatory-live.timer').read_text())
 
     def test_scripts_hold_no_secrets_and_never_pull_code_automatically(self):
-        for path in DEPLOY.glob('*'):
+        for path in (p for p in DEPLOY.glob('*') if p.is_file()):
             text = path.read_text()
             self.assertNotRegex(text, r'(?i)(ghp_|github_pat_|token=|password=|BEGIN [A-Z ]*PRIVATE KEY)')
         self.assertNotIn('git pull', (DEPLOY/'observatory-live.service').read_text())

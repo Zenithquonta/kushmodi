@@ -601,3 +601,17 @@ Not done (blocked on the user): the switch itself needs the VPS host, a passing 
   github.com and the user's fallback choice. Probing the host from this session is blocked by its network proxy.
 Decision: approve (preparation)
 ```
+
+### LO-P13 — Archive gallery (2026-10-01)
+
+```text
+Requested by: user ("start phase 3", read as Phase 13 since Phase 3 was done; stated to the user)
+Implemented and reviewed by: supervisor agent (user-selected "Opus 5.5"); approach reviewed by the advisor before coding
+Files: deploy/archive_gallery.py (new), deploy/archive_tool.py (writes the pages), scripts/test_sync.py (+4 tests),
+  scripts/test_deploy.py (scan regular files only), docs
+Evidence: WebP rendering in GitHub markdown verified on the development branch with a temporary probe (removed);
+  159 tests pass; quality gate passes; shellcheck clean.
+Also recorded: the user will create a dedicated instance for the observatory (VPN servers untouched); advised Ampere
+  A1.Flex 1 OCPU / 6 GB, Ubuntu 24.04 (one render: ~160 MB peak memory, ~26 s here).
+Decision: approve
+```

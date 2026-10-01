@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage the server's archive into the sync clone: well-formed WebP frames only, and a merged index (stdlib only).
+"""Stage the server's archive into the sync clone: well-formed WebP frames, a merged index and gallery pages (stdlib).
 
     python3 archive_tool.py stage /var/lib/observatory/archive /var/lib/obsync/repo/archive
 
@@ -15,6 +15,8 @@ from pathlib import Path
 import re
 import sys
 import tempfile
+
+import archive_gallery   # sits beside this file in the read-only code checkout
 
 FRAME = re.compile(r'^(\d{4})/(\d{4})-(\d{2})-(\d{2})-(day|night)\.webp$')
 MAX_FRAME_BYTES = 2_000_000
@@ -83,6 +85,9 @@ def stage(src, dest):
     text = json.dumps(merged, indent=1)+'\n'
     if not (dest/'index.json').exists() or (dest/'index.json').read_text() != text:
         _write_atomic(dest/'index.json', text.encode())
+    for rel, page in archive_gallery.pages(merged, dest).items():   # gallery pages, deterministic
+        if not (dest/rel).exists() or (dest/rel).read_text() != page:
+            _write_atomic(dest/rel, page.encode())
     return sorted(changed)
 
 
