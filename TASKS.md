@@ -19,6 +19,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T02-R2 | Register the CAD cube to the painted cube; moons pass behind the planet | done | Found in T01 (double cube in every frame) and the known moon-occlusion item. |
 | T13 | Animated mission cards + fourth Rover Bay card (user-approved addition) | done | Subtle SMIL card motion with static <picture> fallbacks; 2x2 card grid. |
 | T14 | Scene additions: telescope lock-on, warp/hyperspace transitions, airplane nav lights (user-approved) | done | M51 lock-on with pixel readout; explorer warp exit; fighter drop-outs; nav lights + strobe. |
+| T15 | Living sky: slower galaxies, twinkling painted stars, shooting stars, satellite (user-requested; push approved) | done | Ported from the user's PC session onto the reviewed builder with Track parity; 38 tests; Chromium vs GIF parity. |
 | T09 | Review meaningful source regression tests | done | Five tests now cover traffic period wrap, periodic/finite CAD geometry, deterministic and changing scene output, sprite crop bounds, and the observed open-path polygon regression. The quality gate additionally covers SVG references and removed live-content references. Review preview regeneration coverage and extend where meaningful. |
 | T10 | Review handoff, registry and reproducibility | done | All supplied artwork, active SVGs, legacy SVGs, scripts, template, ledger, entry point and model loop are included. `assets/MANIFEST.json` should describe files and hashes. The handoff must accurately identify completed versus pending work. |
 | T11 | Commit and push the entire handoff and profile project | implementing | Target is only `Zenithquonta/kushmodi`. Earlier writes to both Git Trees and Contents APIs failed with 403 `Resource not accessible by integration`. Refresh live permissions before retrying. Preserve HEAD/unrelated files and do not force-push. |
@@ -358,4 +359,38 @@ Commands and outcomes: gate 4/4; 34 tests; stale-number grep leaves only two lin
   runtime model identifiers in docs. Supervisor corrected CI wording with the verified run #15 result.
 Decision: approve
 Remaining caveat: preview.html still shows three panels (the fourth card exists only in README).
+```
+
+### T15 — living sky (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5"; Claude Code cloud session)
+Coder: same agent (no separate coder was delegated; the code was ported from an earlier session's edits)
+Attempt: 1
+Origin: The user asked for a slower galaxy and a livelier sky (twinkling stars, random shooting stars). A Claude Code
+  session on the user's PC implemented it against the original package in Downloads (1000px GIF, pre-T02-R1/T07/T13/T14
+  builder), rendered with Chrome because FFmpeg was absent, and asked to push. The user approved, but the PC went
+  offline before the push. Its edits were recovered from that session's transcript. Pushing that folder would have
+  rolled back T02-R1..T14, so the changes were ported onto the current builder instead.
+Files changed: scripts/build_animation.py (slow_spin, twinkles/bright_stars/twinkle_plan, meteors/meteor_plan/meteor_tracks,
+  satellite, QUIET, shared tw*/mt* gradient defs; rotate_node removed), scripts/test_scene.py (+4 tests; circle leaves
+  added to the generic comparison), assets/{observatory.svg,poster.svg,observatory-poster.png,observatory.gif,MANIFEST.json},
+  preview.html, docs.
+Differences from the PC version: every motion is a Track, so SVG and GIF agree; no mix-blend-mode:plus-lighter (librsvg
+  ignores it: a 50%+50% test rendered like normal blending), so eased 1-w^2 / 1-(1-w)^2 dissolve curves are used instead;
+  static frames keep every element so the generic parity test compares like with like; meteor and satellite positions
+  return to the start while invisible; QUIET also excludes the lock-on readout (so meteor positions differ slightly
+  from the PC preview).
+Commands and outcomes:
+  - unittest 38/38 pass; quality gate 4/4 (10 SVGs, 520 animation elements in total, 504 in the hero).
+  - GIF: 840x473, 240 frames, 10fps, loop=0, 8,150,550 bytes (+2.4% vs T14).
+  - Loop wrap on the main-galaxy crop: mean abs step 239->0 = 6.25 vs normal steps 6.04-6.22.
+  - Core luminance through the dissolve: 141.2-149.0 (start 144.9).
+  - Chromium 1194 (Playwright 1.56.1) setCurrentTime vs librsvg at 1672px, t=0.4/6.4/13.6/20/23.9:
+    pixels |diff|>60 = 2/6/7/4/0 of 1,573,352; mean abs diff 0.12-0.16.
+Visual evidence: supervisor inspected a 6-frame decoded-GIF contact sheet (0, 0.4, 6.4, 13.6, 20, 23.9s) and a 9-frame
+  main-galaxy strip through the dissolve and the wrap (scratchpad, not committed).
+Decision: approve
+Remaining caveats: mid-dissolve (about 19-21s) the main galaxy briefly shows four faint arms. The new frames were
+  not shown to the user before this push; the user approved the PC version, which has the same features.
 ```

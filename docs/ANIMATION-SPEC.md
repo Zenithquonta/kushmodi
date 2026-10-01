@@ -37,10 +37,13 @@ These coordinates are part of the current implementation, not an immutable aesth
 
 `layers()` returns, in order, over the background plate:
 
-1. Celestial: main and secondary galaxy, orbital guide, the two "behind" moon copies, the planet, then the two "front" moon copies.
-2. Traffic: the explorer, two fighters and airplane (with trails, warp markup and, on the airplane, navigation lights).
-3. Sky details: extra star twinkles, the idle target path and reticle, the telescope lock-on, the meteor.
-4. Workshop: the cube patch, the wireframe cube, printer nozzle, scan line and LEDs.
+1. Twinkles: 110 painted stars that dim and flare (T15).
+2. Celestial: main and secondary galaxy, orbital guide, the two "behind" moon copies, the planet, then the two "front" moon copies.
+3. Satellite (T15).
+4. Traffic: the explorer, two fighters and airplane (with trails, warp markup and, on the airplane, navigation lights).
+5. Sky details: extra star twinkles, the idle target path and reticle, the telescope lock-on, the meteor.
+6. Meteors: six shooting stars per loop (T15).
+7. Workshop: the cube patch, the wireframe cube, printer nozzle, scan line and LEDs.
 
 Foreground telescope/trees/buildings are baked into the background, so traffic cannot pass behind them. Instead traffic is kept above the `SKYLINE` outline (below) and fades or warps out before it reaches foreground objects. If full foreground occlusion becomes necessary, introduce a genuine separate foreground layer through an artistic edit rather than covering objects with arbitrary dark polygons. The one place the plate is covered is the painted CAD cube (see Workshop), and that patch is cut from the plate itself.
 
@@ -52,9 +55,11 @@ The common cycles are 1.5, 3, 4, 6, 8, 12 and 24 seconds, all divisors of the ma
 
 ## Galaxies
 
-Main galaxy: core position approximately **(810,184)**, displayed width **390**, positive rotation through one full turn in **24 seconds**. Its wings have enough space to turn above and beside the name region. The approved look has a larger more oblique galaxy; the separate sprite makes the core circular and lends itself to rotation. Review the comparison without silently discarding the user's approved composition.
+Main galaxy: core position approximately **(810,184)**, displayed width **390**, positive rotation through half a turn (180°) in **24 seconds** (T15; it was a full turn, which the user found too busy). Its wings have enough space to turn above and beside the name region. The approved look has a larger more oblique galaxy; the separate sprite makes the core circular and lends itself to rotation. Review the comparison without silently discarding the user's approved composition.
 
-Secondary galaxy: approximately **(1128,228)**, width **137**, opposite rotation through a full turn in **12 seconds**. It adds depth without competing with the main galaxy. Both are stylized celestial motion.
+Secondary galaxy: approximately **(1128,228)**, width **137**, opposite rotation through half a turn in **24 seconds**, with its cycle offset by 12s (T15; it was a full turn every 12 seconds). It adds depth without competing with the main galaxy. Both are stylized celestial motion.
+
+**Slow-spin hand-over (`slow_spin`).** Half a turn per loop cannot close on its own, so each galaxy is drawn twice. Copy A turns 0→sweep and copy B, drawn on top, turns −sweep→0. In the last `SPIN_FADE`=8s of the cycle A fades as 1−w² and B fades in as 1−(1−w)², where w runs 0→1. At the wrap, B (fully visible at 0°) hands over to A (fully visible at 0°), so the loop closes exactly. The galaxy has two arms, so it looks almost the same half a turn apart, which keeps the dissolve subtle; the four-arm overlap is visible only briefly in mid-dissolve. Only normal blending is used: librsvg ignores `mix-blend-mode:plus-lighter`, which would make the GIF differ from the browser. With the eased curves, the overlapping core keeps at least 94% of its brightness (measured in the GIF: core luminance 141–149 over the loop). The two galaxies never dissolve at the same moment (tested).
 
 SVG rotation uses `animateTransform`; sampled frames calculate the equivalent angle. In static exports, angle values such as 0 and 360 are visually equivalent but their XML text is not identical. Tests should check geometric/visual periodicity instead of incorrectly expecting every serialized transform string to be equal at wrap.
 
@@ -112,6 +117,18 @@ An idle dotted cyan target path leads from near the telescope (811,551) toward a
 
 The meteor uses a 12-second cycle with visibility only in roughly the first 16% of the cycle, a sin² fade in and out. A short line and bright head move diagonally from around (1100,380) toward (1490,530).
 
+## Living sky (T15)
+
+Requested by the user: make the galaxy turn slowly and the background feel alive, with star twinkle and random shooting stars. First built on the user's PC against the original package, then ported here onto the reviewed builder with `Track` parity (see the T15 ledger record).
+
+`QUIET` lists where twinkles and meteors may not appear: the name block, the telescope, the workshop, everything at or below y=560, and the lock-on readout (padded by 12px).
+
+**Twinkles.** `bright_stars()` finds the 110 brightest painted stars in the plate with Pillow: local maxima of a 9px max filter, at least 200 luminance and at least 80 above the surrounding sky, outside `QUIET`, at least 16px apart, ranked by energy. The 45 brightest are "big". Each star gets two opacity tracks (`Random(41)`): a dim disc in the surrounding sky colour (radial gradient `tw{k}`) that fades the painted star, and a small pixel sparkle (cross, diagonals, white centre) in the star's tint. Both follow `0.75 sin(a) + 0.25 sin(2a + φ)`, sampled at 12 keyframes per period. Big stars pulse slowly (3/4/6s) with arms of 10–14px; small stars flicker faster (1.5/2/3s) with arms of 5–6px.
+
+**Shooting stars.** `meteor_plan()` (`Random(7)`) places one meteor in each four-second slot, starting 0–2.6s into the slot. Each lasts 0.7–1.15s, travels 260–460px at 18–42° down-left or down-right, and has a tail of 110–190px. Slot 3 is the bright one, with a 240px tail and a wider stroke. The whole path and tail must stay in open sky above y=540, outside `QUIET` with 18px padding. The fade is in over 12% of the flight and out over the last 35%. The position snaps back to the start 0.05s after the fade completes, so every track closes its loop. Tail gradients `mt{k}` sit in the shared `<defs>`, which the moving and reduced-motion copies both use.
+
+**Satellite.** A 3px light with a faint halo glides from (−20,34) to about (1700,104) in 23.8s. It fades in over the first 0.6s and out from 23.2s to 23.8s, then returns while invisible.
+
 ## Telescope lock-on (T14)
 
 Once per loop the telescope acquires the main galaxy, identified as M51 (the Whirlpool, a face-on spiral). Real J2000 coordinates are RA 13h29m52.7s, Dec +47°11′43″; the readout shows them rounded to RA 13h29m and Dec +47°11′. Timeline in loop seconds (the `LOCK` tracks in `_lock_tracks`):
@@ -165,7 +182,7 @@ Default export is **840px wide at 10fps** (`GIF_WIDTH = 840`, `--fps 10`), 240 f
 - `stats_mode=diff` gave a larger file (about +8%) and worse error on the static background. FFmpeg's GIF muxer already writes changed-rectangle frames, so `diff_mode=rectangle` and a gifsicle `-O3` pass gained nothing (-0.13%).
 - Trade-off: fewer source pixels for high-DPI zoom. The animated SVG is the full-resolution version.
 
-The committed GIF is 7,955,864 bytes after the T14 scene additions. Increasing to 12fps smooths traffic but increases frames and bytes. More complex halos or full-scene motion can inflate GIF size quickly.
+The committed GIF is 8,150,550 bytes after the T15 living-sky additions (7,955,864 after T14). Increasing to 12fps smooths traffic but increases frames and bytes. More complex halos or full-scene motion can inflate GIF size quickly.
 
 The quality gate's 25MB budget is a review ceiling, not a requirement to approach it. Prefer smaller files when readability, pixel texture and perceived movement remain intact. Check shared-palette dithering for crawl/noise around sprite edges. Do not shrink and blur the scene so the user's distinctive telescope silhouette disappears.
 

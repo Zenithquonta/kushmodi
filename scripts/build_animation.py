@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the observatory SVG and render a portable GIF with FFmpeg/librsvg.
+"""Build the observatory SVG and render a portable GIF with FFmpeg/librsvg (Pillow finds the painted stars).
 
 The background and transparent sprites are authored with image generation.
 This script composes those layers and defines their animation timelines.
@@ -7,6 +7,7 @@ This script composes those layers and defines their animation timelines.
 import argparse
 import base64
 from concurrent.futures import ThreadPoolExecutor
+import functools
 import math
 from pathlib import Path
 import random
@@ -42,12 +43,6 @@ def sprite(name, width):
     return (f'<svg x="{-(ox-x)*scale:.3f}" y="{-(oy-y)*scale:.3f}" '
             f'width="{width}" height="{sh*scale:.3f}" viewBox="{x} {y} {sw} {sh}" '
             f'overflow="hidden"><use href="#atlas" xlink:href="#atlas"/></svg>')
-
-
-def rotate_node(name, width, x, y, angle, animated, seconds=24):
-    motion = (f'<animateTransform attributeName="transform" type="rotate" '
-              f'from="{angle}" to="{angle+360}" dur="{seconds}s" repeatCount="indefinite"/>' if animated else '')
-    return f'<g transform="translate({x:.3f} {y:.3f})"><g transform="rotate({angle:.3f})">{motion}{sprite(name,width)}</g></g>'
 
 
 def _num(value, digits=3):
@@ -165,13 +160,48 @@ def moon(t, animated, phase, size, period, behind):
     return (f'<g data-moon="{"behind" if behind else "front"}" opacity="{layer.value_text(t)}">{fade}{body}</g>')
 
 
+SPIN_FADE = 8  # seconds each galaxy spends cross-dissolving into its successor at the end of its cycle
+SPIN_SAMPLES = 16
+
+
+def _spin_opacity(outgoing, offset):
+    """Opacity track of one galaxy copy: eased so the overlapping core stays >=94% bright with normal blending.
+
+    The outgoing copy (drawn first) fades as 1-w^2 and the incoming copy on top as 1-(1-w)^2, where w runs
+    0..1 over the last SPIN_FADE seconds.  Normal blending only, because librsvg ignores plus-lighter and the
+    GIF frames must match the browser.
+    """
+    hold = (PERIOD-SPIN_FADE)/PERIOD
+    ws = [i/SPIN_SAMPLES for i in range(SPIN_SAMPLES+1)]
+    curve = [1-w*w for w in ws] if outgoing else [1-(1-w)**2 for w in ws]
+    return Track([curve[0]]+curve, [0]+[hold+(1-hold)*w for w in ws], PERIOD, -offset)
+
+
+def slow_spin(name, width, x, y, sweep, t, animated, offset=0):
+    """Turn a galaxy by only `sweep` degrees per loop.
+
+    Copy A turns 0..sweep and dissolves away in the last SPIN_FADE seconds while copy B, drawn on top, turns
+    -sweep..0 and dissolves in.  At the wrap B (fully visible at 0 deg) hands over to A (fully visible at
+    0 deg), so the loop closes without a jump.  The two-armed galaxy looks almost the same half a turn apart,
+    which keeps the dissolve subtle.  `offset` shifts this galaxy's cycle so two galaxies never dissolve together.
+    """
+    u = ((t+offset) % PERIOD)/PERIOD
+    copies = []
+    for start, outgoing in ((0, True), (-sweep, False)):
+        fade = _spin_opacity(outgoing, offset)
+        begin = f' begin="{-offset}s"' if offset else ''
+        spin = (f'<animateTransform attributeName="transform" type="rotate" from="{start}" to="{start+sweep}" '
+                f'dur="{PERIOD}s"{begin} repeatCount="indefinite"/>' if animated else '')
+        copies.append(f'<g opacity="{fade.value_text(t)}">{fade.smil("opacity") if animated else ""}'
+                      f'<g transform="rotate({_num(start+sweep*u, 4)})">{spin}{sprite(name,width)}</g></g>')
+    return f'<g data-spin="{name}-{width}" transform="translate({x} {y})">{"".join(copies)}</g>'
+
+
 def celestial(t, animated):
-    parts = [rotate_node('galaxy', 390, 810, 184, t*360/PERIOD, animated),
-             rotate_node('galaxy', 137, 1128, 228, -t*360/12, animated, seconds=12)]
-    # Secondary galaxy counter-rotates with an independent 12-second loop.
-    if animated:
-        parts[1] = (f'<g transform="translate(1128 228)"><g><animateTransform attributeName="transform" '
-                    f'type="rotate" from="0" to="-360" dur="12s" repeatCount="indefinite"/>{sprite("galaxy",137)}</g></g>')
+    # Half a turn per loop (the old full turn read as busy).  The small galaxy turns the other way, and its
+    # cycle is offset by 12 s so the two dissolves happen at different moments.
+    parts = [slow_spin('galaxy', 390, 810, 184, 180, t, animated),
+             slow_spin('galaxy', 137, 1128, 228, -180, t, animated, offset=12)]
     orbit = '<ellipse cx="1480" cy="162" rx="150" ry="66" fill="none" stroke="#71d6ef" stroke-width="1.4" stroke-dasharray="3 10" opacity=".4"/>'
     parts.append(orbit)
     # Gentle +-3px bob, sampled from a sine so SMIL and the raster follow the same keyframes.
@@ -756,8 +786,186 @@ def sky_details(t, animated):
     return ''.join(parts)
 
 
+# ---------------------------------------------------------------------------
+# Living sky: painted stars twinkle, shooting stars streak by, a satellite drifts over.
+# ---------------------------------------------------------------------------
+# Regions where twinkles and meteors must not appear: the name block, the telescope, the workshop,
+# everything at or below the horizon, and the lock-on readout.
+QUIET = [(20, 205, 575, 390), (735, 535, 885, 941), (1150, 470, 1672, 941), (0, 560, 1672, 941),
+         tuple(v+d for v, d in zip(LOCK_READOUT_BOX, (-12, -12, 12, 12)))]
+TWINKLE_COUNT = 110
+TWINKLE_BIG = 45  # the brightest stars pulse slowly and widely, the rest flicker faster
+
+
+def quiet(x, y, pad=0):
+    return any(x0-pad <= x <= x1+pad and y0-pad <= y <= y1+pad for x0, y0, x1, y1 in QUIET)
+
+
+@functools.lru_cache(maxsize=1)
+def bright_stars():
+    """The brightest painted stars of the background plate as (x, y, big, star_rgb, sky_rgb), brightest first."""
+    from PIL import Image, ImageFilter
+    image = Image.open(ASSETS/'observatory-background.png').convert('RGB')
+    lum = image.convert('L')
+    lp, pp, rgb = lum.load(), lum.filter(ImageFilter.MaxFilter(9)).load(), image.load()
+    candidates = []
+    for y in range(8, 560):
+        for x in range(8, W-8):
+            v = lp[x, y]
+            if v < 200 or v != pp[x, y] or quiet(x, y, 10):
+                continue
+            base = sorted(lp[x+dx, y+dy] for dx, dy in [(-11, 0), (11, 0), (0, -11), (0, 11), (-8, -8), (8, 8), (-8, 8), (8, -8)])[3]
+            if v-base < 80:
+                continue
+            energy = sum(max(0, lp[x+i, y+j]-base-40) for i in range(-6, 7) for j in range(-6, 7))
+            candidates.append((energy, x, y))
+    candidates.sort(reverse=True)
+    kept = []
+    for energy, x, y in candidates:
+        if all((x-a)**2+(y-b)**2 > 16**2 for _, a, b in kept):
+            kept.append((energy, x, y))
+    stars = []
+    for i, (_, x, y) in enumerate(kept[:TWINKLE_COUNT]):
+        ring = [rgb[x+dx, y+dy] for dx, dy in [(-12, 0), (12, 0), (0, -12), (0, 12), (-9, -9), (9, 9), (-9, 9), (9, -9)]]
+        sky = tuple(sorted(c[k] for c in ring)[3] for k in range(3))
+        core = [rgb[x+dx, y+dy] for dx in (-2, 0, 2) for dy in (-2, 0, 2)]
+        tint = tuple(min(255, int(sum(c[k] for c in core)/len(core)*.6+110)) for k in range(3))
+        stars.append((x, y, i < TWINKLE_BIG, tint, sky))
+    return stars
+
+
+def _wave(u, phase2):
+    a = 2*math.pi*u
+    return .75*math.sin(a)+.25*math.sin(2*a+2*math.pi*phase2)
+
+
+@functools.lru_cache(maxsize=1)
+def twinkle_plan():
+    """Per star: position, colours, sparkle size and its dim/flare opacity tracks (12 keyframes per period)."""
+    rng = random.Random(41)
+    plan = []
+    for x, y, big, tint, sky in bright_stars():
+        period = rng.choice([3, 4, 6] if big else [1.5, 2, 3])
+        phase, phase2 = rng.random(), rng.random()
+        arm = rng.choice([10, 12, 14]) if big else rng.choice([5, 6])
+        dim_peak, flare_peak = (.8, 1) if big else (.9, .75)
+        waves = [_wave(i/12, phase2) for i in range(12)]
+        waves.append(waves[0])
+        dim = Track([dim_peak*max(0, -w) for w in waves], None, period, -phase*period)
+        flare = Track([flare_peak*max(0, w)**1.5 for w in waves], None, period, -phase*period)
+        plan.append((x, y, big, '#%02x%02x%02x' % tint, '#%02x%02x%02x' % sky, arm, dim, flare))
+    return plan
+
+
+def twinkle_defs():
+    return ''.join(f'<radialGradient id="tw{k}"><stop offset="0" stop-color="{sky}"/><stop offset=".55" stop-color="{sky}" stop-opacity=".95"/>'
+                   f'<stop offset="1" stop-color="{sky}" stop-opacity="0"/></radialGradient>'
+                   for k, (*_, sky, _arm, _dim, _flare) in enumerate(twinkle_plan()))
+
+
+def twinkles(t, animated):
+    """Each painted star alternately fades toward the surrounding sky and flares into a small pixel sparkle."""
+    anim = lambda track: track.smil('opacity') if animated else ''
+    dims, flares = [], []
+    for k, (x, y, big, tint, sky, arm, dim, flare) in enumerate(twinkle_plan()):
+        r = 7 if big else 4.5
+        diag = arm*.45
+        dims.append(f'<g opacity="{dim.value_text(t)}">{anim(dim)}<circle cx="{x}" cy="{y}" r="{r}" fill="url(#tw{k})"/></g>')
+        flares.append(f'<g opacity="{flare.value_text(t)}">{anim(flare)}<circle cx="{x}" cy="{y}" r="{arm*.55:.1f}" fill="{tint}" opacity=".22"/>'
+                      f'<path d="M{x-arm} {y}H{x+arm}M{x} {y-arm}V{y+arm}" stroke="{tint}" stroke-width="{2 if big else 1.5}"/>'
+                      f'<path d="M{x-diag:.1f} {y-diag:.1f}L{x+diag:.1f} {y+diag:.1f}M{x-diag:.1f} {y+diag:.1f}L{x+diag:.1f} {y-diag:.1f}" '
+                      f'stroke="{tint}" stroke-width="1" opacity=".55"/><rect x="{x-1.5}" y="{y-1.5}" width="3" height="3" fill="#ffffff"/></g>')
+    return f'<g data-sky="twinkles">{"".join(dims)}{"".join(flares)}</g>'
+
+
+METEOR_COUNT = 6  # one per four-second slot, so something streaks by about every fourth second
+METEOR_BRIGHT = 3  # slot index of the one big, bright shooting star
+
+
+@functools.lru_cache(maxsize=1)
+def meteor_plan():
+    """Shooting stars at irregular times, angles and lengths whose whole path and tail stay in open sky."""
+    rng = random.Random(7)
+    plan = []
+    for slot in range(METEOR_COUNT):
+        while True:
+            start = slot*4+rng.uniform(0, 2.6)
+            duration = rng.uniform(.7, 1.15)
+            x0, y0 = rng.uniform(60, 1640), rng.uniform(15, 330)
+            side, heading = rng.choice([1, -1]), math.radians(rng.uniform(18, 42))
+            travel = rng.uniform(260, 460)
+            dx, dy = side*math.cos(heading)*travel, math.sin(heading)*travel
+            tail = rng.uniform(110, 190) if slot != METEOR_BRIGHT else 240
+            ux, uy = dx/travel, dy/travel
+            points = [(x0+dx*i/20, y0+dy*i/20) for i in range(21)]+[(x0-ux*tail, y0-uy*tail)]
+            if all(0 < px < W and py < 540 and not quiet(px, py, 18) for px, py in points):
+                plan.append((start, duration, x0, y0, dx, dy, tail, slot == METEOR_BRIGHT))
+                break
+    return plan
+
+
+def meteor_tracks(start, duration, x0, y0, dx, dy):
+    """Fade and position tracks: in over 12% of the flight, out over the last 35%, linear motion.
+
+    The position snaps back to the start 0.05 s after the meteor has faded out, so every track closes its loop.
+    """
+    at = lambda f: (x0+dx*f, y0+dy*f)
+    fade = Track.timeline([(start, 0), (start+.12*duration, 1), (start+.65*duration, 1), (start+duration, 0)], 0, digits=4)
+    move = Track.timeline([(start, at(0)), (start+.12*duration, at(.12)), (start+.65*duration, at(.65)),
+                           (start+duration, at(1)), (start+duration+.05, at(0))], at(0), digits=2)
+    return fade, move
+
+
+def meteor_defs():
+    parts = []
+    for k, (_, _, _, _, dx, dy, tail, _) in enumerate(meteor_plan()):
+        length = math.hypot(dx, dy)
+        ux, uy = dx/length, dy/length
+        parts.append(f'<linearGradient id="mt{k}" gradientUnits="userSpaceOnUse" x1="{-ux*tail:.1f}" y1="{-uy*tail:.1f}" x2="0" y2="0">'
+                     f'<stop offset="0" stop-color="#7fd8ff" stop-opacity="0"/><stop offset=".7" stop-color="#bfeeff" stop-opacity=".6"/>'
+                     f'<stop offset="1" stop-color="#ffffff"/></linearGradient>')
+    return ''.join(parts)
+
+
+def meteors(t, animated):
+    parts = []
+    for k, (start, duration, x0, y0, dx, dy, tail, bright) in enumerate(meteor_plan()):
+        length = math.hypot(dx, dy)
+        ux, uy = dx/length, dy/length
+        width = 4 if bright else 3
+        trail = f'M{-ux*tail:.1f} {-uy*tail:.1f}L0 0'
+        fade, move = meteor_tracks(start, duration, x0, y0, dx, dy)
+        parts.append(f'<g opacity="{fade.value_text(t)}">{fade.smil("opacity") if animated else ""}'
+                     f'<g transform="translate({move.value_text(t)})">{move.smil("transform", "translate") if animated else ""}'
+                     f'<path d="{trail}" stroke="url(#mt{k})" stroke-width="{width*2.5}" fill="none" opacity=".25"/>'
+                     f'<path d="{trail}" stroke="url(#mt{k})" stroke-width="{width}" fill="none"/>'
+                     f'<circle r="{7 if bright else 5}" fill="#bff3ff" opacity=".35"/>'
+                     f'<rect x="-2.5" y="-2.5" width="5" height="5" fill="#ffffff"/></g></g>')
+    return f'<g data-sky="meteors">{"".join(parts)}</g>'
+
+
+SATELLITE = ((-20, 34), (1700, 104))  # enters and leaves off canvas
+
+
+def satellite_tracks():
+    (x0, y0), (x1, y1) = SATELLITE
+    at = lambda s: (x0+(x1-x0)*s/23.8, y0+(y1-y0)*s/23.8)
+    move = Track.timeline([(0, at(0)), (23.8, at(23.8)), (PERIOD, at(0))], at(0), digits=2)
+    fade = Track.timeline([(0, 0), (.6, 1), (23.2, 1), (23.8, 0)], 0)
+    return fade, move
+
+
+def satellite(t, animated):
+    """A slow satellite gliding across the top of the sky once per loop; it returns while invisible."""
+    fade, move = satellite_tracks()
+    return (f'<g data-sky="satellite" opacity="{fade.value_text(t)}">{fade.smil("opacity") if animated else ""}'
+            f'<g transform="translate({move.value_text(t)})">{move.smil("transform", "translate") if animated else ""}'
+            '<circle r="4" fill="#d9f4ff" opacity=".2"/><rect x="-1.5" y="-1.5" width="3" height="3" fill="#e9f8ff"/></g></g>')
+
+
 def layers(t, animated):
-    return celestial(t,animated)+traffic(t,animated)+sky_details(t,animated)+workshop(t,animated)
+    return (twinkles(t,animated)+celestial(t,animated)+satellite(t,animated)+traffic(t,animated)
+            +sky_details(t,animated)+meteors(t,animated)+workshop(t,animated))
 
 
 def feather_defs():
@@ -778,10 +986,10 @@ def feather_defs():
 def scene(t=0, animated=False, embedded=True):
     parts=[f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" aria-labelledby="title desc">',
            '<title id="title">Kush Modi — building toward the unexplored</title>',
-           '<desc id="desc">Pixel observatory based on Kush\'s telescope photograph. Rotating galaxies, planetary moons, exploration spacecraft, an airplane and a working maker workshop.</desc>',
+           '<desc id="desc">Pixel observatory based on Kush\'s telescope photograph. Slowly turning galaxies, twinkling stars, shooting stars, a satellite, planetary moons, exploration spacecraft, an airplane and a working maker workshop.</desc>',
            '<defs>',
            f'<image id="atlas" width="1536" height="1024" href="{ATLAS}" xlink:href="{ATLAS}"/>']
-    parts+=[feather_defs(),'</defs>',
+    parts+=[feather_defs(),twinkle_defs(),meteor_defs(),'</defs>',
             f'<image id="plate" width="{W}" height="{H}" href="{BACKGROUND}" xlink:href="{BACKGROUND}"/>']
     if animated:
         parts.append('<style>.still{display:none}@media(prefers-reduced-motion:reduce){.moving{display:none}.still{display:inline}}</style>')
