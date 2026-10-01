@@ -56,7 +56,7 @@ Marking a task `ready_for_review` is not a claim that a supervisor has approved 
 ### T00 — package recovery (2026-10-01)
 
 ```text
-Reviewed by: supervisor claude-opus-5-5 (Claude Code cloud session)
+Reviewed by: supervisor agent (user-selected "Opus 5.5"; Claude Code cloud session)
 Coder: none (supervisor-only recovery and verification)
 Attempt: 1
 Files changed: AGENTS.md, HANDOFF.md, TASKS.md, SUPERVISOR-PROMPT.md, docs/*.md, scripts/*.py, preview.template.html, preview.html, requirements.txt, assets/{observatory.svg,poster.svg,observatory-poster.png,observatory.gif,observatory-background.png,space-sprites.png,*-card.svg}
@@ -78,7 +78,7 @@ Remaining caveats: README.md, CI workflow, profile-picture.png, approved-concept
 ### T01 — inspection (2026-10-01)
 
 ```text
-Reviewed by: supervisor claude-opus-5-5
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
 Coder: none
 Attempt: 1
 Commands and outcomes: read all gate/handoff docs; rendered t=0,3,6,12,14.7,15.6,18,23.9 at 1672px and zoomed crops.
@@ -92,14 +92,14 @@ Findings fed to T02-R1 / later tasks:
   5. Moons always drawn in front of the planet (known).
   6. Nozzle/scan/LED SMIL vs sine raster mismatch (known, T07).
   Name/typography clear in all sampled frames; airplane clears telescope finder at t≈6.3.
-Model resolution: supervisor "Opus 5.5" → claude-opus-5-5 (session record); coder "Sonnet 5.5" → runtime alias `sonnet`, actual ID recorded per task from the coder's report.
+Model resolution: both user-selected names resolved to runtime models; the exact identifiers are reported to the user in the session, not stored in the repository.
 ```
 
 ### T02-R1 — traffic route refinement (2026-10-01)
 
 ```text
-Reviewed by: supervisor claude-opus-5-5
-Coder: claude-sonnet-5-5 (Agent tool, model alias `sonnet`; ID self-reported by the coder)
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: delegated coder agent (user-selected "Sonnet 5.5", Agent tool alias `sonnet`)
 Attempt: 1
 Files changed: scripts/build_animation.py (traffic_state/ROUTES/SKYLINE; fleet-zone clipPath removed), scripts/test_scene.py (+7 tests)
 Commands and outcomes:
