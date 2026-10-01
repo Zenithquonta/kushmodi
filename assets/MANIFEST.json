@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "assets": [
+    {
+      "path": "assets/approved-concept.png",
+      "bytes": 2764211,
+      "sha256": "fcdc8e94cd411fa2bfcbfc62816aac05eb06c833852a9dcb94b61cb0af878883",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB",
+      "format": "PNG"
+    },
+    {
+      "path": "assets/fablab-card.svg",
+      "bytes": 5833,
+      "sha256": "d4a3eb3a4a5163f5af70bc78529e0785360442f3cf419f29fb42870e81608b68",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": "360",
+      "height": "136",
+      "viewBox": "0 0 360 136",
+      "animation_elements": 0
+    },
+    {
+      "path": "assets/flight-card.svg",
+      "bytes": 3615,
+      "sha256": "4e3b3c1f7321715bc684c9816deb5449b44c47387fff1ce41a558019d90113ec",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": "360",
+      "height": "136",
+      "viewBox": "0 0 360 136",
+      "animation_elements": 0
+    },
+    {
+      "path": "assets/legacy/ascii-portrait.svg",
+      "bytes": 24110,
+      "sha256": "fb1909e13b15173b5a2b363ef4cebf72de1798491ad7174dac5979eedd996a92",
+      "role": "reference-only rejected prototype",
+      "width": "450",
+      "height": "420",
+      "viewBox": "0 0 450 420",
+      "animation_elements": 38
+    },
+    {
+      "path": "assets/legacy/ascii-wordmark.svg",
+      "bytes": 185893,
+      "sha256": "9ea3c2f516add0017dc9bdf15c148e9e128b5e1c975d631af1fa8fc3627c98b3",
+      "role": "reference-only rejected prototype",
+      "width": "450",
+      "height": "420",
+      "viewBox": "0 0 450 420",
+      "animation_elements": 25
+    },
+    {
+      "path": "assets/legacy/demo-contributions.svg",
+      "bytes": 61060,
+      "sha256": "15477087f1b789436eab10480631495f1eec9ba06dadd8c487da31b16ce8db06",
+      "role": "reference-only rejected prototype",
+      "width": "900",
+      "height": "258",
+      "viewBox": "0 0 900 258",
+      "animation_elements": 0
+    },
+    {
+      "path": "assets/observatory-background.png",
+      "bytes": 2553337,
+      "sha256": "b82feeb1f5c7e5bfc8fbfd6a7bf4a1e57c3240a2e6fff77fea6117caf3d84338",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB",
+      "format": "PNG"
+    },
+    {
+      "path": "assets/observatory-card.svg",
+      "bytes": 2875,
+      "sha256": "17015d5a70dded5b80cbfbc7e7f9c14c28cc1264b0b02918043b907b99a11ab7",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": "360",
+      "height": "136",
+      "viewBox": "0 0 360 136",
+      "animation_elements": 0
+    },
+    {
+      "path": "assets/observatory-poster.png",
+      "bytes": 1355665,
+      "sha256": "2f39417ca8b83986462fffb6caa5877dc4c97eea43dd51d43d196d4d13a839a7",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": 1000,
+      "height": 563,
+      "mode": "RGBA",
+      "format": "PNG"
+    },
+    {
+      "path": "assets/observatory.gif",
+      "bytes": 11744470,
+      "sha256": "b50e46dae4bd159c79e76992802982d45cefc4930e86efc8a27fa94722284fb6",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": 1000,
+      "height": 563,
+      "mode": "P",
+      "format": "GIF",
+      "frames": 240,
+      "loop": 0,
+      "duration_ms": 24000
+    },
+    {
+      "path": "assets/observatory.svg",
+      "bytes": 5876534,
+      "sha256": "bbcc75283a300a409560e285546cee60a9b3778cd49eae925c13291d123c962c",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": "1672",
+      "height": "941",
+      "viewBox": "0 0 1672 941",
+      "animation_elements": 98
+    },
+    {
+      "path": "assets/poster.svg",
+      "bytes": 5851033,
+      "sha256": "0d8297d63bdcb0b0ea3f1734905063f5c8cc3e70bd59228cc19c38c971e93ee8",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": "1672",
+      "height": "941",
+      "viewBox": "0 0 1672 941",
+      "animation_elements": 0
+    },
+    {
+      "path": "assets/profile-picture.png",
+      "bytes": 2936759,
+      "sha256": "8c45c4c775150e330369a570e173ca6a80f745b957ad45a4519c40ff73667c0a",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB",
+      "format": "PNG"
+    },
+    {
+      "path": "assets/reference-telescope.jpg",
+      "bytes": 173775,
+      "sha256": "c32bf583a9f910e8bb398670215cc6707f70bab1e09b74b819b3148af900ea1e",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": 1280,
+      "height": 1280,
+      "mode": "RGB",
+      "format": "JPEG"
+    },
+    {
+      "path": "assets/space-sprites.png",
+      "bytes": 1828948,
+      "sha256": "8d51e493176b5eb149eaf601823710e0f79f8d2450a52cc7d4c1bc01ba75b6bd",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGBA",
+      "format": "PNG"
+    }
+  ]
+}

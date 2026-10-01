@@ -18,7 +18,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T02-R1 | Fix traffic clip, overlap and foreground crossings found in T02 | done |  Explorer hard-clipped at x=574 (t≈14.7); fighters overlap explorer and trees (t≈0/23.9); airplane crosses right trees/workshop roof (t≈15.6). Route geometry/fades only. |
 | T09 | Review meaningful source regression tests | ready_for_review | Five tests now cover traffic period wrap, periodic/finite CAD geometry, deterministic and changing scene output, sprite crop bounds, and the observed open-path polygon regression. The quality gate additionally covers SVG references and removed live-content references. Review preview regeneration coverage and extend where meaningful. |
 | T10 | Review handoff, registry and reproducibility | ready_for_review | All supplied artwork, active SVGs, legacy SVGs, scripts, template, ledger, entry point and model loop are included. `assets/MANIFEST.json` should describe files and hashes. The handoff must accurately identify completed versus pending work. |
-| T11 | Commit and push the entire handoff and profile project | blocked | Target is only `Zenithquonta/kushmodi`. Earlier writes to both Git Trees and Contents APIs failed with 403 `Resource not accessible by integration`. Refresh live permissions before retrying. Preserve HEAD/unrelated files and do not force-push. |
+| T11 | Commit and push the entire handoff and profile project | implementing | Target is only `Zenithquonta/kushmodi`. Earlier writes to both Git Trees and Contents APIs failed with 403 `Resource not accessible by integration`. Refresh live permissions before retrying. Preserve HEAD/unrelated files and do not force-push. |
 | T12 | Verify CI and live profile, then report | blocked | Depends on T11. Fetch pushed files, confirm the validation workflow run and inspect rendered README. Report actual commit SHA and repository URL. Do not claim a GitHub profile-top display: a `kushmodi` repository does not match the account name `Zenithquonta`. |
 
 ## Review record format
@@ -136,4 +136,19 @@ Visual evidence: GitHub rendering not yet verified (T05, after publication).
 Decision: approve
 Reason: astronomy-first, no invented credentials, no removed-work references, only GitHub-supported interactions.
 Remaining caveats: <picture> reduced-motion behaviour and card links must be verified on github.com (T05).
+```
+
+### Concurrent publication to main (2026-10-01)
+
+```text
+Observed: commit 316e993 on main ("feat: observatory profile README, assets and handoff docs"), authored by
+Kush Modi at 2026-10-01 10:55 +0530, pushed outside this session. CI run 36819742217 on main: success.
+Verified: all 15 assets on main match MANIFEST.json SHA-256; scripts, docs, preview and template are
+byte-identical to the versions recovered in T00; README.md identical to the one approved in T04.
+Merge into ccr-19e1f533-c4auq1: took main's original workflow, .gitignore and requirements.txt (authentic
+package versions; the session's recreated workflow is superseded); kept this branch's TASKS.md and the
+reviewed T02-R1 builder/tests. New on this branch from main: approved-concept.png, profile-picture.png,
+reference-telescope.jpg, assets/legacy/*, assets/MANIFEST.json.
+Consequence for T11: the original package is published on main by the user. Reviewed refinements on this
+branch still need to reach main (normal merge, no force-push).
 ```
