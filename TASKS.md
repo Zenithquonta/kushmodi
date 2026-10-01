@@ -20,6 +20,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T13 | Animated mission cards + fourth Rover Bay card (user-approved addition) | done | Subtle SMIL card motion with static <picture> fallbacks; 2x2 card grid. |
 | T14 | Scene additions: telescope lock-on, warp/hyperspace transitions, airplane nav lights (user-approved) | done | M51 lock-on with pixel readout; explorer warp exit; fighter drop-outs; nav lights + strobe. |
 | T15 | Living sky: slower galaxies, twinkling painted stars, shooting stars, satellite (user-requested; push approved) | done | Ported from the user's PC session onto the reviewed builder with Track parity; 38 tests; Chromium vs GIF parity. |
+| T16 | README mission logs updated from the user's CV | done | Facts from resume.tex only; GR Modi, Modi Fintelli, accounting/clerical skills excluded; contacts unchanged pending user. |
 | T09 | Review meaningful source regression tests | done | Five tests now cover traffic period wrap, periodic/finite CAD geometry, deterministic and changing scene output, sprite crop bounds, and the observed open-path polygon regression. The quality gate additionally covers SVG references and removed live-content references. Review preview regeneration coverage and extend where meaningful. |
 | T10 | Review handoff, registry and reproducibility | done | All supplied artwork, active SVGs, legacy SVGs, scripts, template, ledger, entry point and model loop are included. `assets/MANIFEST.json` should describe files and hashes. The handoff must accurately identify completed versus pending work. |
 | T11 | Commit and push the entire handoff and profile project | implementing | Target is only `Zenithquonta/kushmodi`. Earlier writes to both Git Trees and Contents APIs failed with 403 `Resource not accessible by integration`. Refresh live permissions before retrying. Preserve HEAD/unrelated files and do not force-push. |
@@ -393,4 +394,23 @@ Visual evidence: supervisor inspected a 6-frame decoded-GIF contact sheet (0, 0.
 Decision: approve
 Remaining caveats: mid-dissolve (about 19-21s) the main galaxy briefly shows four faint arms. The new frames were
   not shown to the user before this push; the user approved the PC version, which has the same features.
+```
+
+### T16 — README content from CV (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: delegated coder agent (user-selected "Sonnet 5.5")
+Attempt: 1 (+ supervisor wording fix: IGVC placing labelled as team result)
+Source: user-supplied resume.tex (session upload). Included: MBA Tech Computer Engineering 2024-2029 (MPSTME,
+  NMIMS); alt-az star tracker mount; Team Astrofix SIH 2025 team leader; NETRA; ESP32-S3 micro drone (in design);
+  trekking/skiing/scuba (in progress); Fusion 360/SolidWorks/FDM/fabrication; own PCBs (user statement in
+  session); Team Darwin roles, Vega/Kaizen, Gazebo, chassis, cost-field approach, electronics integration;
+  IGVC 1st qualifying / 5th AutoNav; tools.
+Excluded: GR Modi and Co.; Modi Fintelli (accounting venture, pending user decision); Apps Script, VBA,
+  Workspace automation, web scraping, TradingView; Model UN.
+Checks: header/cards/footer byte-identical to HEAD; gate passes; 60 tests; exclusion grep empty.
+Decision: approve
+Open: CV contacts (kushsmodi@gmail.com, linkedin.com/in/kushsmodi) differ from README contacts; unchanged
+  until the user confirms which are correct.
 ```
