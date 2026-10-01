@@ -85,7 +85,8 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 4 Six-season visuals | done: dry vegetation plate, pixel clouds, monsoon overcast and seeded showers, wet ground and puddles, horizon haze, night visibility; 9 tests |
 | 5 Mumbai skyline, haze and urban glow | done: fixed pixel skyline on both shores, sea link, night windows and blinking aviation lights, sodium glow on the low sky and cloud undersides; 6 tests |
 | 6 Daily seed variation | done: seeded twinkles, meteors, sky crosses, clouds; 4 checked airliner timings and 4 satellite passes; more meteors on approximate shower peaks; 10 tests |
-| 7–14 | pending |
+| 7 Portfolio objects | done: drone pad and hovering quadcopter, field ground station with telemetry trace, tracker controller on the tripod, PCB and soldering iron on the lantern crate; 8 tests |
+| 8–14 | pending |
 
 ## Phase 2 implementation notes
 
@@ -198,3 +199,25 @@ amendments that follow from measured facts, open decisions, and phase status.
   and loop tests; consecutive days differ; defs follow the seeded meteors.
 - Browser parity on the Geminids night (12 meteors) at t = 0, 3, 6, 12, 14.7, 18, 23.9 s: worst cell 0 to 9 px.
 - Cloud layout changed from Phase 4 because clouds now use their own layer seed.
+
+## Phase 7 notes — portfolio objects
+
+- Only work confirmed by the CV or the user: NETRA and the ESP32-S3 micro drone (drone pad and a hovering quadcopter,
+  drawn as art; the CV lists the micro drone as in design), a field ground station (ROS serial / ESP-NOW / GPS-IMU
+  telemetry, shown as a generic scrolling trace and a blinking fix light), the star tracker's controller (a box with
+  power and step lights clamped to the tripod), and PCB work (a board with chips and a soldering iron sending up a
+  wisp, on the lantern crate). No labels, numbers or specs. No research terminal or LoRa (not confirmed).
+- The painted telescope's counterweight looks equatorial; the new box is described as the tracker's controller, not as
+  a claim that the painting shows the alt-az mount.
+- Live-only (drawn when a SceneState is given), after the weather and before the rain. Outdoor objects follow
+  daylight and the sunrise/sunset glow and darken with ground wetness; the PCB keeps the lantern's light.
+- Sized to read at 840 px: the drone is drawn at 1.6x on a 2 px grid and hovers in front of the dark bushes; at night
+  its red/green lamps glow and a white strobe double-flashes (the airliner's strobe timing).
+- `PROTECTED` lists painted things (rover, lantern, printer, LEGO ship, cube patch, tripod centre column and right leg)
+  plus the puddles; a test asserts no object box touches them, the name, or each other.
+- **Coverage gap closed:** `scripts/test_portfolio.py` reruns the generic SMIL-vs-raster and loop checks on lit scenes
+  (winter night, rainy monsoon night, noon) via a patched `layers`, so rain, beacons, clouds and the portfolio
+  animations are now checked, not only browser-sampled. It caught a positive SMIL `begin` on the telemetry trace (the
+  columns would have stood still for up to 3 s in a browser). Rain is exempt from the loop-jump check: it shifts by
+  exactly one tile of identical streaks, so its wrap is seamless by construction.
+- Browser parity (winter night, 7 times): worst cell 0 to 9 px; 0 differing pixels around the objects.

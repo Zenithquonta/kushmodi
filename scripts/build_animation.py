@@ -1022,7 +1022,7 @@ def layers(t, animated, light=None):
             +traffic(t, animated, night, routes_for(day['airliner']))
             +night_group('sky-details', sky_details(t, animated, day['crosses']), night)
             +night_group('meteors', meteors(t, animated, day['meteors'], day['meteor_count']), night)
-            +showers+workshop(t, animated))
+            +('' if light is None else portfolio(t, animated, light))+showers+workshop(t, animated))
 
 
 # ---------------------------------------------------------------------------
@@ -1603,6 +1603,155 @@ def city_defs():
             f'<radialGradient id="city-glow"><stop offset="0" stop-color="{colour}" stop-opacity="1"/>'
             f'<stop offset=".5" stop-color="{colour}" stop-opacity=".45"/>'
             f'<stop offset="1" stop-color="{colour}" stop-opacity="0"/></radialGradient>')
+
+
+# ---------------------------------------------------------------------------
+# Portfolio objects (Phase 7): things from Kush's own work, confirmed by the CV. A drone pad with a hovering quadcopter
+# (NETRA and the ESP32-S3 micro drone, as art), a field ground station with a scrolling telemetry trace, the star
+# tracker's controller on the tripod, and a PCB with a soldering iron on the lantern crate. No labels, specs or numbers.
+# ---------------------------------------------------------------------------
+DRONE_PAD = (1034, 886, 26, 6)            # centre x, centre y, half width, half height
+DRONE_HOVER = (1034, 826)                 # hover centre; it drifts +-4 px and bobs +-3 px
+DRONE_SCALE = 1.6                         # drawn larger than life so it reads at the README's 840 px
+DRONE_DRIFT = 8                           # seconds per drift loop (bob runs twice as fast)
+STATION = (898, 858)                      # ground station: laptop screen top-left; its crate sits below
+TRACKER_BOX = (780, 726, 18, 16)          # x, y, w, h on the tripod's left, beside the centre column
+PCB = (1556, 860)                         # board top-left on the lantern crate
+TRACE_COLUMNS = 12
+# Painted things the objects must never cover (x0, y0, x1, y1); checked by the tests.
+PROTECTED = dict(rover=(1082, 796, 1262, 908), lantern=(1620, 760, 1668, 868), printer=(1270, 688, 1404, 818),
+                 ship=(1418, 738, 1604, 812), cube=(PATCH_TARGET[0], PATCH_TARGET[1], PATCH_TARGET[0]+PATCH_TARGET[2],
+                                                      PATCH_TARGET[1]+PATCH_TARGET[3]),
+                 right_leg=(812, 664, 872, 840), centre_column=(800, 660, 812, 840))
+
+
+def _boxes(rects):
+    return ''.join(f'M{_num(x, 2)} {_num(y, 2)}h{_num(w, 2)}v{_num(h, 2)}h{_num(-w, 2)}z' for x, y, w, h in rects)
+
+
+def _outdoor(light, night, day, warm=None):
+    """An outdoor colour: night to day by daylight, warmed at sunrise/sunset, darker when the ground is wet."""
+    colour = _colour_for(light, night, day, warm or _mix(day, (255, 170, 110), .5))
+    return _mix(colour, (0, 0, 0), WET_DARKEN*.8*light['env']['ground_wetness'])
+
+
+def drone_parts():
+    """Quadcopter seen from the side, centred on 0,0: rects per material (2 px grid)."""
+    return dict(frame=[(-18, -1, 36, 2), (-20, -3, 4, 4), (16, -3, 4, 4), (-8, 4, 2, 4), (6, 4, 2, 4)],
+                body=[(-6, -4, 12, 8)], top=[(-6, -4, 12, 2)], lens=[(-2, 4, 4, 2)],
+                props=[(-26, -6, 16, 2), (10, -6, 16, 2)])
+
+
+def object_boxes():
+    """Bounding boxes of every portfolio object in scene pixels (for the collision tests)."""
+    px, py, hw, hh = DRONE_PAD
+    hx, hy = DRONE_HOVER
+    sx, sy = STATION
+    tx, ty, tw, th = TRACKER_BOX
+    bx, by = PCB
+    k = DRONE_SCALE
+    return dict(pad=(px-hw, py-hh, px+hw, py+hh), drone=(hx-4-26*k, hy-3-10*k, hx+4+26*k, hy+3+12*k),
+                station=(sx-2, sy-2, sx+32, sy+44), tracker=(tx, ty, tx+tw, ty+th), pcb=(bx, by-22, bx+62, by+12))
+
+
+def drone(t, animated, light):
+    darkness = 1-light['daylight']
+    frame = _outdoor(light, (30, 34, 44), (64, 68, 78))
+    body = _outdoor(light, (44, 50, 66), (210, 214, 222))
+    top = _mix(body, (255, 255, 255), .35)
+    hx, hy = DRONE_HOVER
+    path = [(4*math.sin(2*math.pi*i/24), 3*math.sin(4*math.pi*i/24)) for i in range(24)]
+    move = Track([(hx+x, hy+y) for x, y in path]+[(hx+path[0][0], hy+path[0][1])], None, DRONE_DRIFT, digits=2)
+    strobe = Track([v for _, v in STROBE_KEYS], [s/STROBE_PERIOD for s, _ in STROBE_KEYS], STROBE_PERIOD)
+    parts = drone_parts()
+    pad_x, pad_y, hw, hh = DRONE_PAD
+    pad = _outdoor(light, (28, 30, 36), (96, 98, 104))
+    mark = _outdoor(light, (70, 74, 84), (226, 226, 214))
+    pad_rects = [(pad_x-hw+6, pad_y-hh, 2*hw-12, 2), (pad_x-hw+2, pad_y-hh+2, 2*hw-4, 2*hh-4), (pad_x-hw, pad_y-2, 2*hw, 4),
+                 (pad_x-hw+6, pad_y+hh-2, 2*hw-12, 2)]
+    h_mark = [(pad_x-7, pad_y-3, 2, 6), (pad_x+5, pad_y-3, 2, 6), (pad_x-5, pad_y-1, 10, 2)]
+    out = (f'<g data-portfolio="drone-pad"><path d="{_boxes(pad_rects)}" fill="{_rgb(pad)}"/>'
+           f'<path d="{_boxes(h_mark)}" fill="{_rgb(mark)}"/>'
+           f'<ellipse cx="{hx}" cy="{pad_y-1}" rx="14" ry="3" fill="#000" opacity=".3"/></g>')
+    leds = (f'<path d="{_boxes([(-20, 1, 2, 2)])}" fill="#ff3b3b"/><path d="{_boxes([(18, 1, 2, 2)])}" fill="#38ff7a"/>'
+            f'<circle cx="-19" cy="2" r="4" fill="#ff3b3b" opacity="{_num(.35*darkness, 3)}"/>'
+            f'<circle cx="19" cy="2" r="4" fill="#38ff7a" opacity="{_num(.35*darkness, 3)}"/>'
+            f'<g opacity="{strobe.value_text(t)}">{strobe.smil("opacity") if animated else ""}'
+            f'<path d="{_boxes([(-1, -8, 2, 2)])}" fill="#ffffff"/>'
+            f'<circle cy="-7" r="5" fill="#ffffff" opacity="{_num(.4*darkness, 3)}"/></g>')
+    out += (f'<g data-portfolio="drone" transform="translate({move.value_text(t)})">'
+            f'{move.smil("transform", "translate") if animated else ""}<g transform="scale({DRONE_SCALE})">'
+            f'<path d="{_boxes(parts["props"])}" fill="{_rgb(_mix(top, (200, 210, 220), .5))}" opacity=".55"/>'
+            f'<path d="{_boxes(parts["frame"])}" fill="{_rgb(frame)}"/>'
+            f'<path d="{_boxes(parts["body"])}" fill="{_rgb(body)}"/>'
+            f'<path d="{_boxes(parts["top"])}" fill="{_rgb(top)}"/>'
+            f'<path d="{_boxes(parts["lens"])}" fill="#0a1020"/>{leds}</g></g>')
+    return out
+
+
+def ground_station(t, animated, light):
+    """A rugged laptop on a crate, its screen showing a generic scrolling trace and a blinking fix light."""
+    darkness = 1-light['daylight']
+    sx, sy = STATION
+    crate = _outdoor(light, (38, 30, 28), (128, 96, 62))
+    shell = _outdoor(light, (30, 34, 40), (70, 76, 86))
+    out = (f'<g data-portfolio="ground-station">'
+           f'<rect x="{sx-4}" y="{sy-4}" width="36" height="26" fill="#5af0b0" opacity="{_num(.18*darkness, 3)}"/>'
+           f'<path d="{_boxes([(sx, sy+22, 30, 20)])}" fill="{_rgb(crate)}"/>'
+           f'<path d="{_boxes([(sx, sy+30, 30, 2), (sx+14, sy+22, 2, 20)])}" fill="{_rgb(_mix(crate, (0, 0, 0), .35))}"/>'
+           f'<path d="{_boxes([(sx-2, sy-2, 32, 22), (sx-2, sy+18, 34, 4)])}" fill="{_rgb(shell)}"/>'
+           f'<path d="{_boxes([(sx, sy, 28, 18)])}" fill="#06140f"/>'
+           f'<path d="{_boxes([(sx+2, sy+14, 10, 2), (sx+16, sy+14, 6, 2)])}" fill="#2a6a50"/>')
+    for k in range(TRACE_COLUMNS):
+        wave = Track.sine(sy+8, 4, 3, phase=k/TRACE_COLUMNS, digits=2)
+        out += (f'<rect x="{sx+2+2*k}" y="{wave.value_text(t)}" width="2" height="2" fill="#6dffb8">'
+                f'{wave.smil("y") if animated else ""}</rect>')
+    fix = Track([1, 1, .2, .2, 1], [0, .5, .5, .99, 1], 1)
+    out += (f'<rect x="{sx+24}" y="{sy+2}" width="2" height="2" fill="#7dff8a" opacity="{fix.value_text(t)}">'
+            f'{fix.smil("opacity") if animated else ""}</rect></g>')
+    return out
+
+
+def tracker_controller(t, animated, light):
+    """A small controller box clamped to the tripod: a steady green power light and a slow red step light."""
+    x, y, w, h = TRACKER_BOX
+    box = _outdoor(light, (26, 30, 38), (84, 90, 100))
+    edge = _mix(box, (255, 255, 255), .25)
+    step = Track([1, 1, .15, .15, 1], [0, .45, .5, .95, 1], 2)
+    return (f'<g data-portfolio="tracker"><path d="{_boxes([(x, y, w, h)])}" fill="{_rgb(box)}"/>'
+            f'<path d="{_boxes([(x, y, w, 2), (x+w, y+4, 2, 2)])}" fill="{_rgb(edge)}"/>'
+            f'<path d="{_boxes([(x+3, y+4, 4, 4)])}" fill="#38ff7a"/>'
+            f'<rect x="{x+10}" y="{y+4}" width="4" height="4" fill="#ff4a3b" opacity="{step.value_text(t)}">'
+            f'{step.smil("opacity") if animated else ""}</rect>'
+            f'<path d="{_boxes([(x+3, y+11, 12, 2)])}" fill="{_rgb(_mix(box, (0, 0, 0), .4))}"/></g>')
+
+
+def pcb_bench(t, animated):
+    """A green board with chips and pads, and a soldering iron whose tip sends up a thin wisp (lit by the lantern)."""
+    x, y = PCB
+    board = [(x, y, 34, 8)]
+    chips = [(x+4, y+2, 6, 4), (x+14, y+2, 4, 4), (x+22, y+2, 8, 2)]
+    pads = [(x+2, y, 2, 2), (x+12, y+6, 2, 2), (x+20, y, 2, 2), (x+30, y+6, 2, 2), (x+26, y+4, 2, 2)]
+    iron = [(x+40, y+6, 6, 2), (x+46, y+4, 6, 2), (x+52, y+2, 6, 2)]
+    tip = (x+38, y+6)
+    out = (f'<g data-portfolio="pcb"><path d="{_boxes(board)}" fill="rgb(40,128,70)"/>'
+           f'<path d="{_boxes([(x, y+6, 34, 2)])}" fill="rgb(24,84,48)"/>'
+           f'<path d="{_boxes(chips)}" fill="rgb(22,22,26)"/><path d="{_boxes(pads)}" fill="rgb(236,190,96)"/>'
+           f'<path d="{_boxes([(x+31, y+2, 2, 2)])}" fill="#ff4a3b"/>'
+           f'<path d="{_boxes(iron)}" fill="rgb(120,124,132)"/><path d="{_boxes([(tip[0], tip[1], 2, 2)])}" fill="rgb(255,150,60)"/>')
+    for k in range(3):
+        offset = -k  # three puffs, one second apart; each rises, fades, and returns while invisible
+        move = Track([(tip[0], tip[1]-2), (tip[0]-2, tip[1]-20), (tip[0], tip[1]-2)], [0, .9, 1], 3, begin=offset, digits=2)
+        fade = Track([0, .55, 0, 0], [0, .15, .9, 1], 3, begin=offset)
+        out += (f'<g opacity="{fade.value_text(t)}">{fade.smil("opacity") if animated else ""}'
+                f'<rect x="0" y="0" width="2" height="2" fill="rgb(222,222,226)" '
+                f'transform="translate({move.value_text(t)})">{move.smil("transform", "translate") if animated else ""}</rect></g>')
+    return out+'</g>'
+
+
+def portfolio(t, animated, light):
+    return (f'<g data-portfolio="objects">{drone(t, animated, light)}{ground_station(t, animated, light)}'
+            f'{tracker_controller(t, animated, light)}{pcb_bench(t, animated)}</g>')
 
 
 def feather_defs():

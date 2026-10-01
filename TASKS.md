@@ -513,3 +513,18 @@ Commands and outcomes: 102 tests pass; quality gate passes; default scene byte-i
 Visual evidence: 10 and 11 Feb 2027 at 23:00, four loop times each.
 Decision: approve
 ```
+
+### LO-P7 — Portfolio objects (2026-10-01)
+
+```text
+Requested by: user ("yes start phase 7 yourself, don't wait")
+Implemented and reviewed by: supervisor agent (user-selected "Opus 5.5"); approach reviewed by the advisor before coding
+Files: scripts/build_animation.py (drone, ground_station, tracker_controller, pcb_bench, portfolio, PROTECTED,
+  object_boxes), scripts/test_portfolio.py (8 tests), scripts/test_scene.py (rain loop exemption with reason), docs
+Findings during the phase: objects were unreadable at 840 px at first (drone 1.6x and higher hover, larger tracker
+  box); the new lit-scene coverage caught a positive SMIL begin on the telemetry trace.
+Commands and outcomes: 110 tests pass; quality gate passes; default scene byte-identical to published assets;
+  Chromium vs librsvg on a winter night at 7 times: worst cell 0 to 9 px, 0 px around the objects.
+Visual evidence: 4x zooms of each object at noon, golden hour, winter night and monsoon morning; 840 px crops.
+Decision: approve
+```

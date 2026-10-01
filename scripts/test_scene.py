@@ -492,6 +492,8 @@ class SceneTests(unittest.TestCase):
     continue  # traffic is an intentional sawtooth that wraps while fully transparent (see traffic tests)
    if any('data-spin' in g.attrib for g in ancestors):
     continue  # galaxy copies hand over to each other at their wrap (see the slow-spin test)
+   if any(g.attrib.get('data-season')=='rain' for g in ancestors):
+    continue  # rain shifts by exactly one tile of identical streaks per period, so its wrap is seamless by construction
    count+=1
    dur=seconds(node.attrib['dur'])
    self.assertEqual(scene.PERIOD%dur,0,node.attrib)
