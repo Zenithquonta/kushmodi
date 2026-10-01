@@ -168,6 +168,19 @@ def same(a,b,tol):
   return a==b
 
 
+def sprite_leaves(t,name):
+ """Static-frame <svg> sprite viewports showing atlas rectangle `name`, in document order."""
+ x,y,w,h=scene.RECTS[name][0]
+ box=f'{x} {y} {w} {h}'
+ return [l for l in static_cached(t) if l[0]=='svg' and l[1].get('viewBox')==box]
+
+
+def leaf_index(t,name):
+ """Document-order position of each sprite of `name` among all static leaves (drawing order)."""
+ x,y,w,h=scene.RECTS[name][0]
+ return [i for i,l in enumerate(static_cached(t)) if l[0]=='svg' and l[1].get('viewBox')==f'{x} {y} {w} {h}']
+
+
 def parents(root):
  return {child:node for node in root.iter() for child in node}
 
@@ -340,7 +353,7 @@ class SceneTests(unittest.TestCase):
   for t in [i/10 for i in range(0,240,7)]:
    sine=lambda period,phase=0:math.sin(2*math.pi*t/period+phase)
    # planet bob, nozzle, scan: centre, amplitude, period of the approved GIF
-   planet_y=[l for l in static_cached(t) if l[0]=='svg'][2][2][5]  # sprites: galaxy, galaxy, planet
+   planet_y=sprite_leaves(t,'planet')[0][2][5]
    self.assertAlmostEqual(planet_y,163+3*sine(24),delta=.05,msg=t)
    self.assertAlmostEqual(float(leaf(t,fill='#71edff')[1]['x']),1335+20*sine(3),delta=.25,msg=t)
    self.assertAlmostEqual(float(leaf(t,fill='#83eaff')[1]['y']),749+18*sine(6),delta=.25,msg=t)
@@ -423,6 +436,114 @@ class SceneTests(unittest.TestCase):
    for y in range(380,limit-6,3):
     dark=sum(max(pixels[x,yy])<42 for x in range(x0,x0+8) for yy in range(y,y+24,2))
     self.assertLess(dark/96,.8,(x0,y,limit))
+
+ def test_animated_cube_is_registered_on_the_painted_cube(self):
+  left,top,right,bottom=scene.PAINTED_CUBE
+  # the painted extent as stored must still be what the plate contains (bright cyan outline pixels)
+  if Image is not None:
+   pixels=Image.open(scene.ASSETS/'observatory-background.png').convert('RGB').load()
+   lit=[(x,y) for y in range(680,745) for x in range(1425,1496)
+        if pixels[x,y][1]>180 and pixels[x,y][2]>200 and pixels[x,y][0]<130]
+   self.assertGreater(len(lit),300)
+   self.assertEqual((min(p[0] for p in lit),min(p[1] for p in lit),max(p[0] for p in lit)+1,max(p[1] for p in lit)+1),
+                    scene.PAINTED_CUBE)
+  # rest pose (the t=0 frame): footprint is the painted 46x45 box to within 3px, centred on it to within 1.5px
+  points=scene.cube_points(0)
+  xs,ys=[p[0] for p in points],[p[1] for p in points]
+  for found,wanted in ((min(xs),left),(min(ys),top),(max(xs),right),(max(ys),bottom)):
+   self.assertAlmostEqual(found,wanted,delta=3)
+  self.assertAlmostEqual((min(xs)+max(xs))/2,(left+right)/2,delta=1.5)
+  self.assertAlmostEqual((min(ys)+max(ys))/2,(top+bottom)/2,delta=1.5)
+  self.assertAlmostEqual(max(xs)-min(xs),right-left,delta=3)
+  self.assertAlmostEqual(max(ys)-min(ys),bottom-top,delta=3)
+  # the first frame of the SVG/raster draws that same pose, and the cube never leaves the workshop wall
+  edge=[l for l in static_cached(0) if l[1].get('stroke')=='#72f0ff'][0]
+  self.assertAlmostEqual(float(edge[1]['x1']),points[0][0],delta=.01)
+  for theta in (i*2*math.pi/24 for i in range(24)):
+   for x,y in scene.cube_points(theta):
+    self.assertTrue(1432<=x<=1490 and 684<=y<=738,(theta,x,y))
+
+ def test_cube_reads_as_three_dimensional_at_every_pose(self):
+  for step in range(96):  # four poses per animation keyframe
+   pts=scene.cube_points(step*2*math.pi/96)
+   top=[pts[i] for i in (0,1,5,4)]  # the y=-1 face
+   area=abs(sum(a[0]*b[1]-b[0]*a[1] for a,b in zip(top,top[1:]+top[:1])))/2
+   self.assertGreater(area,250,step)  # ~295 at every pose: the top face never collapses to an edge
+   # perspective: the four vertical edges are never all the same length, so a face-on pose still shows near/far faces
+   edges=[math.dist(pts[i],pts[j]) for i,j in ((0,3),(1,2),(4,7),(5,6))]
+   self.assertGreater(max(edges)/min(edges),1.08,step)
+
+ def test_cube_has_restrained_glow_under_the_crisp_edges(self):
+  strokes=[l for l in static_cached(0) if l[0]=='line']
+  crisp=[l for l in strokes if l[1]['stroke']=='#72f0ff']
+  glow=[l for l in strokes if l[1]['stroke']!='#72f0ff']
+  self.assertEqual(len(crisp),12)
+  self.assertEqual(len(glow),12*len(scene.GLOW))
+  self.assertEqual(strokes[-12:],crisp)  # crisp edges drawn on top of the glow
+  for l in glow:
+   self.assertGreater(float(l[1]['stroke-width']),float(crisp[0][1]['stroke-width']))
+   self.assertLessEqual(l[3],.25)
+  self.assertNotIn('<filter id="cube-glow"',scene.scene(0,True))  # plain strokes only, identical in every engine
+
+ def test_painted_cube_is_covered_by_a_patch_of_the_embedded_plate_only(self):
+  svg=scene.scene(0,True)
+  self.assertEqual(svg.count('data:image/png'),2)  # atlas and plate, no third raster copy
+  self.assertEqual(svg.count('<image '),2)
+  self.assertIn('href="#plate"',svg)
+  self.assertIn('id="cube-feather"',svg)
+  self.assertNotIn('clip-path',svg)
+  ET.fromstring(svg)
+  x,y,w,h=scene.PATCH_TARGET
+  left,top,right,bottom=scene.PAINTED_CUBE
+  self.assertTrue(x<=left-4 and y<=top-4 and x+w>=right+4 and y+h>=bottom+4)  # covers the outline with margin
+  for sx,sy,sw,sh in (scene.PATCH_SOURCE,scene.PATCH_LOW):
+   self.assertTrue(sy+sh<=top-1 or sy>=bottom+3)  # strips come from wall outside the painted cube
+
+ def test_moons_hide_behind_the_planet_on_the_far_half_only(self):
+  for t in SAMPLES:
+   order=leaf_index(t,'planet')
+   self.assertEqual(len(order),1)
+   moons=leaf_index(t,'moon')
+   self.assertEqual(len(moons),4)  # (behind, front) copies of both moons, behind copies first
+   self.assertEqual([i<order[0] for i in moons],[True,True,False,False],t)
+   for moon,(phase,size,period) in enumerate(scene.MOONS):
+    theta=2*math.pi*t/period+phase
+    behind,front=(static_cached(t)[moons[moon+offset]] for offset in (0,2))
+    cx,cy,rx,ry=scene.ORBIT
+    for leaf in (behind,front):
+     self.assertAlmostEqual(leaf[2][4],cx+rx*math.cos(theta),delta=.01,msg=(t,moon))
+     self.assertAlmostEqual(leaf[2][5],cy+ry*math.sin(theta),delta=.01,msg=(t,moon))
+    self.assertAlmostEqual(behind[3]+front[3],1,delta=1e-9,msg=(t,moon))  # never both, never neither
+    if math.sin(theta)<-1e-9:
+     self.assertEqual((behind[3],front[3]),(1,0),(t,moon,'far half: occluded by the planet'))
+    elif math.sin(theta)>1e-9:
+     self.assertEqual((behind[3],front[3]),(0,1),(t,moon,'near half: in front of the planet'))
+
+ def test_moon_layer_switches_are_exact_steps_at_theta_zero_and_pi(self):
+  for phase,size,period in scene.MOONS:
+   behind=scene.moon_layer(phase,period,True)
+   front=scene.moon_layer(phase,period,False)
+   for k in range(2):  # theta = pi (near -> far) and theta = 2*pi (far -> near)
+    switch=(math.pi*(k+1)-phase)/(2*math.pi)*period
+    for dt,far in ((-.01,k==1),(.01,k==0)):
+     self.assertEqual(behind.at(switch+dt),1.0 if far else 0.0,(phase,k,dt))
+     self.assertEqual(front.at(switch+dt),0.0 if far else 1.0,(phase,k,dt))
+   self.assertEqual(behind.values[0],behind.values[-1])
+   # an exact SMIL step, not a fade: only the coincident key times change the value
+   self.assertEqual(len(set(behind.key_times)),4)
+
+ def test_moon_layer_markup_uses_coincident_key_times(self):
+  moving=ET.fromstring(WRAP.format(scene.layers(0,True)))
+  layers=[g for g in moving.iter(SVG+'g') if g.attrib.get('data-moon')]
+  self.assertEqual([g.attrib['data-moon'] for g in layers],['behind','behind','front','front'])
+  for g in layers:
+   anim=g.find(SVG+'animate')
+   self.assertEqual(anim.attrib['attributeName'],'opacity')
+   keys=anim.attrib['keyTimes'].split(';')
+   self.assertEqual(keys,['0','0.25','0.25','0.75','0.75','1'])
+   self.assertEqual(len(keys),6)
+   self.assertEqual(keys[1],keys[2])
+   self.assertEqual(keys[3],keys[4])
 
 
 if __name__=='__main__':

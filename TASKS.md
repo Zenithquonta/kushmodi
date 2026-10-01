@@ -8,7 +8,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | --- | --- | --- | --- |
 | T00 | Recover package into the cloud runtime | done | Package was not present in the container; recovered from user uploads and verified against `MANIFEST.json` (see review record). |
 | T01 | Inspect supplied project and approved references | done | Read the gate and handoff; open reference photo, approved concept, current poster and square image. Record actual runtime/model IDs. Do not rebuild from scratch. |
-| T02 | Review the layered scene and animation geometry | ready_for_review | Background, sprites, galaxy rotation, moon orbits, ship traffic, twinkles, print head, wireframe cube and LEDs exist in the builder. Inspect 0/3/6/12/18/23.9 second frames for clipping, artifacts, title collisions and horizon crossings. |
+| T02 | Review the layered scene and animation geometry | done | Background, sprites, galaxy rotation, moon orbits, ship traffic, twinkles, print head, wireframe cube and LEDs exist in the builder. Inspect 0/3/6/12/18/23.9 second frames for clipping, artifacts, title collisions and horizon crossings. |
 | T03 | Review and refine the square profile picture | done | `assets/profile-picture.png` exists. Check telescope/galaxy readability at 96px and 192px, and in a circular crop preview. Keep source image unchanged. |
 | T04 | Review README content, employer removal and scope | done | Name is Kush Modi; astronomy-first profile; four expandable sections; AstroFixxer project links; aviation/LEGO/CAD/printing interests; no removed-work references. Existing robotics/education/contact facts are grounded in the original README. |
 | T05 | Verify actual GitHub README interactions | done | Render on GitHub after push, verify picture fallback, image links, section anchors and details. GitHub README must not depend on JavaScript, image maps or iframe controls. |
@@ -16,7 +16,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T07 | Align SVG and GIF animation timings | done | The same scene functions render both versions, but some workshop SMIL motion interpolates linearly while raster frames use sine. Review resulting differences and make them intentional or identical. Compare selected times and the wrap at 24 seconds. |
 | T08 | Optimize size without damaging the approved look | pending | Current GIF: 1000×563, 240 frames at 10fps, 24s, 11,744,470 bytes. Review 840/1000px and 8/10/12fps tradeoffs if needed. Prefer one accepted version, no noisy blur or flickering palettes. Document final output dimensions, bytes, duration and tool versions. |
 | T02-R1 | Fix traffic clip, overlap and foreground crossings found in T02 | done |  Explorer hard-clipped at x=574 (t≈14.7); fighters overlap explorer and trees (t≈0/23.9); airplane crosses right trees/workshop roof (t≈15.6). Route geometry/fades only. |
-| T02-R2 | Register the CAD cube to the painted cube; moons pass behind the planet | implementing | Found in T01 (double cube in every frame) and the known moon-occlusion item. |
+| T02-R2 | Register the CAD cube to the painted cube; moons pass behind the planet | done | Found in T01 (double cube in every frame) and the known moon-occlusion item. |
 | T09 | Review meaningful source regression tests | ready_for_review | Five tests now cover traffic period wrap, periodic/finite CAD geometry, deterministic and changing scene output, sprite crop bounds, and the observed open-path polygon regression. The quality gate additionally covers SVG references and removed live-content references. Review preview regeneration coverage and extend where meaningful. |
 | T10 | Review handoff, registry and reproducibility | ready_for_review | All supplied artwork, active SVGs, legacy SVGs, scripts, template, ledger, entry point and model loop are included. `assets/MANIFEST.json` should describe files and hashes. The handoff must accurately identify completed versus pending work. |
 | T11 | Commit and push the entire handoff and profile project | implementing | Target is only `Zenithquonta/kushmodi`. Earlier writes to both Git Trees and Contents APIs failed with 403 `Resource not accessible by integration`. Refresh live permissions before retrying. Preserve HEAD/unrelated files and do not force-push. |
@@ -260,4 +260,22 @@ Reason: Moons approved (hidden behind the planet on the far half, in front on th
   Option 2 (plate-derived feathered patch + one cube) is correct, but the yaw-only projection collapses to a flat
   rectangle every 90 deg and the painted hologram glow is lost. Attempt 2: fixed tilt, subtle glow stroke,
   remove option-1 code, check faint patch bottom edge.
+```
+
+### T02-R2 — attempt 2 (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: delegated coder agent (user-selected "Sonnet 5.5")
+Attempt: 2
+Files changed: scripts/build_animation.py (22 deg tilt + weak perspective cube registered on the painted cube,
+  two-stroke restrained glow, plate-derived feathered patch with low strip + gradient, option-1 code removed;
+  moons drawn as behind/front copies switched by opacity Tracks), scripts/test_scene.py (23 tests)
+Commands and outcomes: 23/23 pass (supervisor re-run); parity max cell 4 at 7 times; animated SVG +35 KB.
+Visual evidence: supervisor inspected x3 cube crops at 8 poses and the 1000px plate/t0/t0.75 workshop comparison.
+Decision: approve
+Reason: single cube, 3D at every pose, footprint matches the painted cube within 0.5px, glow matches the plate,
+  no visible seam at README size; moons occluded correctly (approved in attempt 1).
+Remaining caveats: patch loses the plate's soft halo (glow strokes stand in); faint plate-shadow step at x<1452,
+  y~741 visible only at 1672px brightness-boosted.
 ```

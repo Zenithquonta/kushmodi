@@ -115,6 +115,41 @@ class Track:
         return self.text(self.at(t))
 
 
+# (start phase in radians, sprite width, period in seconds); theta = 2*pi*t/period + phase.
+MOONS = [(0, 39, 12), (math.pi, 28, 24)]
+ORBIT = (1480, 162, 150, 66)  # projected ellipse: centre x, centre y, radii x and y
+
+
+def moon_layer(phase, period, behind):
+    """Opacity of one moon copy: a step track whose cycle starts at theta=pi/2 (mid near half).
+
+    The far half (sin(theta)<0) is cycle fraction .25..75; the coincident key times make
+    the switches instant steps at theta=pi and theta=0 (mod 2*pi).
+    """
+    begin = ((math.pi/2-phase)/(2*math.pi)*period) % period-period
+    values = [0, 0, 1, 1, 0, 0] if behind else [1, 1, 0, 0, 1, 1]
+    return Track(values, [0, .25, .25, .75, .75, 1], period, begin)
+
+
+def moon(t, animated, phase, size, period, behind):
+    theta = 2*math.pi*t/period+phase
+    cx, cy, rx, ry = ORBIT
+    mx, my = cx+rx*math.cos(theta), cy+ry*math.sin(theta)
+    layer = moon_layer(phase, period, behind)
+    fade = layer.smil('opacity') if animated else ''
+    if animated:
+        # Circular parameter is projected to an ellipse by scaling its parent.
+        degrees = math.degrees(phase)
+        body = (f'<g transform="translate({cx} {cy}) scale(1 {ry/rx:.2f})"><g transform="rotate({degrees:.3f})">'
+                f'<animateTransform attributeName="transform" type="rotate" from="{degrees:.3f}" to="{degrees+360:.3f}" dur="{period}s" repeatCount="indefinite"/>'
+                f'<g transform="translate({rx} 0)"><g transform="rotate({-degrees:.3f})">'
+                f'<animateTransform attributeName="transform" type="rotate" from="{-degrees:.3f}" to="{-degrees-360:.3f}" dur="{period}s" repeatCount="indefinite"/>'
+                f'<g transform="scale(1 {rx/ry:.5f})">{sprite("moon",size)}</g></g></g></g></g>')
+    else:
+        body = f'<g transform="translate({mx:.3f} {my:.3f})">{sprite("moon",size)}</g>'
+    return (f'<g data-moon="{"behind" if behind else "front"}" opacity="{layer.value_text(t)}">{fade}{body}</g>')
+
+
 def celestial(t, animated):
     parts = [rotate_node('galaxy', 390, 810, 184, t*360/PERIOD, animated),
              rotate_node('galaxy', 137, 1128, 228, -t*360/12, animated, seconds=12)]
@@ -126,20 +161,18 @@ def celestial(t, animated):
     parts.append(orbit)
     # Gentle +-3px bob, sampled from a sine so SMIL and the raster follow the same keyframes.
     bob = Track.sine(163, 3, 24, lift=lambda y: (1480, y))
-    parts.append(f'<g transform="translate({bob.value_text(t)})">{bob.smil("transform", "translate") if animated else ""}'
-                 f'{sprite("planet",305)}</g>')
-    for phase, size, period in [(0,39,12),(math.pi,28,24)]:
-        theta = 2*math.pi*t/period+phase
-        mx, my = 1480+150*math.cos(theta), 162+66*math.sin(theta)
-        if animated:
-            # Circular parameter is projected to an ellipse by scaling its parent.
-            parts.append(f'<g transform="translate(1480 162) scale(1 .44)"><g transform="rotate({math.degrees(phase):.3f})">'
-                         f'<animateTransform attributeName="transform" type="rotate" from="{math.degrees(phase):.3f}" to="{math.degrees(phase)+360:.3f}" dur="{period}s" repeatCount="indefinite"/>'
-                         f'<g transform="translate(150 0)"><g transform="rotate({-math.degrees(phase):.3f})">'
-                         f'<animateTransform attributeName="transform" type="rotate" from="{-math.degrees(phase):.3f}" to="{-math.degrees(phase)-360:.3f}" dur="{period}s" repeatCount="indefinite"/>'
-                         f'<g transform="scale(1 {1/.44:.5f})">{sprite("moon",size)}</g></g></g></g></g>')
-        else:
-            parts.append(f'<g transform="translate({mx:.3f} {my:.3f})">{sprite("moon",size)}</g>')
+    planet = (f'<g transform="translate({bob.value_text(t)})">{bob.smil("transform", "translate") if animated else ""}'
+              f'{sprite("planet",305)}</g>')
+    # Each moon is drawn twice: a copy before the planet that is visible on the far (upper, sin(theta)<0)
+    # half of its orbit and a copy after it for the near half.  Complementary opacity tracks switch
+    # them at theta=0 and theta=pi, where the moon is clear of the planet body.
+    behind, front = [], []
+    for phase, size, period in MOONS:
+        behind.append(moon(t, animated, phase, size, period, True))
+        front.append(moon(t, animated, phase, size, period, False))
+    parts.extend(behind)
+    parts.append(planet)
+    parts.extend(front)
     return ''.join(parts)
 
 
@@ -275,27 +308,71 @@ def traffic(t, animated):
     return ''.join(parts)
 
 
+# The background plate already paints a glowing wireframe cube on the wall (outline x 1438..1484, y 689..734,
+# centre (1461, 711.3), measured from the bright cyan pixels).  Two cubes would show, so the painted one is
+# covered by a patch made only from the plate's own wall (no new artwork, no flat fill) and the animated cube
+# is drawn where the painted one was.
+PAINTED_CUBE = (1438, 689, 1484, 734)
+CUBE_CENTER = (1461, 709.1)  # projection centre; with the perspective below the rest-pose box is centred on (1461, 711.5)
+CUBE_HALF = 15.5    # half edge
+CUBE_DISTANCE = 140  # camera distance in px: weak perspective, so a face-on pose still shows nested near/far faces
+CUBE_YAW0 = math.pi/4   # rest pose looks down a body diagonal, like the painted cube
+CUBE_PITCH = math.radians(22)  # fixed downward tilt: top faces stay visible at every yaw
+GLOW = [(7, .12), (4, .24)]    # (stroke width, opacity) of the soft under-strokes that echo the painted halo
+
+# PATCH_TARGET is the area covered (x, y, w, h).  The wall darkens downward, so it is built from two clean strips
+# of plate wall in the same columns (the vertical wall seams continue): PATCH_SOURCE (just above the cube) over
+# all of it, and PATCH_LOW (just below) faded in over the lower part so the bottom edge matches the plate there.
+PATCH_TARGET = (1432, 683, 60, 58)
+PATCH_SOURCE = (1432, 685, 60, 3)
+PATCH_LOW = (1432, 738, 60, 3)
+PATCH_LOW_FADE = (716, 732)   # y where the low strip starts to show and where it is fully opaque
+PATCH_FEATHER = 2
+
+
+def _stretched(target, source):
+    x, y, w, h = target
+    sx, sy, sw, sh = source
+    return (f'<svg x="{x}" y="{y}" width="{w}" height="{h}" viewBox="{sx} {sy} {sw} {sh}" '
+            f'preserveAspectRatio="none" overflow="hidden"><use href="#plate" xlink:href="#plate"/></svg>')
+
+
+def cube_patch():
+    x, y, w, h = PATCH_TARGET
+    low = (x, PATCH_LOW_FADE[0], w, y+h-PATCH_LOW_FADE[0])
+    return (f'<g mask="url(#cube-feather)">{_stretched(PATCH_TARGET, PATCH_SOURCE)}</g>'
+            f'<g mask="url(#cube-feather-low)">{_stretched(low, PATCH_LOW)}</g>')
+
+
 def cube_points(theta):
     points=[]
+    cp,sp=math.cos(CUBE_PITCH),math.sin(CUBE_PITCH)
     for x,y,z in [(-1,-1,-1),(1,-1,-1),(1,1,-1),(-1,1,-1),(-1,-1,1),(1,-1,1),(1,1,1),(-1,1,1)]:
-        rx=x*math.cos(theta)+z*math.sin(theta)
-        rz=-x*math.sin(theta)+z*math.cos(theta)
-        points.append((1435+rx*18,697+y*18-rz*6))
+        yaw=theta+CUBE_YAW0
+        rx=x*math.cos(yaw)+z*math.sin(yaw)
+        rz=-x*math.sin(yaw)+z*math.cos(yaw)   # larger rz = farther away = higher on screen
+        screen_y=y*cp-rz*sp
+        depth=rz*cp+y*sp                      # after the downward tilt; the top face is nearest the camera
+        scale=CUBE_HALF*CUBE_DISTANCE/(CUBE_DISTANCE+depth*CUBE_HALF)
+        points.append((CUBE_CENTER[0]+rx*scale,CUBE_CENTER[1]+screen_y*scale))
     return points
 
 
 def workshop(t, animated):
-    parts=[]
+    parts=[cube_patch()]
     edges=[(0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),(0,4),(1,5),(2,6),(3,7)]
     # Each projected vertex coordinate is one 24-pose track, shared by every edge that uses it.
     poses=[cube_points(i*2*math.pi/24) for i in range(24)]
     poses.append(poses[0])
     cube=[[Track([pose[k][axis] for pose in poses], None, 6, digits=2) for axis in (0,1)] for k in range(8)]
-    for i,j in edges:
-        tracks=[('x1',cube[i][0]),('y1',cube[i][1]),('x2',cube[j][0]),('y2',cube[j][1])]
-        anim=''.join(track.smil(name) for name,track in tracks) if animated else ''
-        x1,y1,x2,y2=(track.value_text(t) for _,track in tracks)
-        parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#72f0ff" stroke-width="1.8" opacity=".9">{anim}</line>')
+    # Glow first (wide faint copies of every edge, same Tracks, plain strokes so both engines agree), then the crisp edges.
+    for width,opacity,colour in [(w,o,'#36bfe8') for w,o in GLOW]+[(1.8,.9,'#72f0ff')]:
+        for i,j in edges:
+            tracks=[('x1',cube[i][0]),('y1',cube[i][1]),('x2',cube[j][0]),('y2',cube[j][1])]
+            anim=''.join(track.smil(name) for name,track in tracks) if animated else ''
+            x1,y1,x2,y2=(track.value_text(t) for _,track in tracks)
+            parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" stroke-width="{width}" '
+                         f'stroke-linecap="round" opacity="{opacity}">{anim}</line>')
     nozzle=Track.sine(1335,20,3)
     parts.append(f'<rect x="{nozzle.value_text(t)}" y="727" width="9" height="5" fill="#71edff">{nozzle.smil("x") if animated else ""}</rect>')
     scan=Track.sine(749,18,6)
@@ -339,13 +416,29 @@ def layers(t, animated):
     return celestial(t,animated)+traffic(t,animated)+sky_details(t,animated)+workshop(t,animated)
 
 
+def feather_defs():
+    x, y, w, h = PATCH_TARGET
+    f = PATCH_FEATHER
+    region = f'maskUnits="userSpaceOnUse" x="{x-4*f}" y="{y-4*f}" width="{w+8*f}" height="{h+8*f}"'
+    top, full = PATCH_LOW_FADE
+    return (f'<filter id="cube-blur" filterUnits="userSpaceOnUse" x="{x-4*f}" y="{y-4*f}" width="{w+8*f}" height="{h+8*f}">'
+            f'<feGaussianBlur stdDeviation="{f}"/></filter>'
+            f'<linearGradient id="cube-fade" gradientUnits="userSpaceOnUse" x1="0" y1="{top}" x2="0" y2="{full}">'
+            f'<stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff"/></linearGradient>'
+            f'<mask id="cube-feather" {region}>'
+            f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="#fff" filter="url(#cube-blur)"/></mask>'
+            f'<mask id="cube-feather-low" {region}>'
+            f'<rect x="{x}" y="{top}" width="{w}" height="{y+h-top}" fill="url(#cube-fade)" filter="url(#cube-blur)"/></mask>')
+
+
 def scene(t=0, animated=False, embedded=True):
     parts=[f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" aria-labelledby="title desc">',
            '<title id="title">Kush Modi — building toward the unexplored</title>',
            '<desc id="desc">Pixel observatory based on Kush\'s telescope photograph. Rotating galaxies, planetary moons, exploration spacecraft, an airplane and a working maker workshop.</desc>',
            '<defs>',
-           f'<image id="atlas" width="1536" height="1024" href="{ATLAS}" xlink:href="{ATLAS}"/></defs>',
-           f'<image width="{W}" height="{H}" href="{BACKGROUND}" xlink:href="{BACKGROUND}"/>']
+           f'<image id="atlas" width="1536" height="1024" href="{ATLAS}" xlink:href="{ATLAS}"/>']
+    parts+=[feather_defs(),'</defs>',
+            f'<image id="plate" width="{W}" height="{H}" href="{BACKGROUND}" xlink:href="{BACKGROUND}"/>']
     if animated:
         parts.append('<style>.still{display:none}@media(prefers-reduced-motion:reduce){.moving{display:none}.still{display:inline}}</style>')
         parts.append('<g class="moving">'+layers(t,True)+'</g><g class="still">'+layers(0,False)+'</g>')
