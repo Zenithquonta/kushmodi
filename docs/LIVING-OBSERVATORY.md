@@ -54,6 +54,15 @@ amendments that follow from measured facts, open decisions, and phase status.
 7. **VPS access.** The cloud session that builds this cannot reach the Oracle VPS. Deployment is delivered as
    a reviewed install script + systemd units that the user runs, or via an access path the user sets up.
 
+## Decisions recorded (2026-10-01)
+
+- PC session stopped; this session owns `scripts/build_animation.py` (user: yes).
+- Phase 3 may tint the existing night plate until deliberate day/golden-hour art exists (user: yes).
+- The earlier "main = README + images only" cleanup is cancelled; renderer, config and archive stay in this repo (user: yes).
+- Defaults pending objection: archive as WebP in git; stylized galaxy/planet kept as art; Modi Fintelli excluded.
+- Portfolio objects confirmed by the CV: drone station (NETRA, ESP32-S3 micro drone), telemetry console (ROS serial,
+  ESP-NOW, GPS/IMU), PCB bench (user statement), star-tracker mount. Not confirmed: research terminal, LoRa.
+
 ## Open decisions (user)
 
 - Keep or supersede the earlier "main = README + images only" cleanup (the plan places the renderer,
@@ -70,7 +79,8 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 0 Repository audit | done (this file) |
 | 1 Baseline | done: live hero at `569b58b` (GIF/poster/SVG), 34 tests, CI green |
 | 2 SceneState (time, season, astronomy, seed) | done: `scripts/scene_state.py`, `config/observatory.json`, 22 tests; supervisor-verified sunset 14 Dec 2026 18:02 IST independently |
-| 3–14 | pending decisions above |
+| 3 Day/night lighting on existing art | in progress |
+| 4–14 | pending |
 
 ## Phase 2 implementation notes
 
