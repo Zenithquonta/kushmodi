@@ -556,3 +556,19 @@ Commands and outcomes: 127 tests pass; quality gate passes; a week (12-18 Dec 20
 Not done by design: no archive frames committed (Phase 11 adds one day at a time).
 Decision: approve
 ```
+
+### LO-P10 — VPS deployment (2026-10-01)
+
+```text
+Requested by: user ("yes start phase 10 yourself, don't wait")
+Implemented and reviewed by: supervisor agent (user-selected "Opus 5.5"); plan reviewed by the advisor before coding
+Files: scripts/build_animation.py (compact mode, single embed of day plates, day plates through the ground mask),
+  scripts/render_live.py (compact by default, --full), deploy/ (install.sh, update.sh, check.sh,
+  observatory-live.service, observatory-live.timer, Caddyfile.template, README.md), scripts/test_deploy.py (9 tests)
+Findings during the phase: day plates were embedded twice; lossy WebP smeared lettering and the blueprint
+  (replaced by JPEG 4:4:4 and the ground mask).
+Commands and outcomes: 136 tests pass; quality gate passes; default scene byte-identical; shellcheck clean; Caddy
+  template validated and probed locally (3 x 200, 8 x 404); compact vs full parity as recorded in the notes.
+Not verified: a real install on the VPS (user runs install.sh and check.sh); GitHub image proxy behaviour (Phase 12).
+Decision: approve
+```

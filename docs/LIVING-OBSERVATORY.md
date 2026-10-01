@@ -88,7 +88,8 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 7 Portfolio objects | done: drone pad and hovering quadcopter, field ground station with telemetry trace, tracker controller on the tripod, PCB and soldering iron on the lantern crate; 8 tests |
 | 8 Real Moon and planets | done: true Moon position and phase with the lit side towards the sun, moonlight on the ground, Mercury/Venus/Mars/Jupiter/Saturn by magnitude; dome projection; no real star field (no verifiable catalogue); 10 tests |
 | 9 Daily day/night generator | done: `scripts/render_daily.py` (--date/--range), WebP frames at solar noon and 21:00, atomic + locked + idempotent, `archive/index.json`; 7 tests; no frames committed yet |
-| 10–14 | pending |
+| 10 VPS deployment | done in the repo, not yet run on the VPS: compact live SVG (1.7-2.3 MB), `deploy/` (install, update, check, sandboxed systemd timer, Caddy template); 9 tests; Caddy rules verified locally |
+| 11–14 | pending |
 
 ## Phase 2 implementation notes
 
@@ -266,3 +267,26 @@ amendments that follow from measured facts, open decisions, and phase status.
   smallest) -> about 58 MB for the year's 730 frames. A week renders in about 48 s here.
 - No archive frames are committed in this phase: the archive is meant to grow one day at a time (Phase 11 sync).
 - Tests mock the rasterizer except one real-render test that runs only where FFmpeg has librsvg.
+
+## Phase 10 notes — VPS deployment
+
+- **Compact live SVG** (`scene(..., compact=True)`, the default in `render_live.py`): measured first, the plate
+  (3.4 MB), atlas (2.4 MB) and day plates (1.3 MB, embedded twice by mistake) dominated. Now: the plate and the day
+  and golden plates go to JPEG 4:4:4 q90 (the day plates are drawn through the ground mask, which equals their alpha),
+  the atlas and dry plate to WebP with lossless alpha; each raster is embedded once. Lossy WebP was rejected: it
+  halves colour resolution and smeared the painted name and the workshop blueprint by up to 100 levels.
+  Live SVG: 1.7-2.3 MB (was 6.2-9.9 MB), 1.8 MB gzipped. Full vs compact: Chromium worst cell 12 px, librsvg 1 px,
+  name within 42 levels; compact Chromium vs librsvg worst cell 0. Day-plate alpha is exact after encoding.
+- **`deploy/`**: `install.sh HOST` (Ubuntu 24.04 only; validates the host name; refuses if another server owns 80/443 or
+  the Caddyfile is customised; Caddy from Ubuntu's own archive, 2.6.2), `update.sh` (fast-forward only, manual),
+  `check.sh HOST` (timer, last result, file ages, HTTPS 200 for the three files, 404 elsewhere), `README.md`.
+- **Layout:** code `/opt/observatory/repo` (root-owned, read-only to the service), venv `/opt/observatory/venv`, output
+  `/var/lib/observatory/live`; Phase 11 will add its own clone and `/var/lib/observatory/archive`.
+- **Service sandbox:** user `observatory`, `PrivateNetwork=yes`, `ProtectSystem=strict`, writes only the live
+  directory, no capabilities, `NoNewPrivileges`, CPUQuota 80 %, 1 GB memory cap, 240 s timeout; timer every 5 min.
+- **Verified here:** shellcheck clean; `systemd-analyze verify` (only the absent server paths are reported); Caddy
+  2.6.2 validated and run locally from the template: 200 with correct types and headers for the three files; 404 for
+  `/`, `/index.json`, `/.live-x/`, `/.live-x/f`, encoded traversal, a trailing slash and wrong case. One live render
+  takes about 26 s in this container (slower on a small ARM core; the timeout is 240 s).
+- **Not verified:** `install.sh` has not run on a real server; `check.sh` is how the user confirms it. Whether GitHub's
+  image proxy accepts a 2 MB SVG and how often it refreshes it is still to be tested with the real URL (Phase 12).

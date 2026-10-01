@@ -1,0 +1,21 @@
+# managed by kushmodi observatory (deploy/install.sh) -- edit deploy/Caddyfile.template in the repo instead.
+# Serves exactly three files; every other path is a 404. HTTPS certificates are automatic.
+__SITE__ {
+	root * __ROOT__
+	encode gzip
+	@live path /live.svg /live.png /live.json
+	handle @live {
+		header {
+			Cache-Control "public, max-age=240"
+			X-Content-Type-Options "nosniff"
+			Content-Security-Policy "default-src 'none'; img-src data:; style-src 'unsafe-inline'"
+			Access-Control-Allow-Origin "*"
+			Referrer-Policy "no-referrer"
+			-Server
+		}
+		file_server
+	}
+	handle {
+		respond 404
+	}
+}

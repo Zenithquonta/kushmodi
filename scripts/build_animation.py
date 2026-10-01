@@ -1257,8 +1257,9 @@ def lighting_markup(light):
     # Day and golden-hour foregrounds (transparent sky) replace the moonlit ground; day is drawn over golden.
     for name, opacity in light['plates'].items():
         if opacity > 0:
+            # The ground mask equals the plate's own alpha, so the plate may also be an opaque (JPEG) image.
             out += (f'<use data-light="plate-{name}" href="#plate-{name}" xlink:href="#plate-{name}" '
-                    f'opacity="{_num(opacity, 4)}"/>')
+                    f'opacity="{_num(opacity, 4)}" mask="url(#ground-mask)"/>')
     if light['foreground'] > .001:
         out += (f'<rect data-light="foreground" width="{W}" height="{H}" fill="{_rgb(FOREGROUND_LIFT[1])}" '
                 f'opacity="{_num(light["foreground"], 4)}" mask="url(#ground-mask)"/>')
@@ -1908,7 +1909,7 @@ def feather_defs():
             f'<rect x="{x}" y="{top}" width="{w}" height="{y+h-top}" fill="url(#cube-fade)" filter="url(#cube-blur)"/></mask>')
 
 
-def scene(t=0, animated=False, embedded=True, state=None):
+def scene(t=0, animated=False, embedded=True, state=None, compact=False):
     parts=[f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" aria-labelledby="title desc">',
            '<title id="title">Kush Modi — building toward the unexplored</title>',
            '<desc id="desc">Pixel observatory based on Kush\'s telescope photograph. Slowly turning galaxies, twinkling stars, shooting stars, a satellite, planetary moons, exploration spacecraft, an airplane and a working maker workshop.</desc>',
@@ -1928,7 +1929,44 @@ def scene(t=0, animated=False, embedded=True, state=None):
     # SVG2 href and xlink fallback need only one copy of raster data.
     result=''.join(parts)
     result=result.replace(f' href="{ATLAS}"','').replace(f' href="{BACKGROUND}"','')
+    for name in DAY_PLATES:
+        if f'id="plate-{name}"' in result:
+            result=result.replace(f' href="{day_plate(name)}"','')
+    if compact:
+        for png, source in compact_sources():
+            result=result.replace(png, compact_uri(source))
     return result
+
+
+DAY_PLATES = ('day', 'golden', 'dry')
+COMPACT_QUALITY = 90
+# Opaque colour goes to JPEG with full-resolution colour (4:4:4): lossy WebP always halves colour resolution, which
+# smeared the painted lettering and the workshop blueprint by up to 100 levels. The day and golden plates are drawn
+# through the ground mask (equal to their alpha), so their colour can be JPEG too. The atlas and the dry plate need
+# their own alpha and go to WebP with lossless alpha.
+OPAQUE_IN_COMPACT = ('observatory-background.png', 'observatory-day.png', 'observatory-golden.png')
+
+
+def compact_sources():
+    """(PNG data URI, asset file) for every large raster the compact (live) SVG re-encodes."""
+    return [(BACKGROUND, 'observatory-background.png'), (ATLAS, 'space-sprites.png')] + \
+        [(day_plate(name), f'observatory-{name}.png') for name in DAY_PLATES]
+
+
+@functools.lru_cache(maxsize=None)
+def compact_uri(name, quality=COMPACT_QUALITY):
+    """A smaller data URI for an asset: JPEG 4:4:4 for opaque use, WebP with lossless alpha otherwise."""
+    import io
+    from PIL import Image
+    buffer = io.BytesIO()
+    with Image.open(ASSETS/name) as image:
+        if name in OPAQUE_IN_COMPACT:
+            image.convert('RGB').save(buffer, 'JPEG', quality=quality, subsampling=0, optimize=True)
+            kind = 'jpeg'
+        else:
+            image.save(buffer, 'WEBP', quality=quality, method=6, alpha_quality=100)
+            kind = 'webp'
+    return f'data:image/{kind};base64,'+base64.b64encode(buffer.getvalue()).decode()
 
 
 def rasterize(svg_path,png_path,width=GIF_WIDTH):

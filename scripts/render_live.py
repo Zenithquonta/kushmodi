@@ -46,16 +46,18 @@ def validate_json(path):
             raise ValueError(f'{path.name} lacks {key}')
 
 
-def render(when, out, png_width=scene.GIF_WIDTH, config=None):
-    """Write live.svg/live.png/live.json for ``when`` into ``out``; returns the SceneState."""
+def render(when, out, png_width=scene.GIF_WIDTH, config=None, compact=True):
+    """Write live.svg/live.png/live.json for ``when`` into ``out``; returns the SceneState.
+
+    ``compact`` re-encodes the embedded rasters (JPEG 4:4:4 / WebP with lossless alpha), about a quarter of the size."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     state = scene_state.scene_state(when, config)
     with tempfile.TemporaryDirectory(prefix='.live-', dir=out) as directory:
         temp = Path(directory)
-        (temp/'live.svg').write_text(scene.scene(animated=True, state=state))
+        (temp/'live.svg').write_text(scene.scene(animated=True, state=state, compact=compact))
         still = temp/'still.svg'
-        still.write_text(scene.scene(0, False, state=state))
+        still.write_text(scene.scene(0, False, state=state, compact=compact))
         scene.rasterize(still, temp/'live.png', png_width)
         still.unlink()
         (temp/'live.json').write_text(json.dumps(state, indent=2)+'\n')
@@ -72,10 +74,11 @@ def main():
     parser.add_argument('--at', help='aware ISO 8601 time (default: now in the configured time zone)')
     parser.add_argument('--out', default='live', help='output directory')
     parser.add_argument('--png-width', type=int, default=scene.GIF_WIDTH)
+    parser.add_argument('--full', action='store_true', help='embed the original PNGs instead of the compact encodings')
     args = parser.parse_args()
     config = scene_state.load_config()
     when = datetime.fromisoformat(args.at) if args.at else datetime.now(ZoneInfo(config['location']['timezone']))
-    state = render(when, args.out, args.png_width, config)
+    state = render(when, args.out, args.png_width, config, compact=not args.full)
     sun = state['astronomy']['sun']
     print(f'{state["timestamp_local"]} sun {sun["altitude_deg"]:.1f} deg az {sun["azimuth_deg"]:.1f} '
           f'daylight {state["lighting"]["daylight"]} -> {args.out}')

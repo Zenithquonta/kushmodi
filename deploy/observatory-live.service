@@ -1,0 +1,37 @@
+# Renders live.svg, live.png and live.json for the current moment. Started by observatory-live.timer.
+# Rendering needs no network and writes only to /var/lib/observatory/live; the code in /opt/observatory is read-only.
+[Unit]
+Description=Render the live Kush Modi observatory picture
+
+[Service]
+Type=oneshot
+User=observatory
+Group=observatory
+WorkingDirectory=/opt/observatory/repo
+Environment=XDG_CACHE_HOME=/tmp
+ExecStart=/opt/observatory/venv/bin/python /opt/observatory/repo/scripts/render_live.py --out /var/lib/observatory/live
+Nice=10
+CPUQuota=80%
+MemoryMax=1G
+TimeoutStartSec=240
+UMask=0022
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/observatory/live
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
