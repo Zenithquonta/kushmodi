@@ -13,9 +13,12 @@
 
 <table>
 <tr>
-<td width="33%"><a href="#observatory"><img src="./assets/observatory-card.svg" width="100%" alt="Observatory — explore astronomy projects" /></a></td>
-<td width="33%"><a href="#flight-deck"><img src="./assets/flight-card.svg" width="100%" alt="Flight deck — aviation and science fiction" /></a></td>
-<td width="33%"><a href="#fab-lab"><img src="./assets/fablab-card.svg" width="100%" alt="Fab lab — LEGO, CAD and 3D printing" /></a></td>
+<td width="50%"><a href="#observatory"><picture><source media="(prefers-reduced-motion: reduce)" srcset="./assets/observatory-card-static.svg" /><img src="./assets/observatory-card.svg" width="100%" alt="Observatory — explore astronomy projects" /></picture></a></td>
+<td width="50%"><a href="#flight-deck"><picture><source media="(prefers-reduced-motion: reduce)" srcset="./assets/flight-card-static.svg" /><img src="./assets/flight-card.svg" width="100%" alt="Flight deck — aviation and science fiction" /></picture></a></td>
+</tr>
+<tr>
+<td width="50%"><a href="#fab-lab"><picture><source media="(prefers-reduced-motion: reduce)" srcset="./assets/fablab-card-static.svg" /><img src="./assets/fablab-card.svg" width="100%" alt="Fab lab — LEGO, CAD and 3D printing" /></picture></a></td>
+<td width="50%"><a href="#mission-log"><picture><source media="(prefers-reduced-motion: reduce)" srcset="./assets/rover-card-static.svg" /><img src="./assets/rover-card.svg" width="100%" alt="Rover bay — robotics and IGVC mission log" /></picture></a></td>
 </tr>
 </table>
 

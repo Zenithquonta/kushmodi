@@ -12,9 +12,29 @@
       "format": "PNG"
     },
     {
+      "path": "assets/fablab-card-static.svg",
+      "bytes": 1384,
+      "sha256": "1518f709ff280f79c688ebdffca8f50a0eb164405046ed78f5066c3a3a3c3075",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": "360",
+      "height": "136",
+      "viewBox": "0 0 360 136",
+      "animation_elements": 0
+    },
+    {
       "path": "assets/fablab-card.svg",
-      "bytes": 5833,
-      "sha256": "d4a3eb3a4a5163f5af70bc78529e0785360442f3cf419f29fb42870e81608b68",
+      "bytes": 2846,
+      "sha256": "ad22968eeb7eed4bfcc05fc3a0ab66a4f8560059d694cfec150f739e84976dad",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": "360",
+      "height": "136",
+      "viewBox": "0 0 360 136",
+      "animation_elements": 4
+    },
+    {
+      "path": "assets/flight-card-static.svg",
+      "bytes": 1143,
+      "sha256": "0c00cd9ccc04daf15cb2b28a3174549af62f8a7d6d5880f2111f3d0e02035f24",
       "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
       "width": "360",
       "height": "136",
@@ -23,13 +43,13 @@
     },
     {
       "path": "assets/flight-card.svg",
-      "bytes": 3615,
-      "sha256": "4e3b3c1f7321715bc684c9816deb5449b44c47387fff1ce41a558019d90113ec",
+      "bytes": 2365,
+      "sha256": "48ddd1a79e7aae108119c5dfbb1682c1b823f64d052802e5eb002d327bf95bb2",
       "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
       "width": "360",
       "height": "136",
       "viewBox": "0 0 360 136",
-      "animation_elements": 0
+      "animation_elements": 4
     },
     {
       "path": "assets/legacy/ascii-portrait.svg",
@@ -72,14 +92,24 @@
       "format": "PNG"
     },
     {
-      "path": "assets/observatory-card.svg",
-      "bytes": 2875,
-      "sha256": "17015d5a70dded5b80cbfbc7e7f9c14c28cc1264b0b02918043b907b99a11ab7",
+      "path": "assets/observatory-card-static.svg",
+      "bytes": 1210,
+      "sha256": "4248ce3743bb6e1e832c0cb80030b8c8dcf3b9801cba6204afaf05d5134423b2",
       "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
       "width": "360",
       "height": "136",
       "viewBox": "0 0 360 136",
       "animation_elements": 0
+    },
+    {
+      "path": "assets/observatory-card.svg",
+      "bytes": 2488,
+      "sha256": "956e9b5b92a1de8ba560387b8ded8b2743f1266bc4972ba26201068db65d4882",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": "360",
+      "height": "136",
+      "viewBox": "0 0 360 136",
+      "animation_elements": 4
     },
     {
       "path": "assets/observatory-poster.png",
@@ -143,6 +173,26 @@
       "height": 1280,
       "mode": "RGB",
       "format": "JPEG"
+    },
+    {
+      "path": "assets/rover-card-static.svg",
+      "bytes": 1318,
+      "sha256": "517550b78bdad166fd7faa9c03c1f66ca850ede002e3967cf3c340b1f1941553",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": "360",
+      "height": "136",
+      "viewBox": "0 0 360 136",
+      "animation_elements": 0
+    },
+    {
+      "path": "assets/rover-card.svg",
+      "bytes": 2708,
+      "sha256": "cc0ab4625249da364ade0d5d3f7b0d2c204e43a5e1e8ace36bbef6b2395b1ecf",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": "360",
+      "height": "136",
+      "viewBox": "0 0 360 136",
+      "animation_elements": 4
     },
     {
       "path": "assets/space-sprites.png",

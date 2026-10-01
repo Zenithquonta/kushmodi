@@ -17,6 +17,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T08 | Optimize size without damaging the approved look | pending | Current GIF: 1000×563, 240 frames at 10fps, 24s, 11,744,470 bytes. Review 840/1000px and 8/10/12fps tradeoffs if needed. Prefer one accepted version, no noisy blur or flickering palettes. Document final output dimensions, bytes, duration and tool versions. |
 | T02-R1 | Fix traffic clip, overlap and foreground crossings found in T02 | done |  Explorer hard-clipped at x=574 (t≈14.7); fighters overlap explorer and trees (t≈0/23.9); airplane crosses right trees/workshop roof (t≈15.6). Route geometry/fades only. |
 | T02-R2 | Register the CAD cube to the painted cube; moons pass behind the planet | done | Found in T01 (double cube in every frame) and the known moon-occlusion item. |
+| T13 | Animated mission cards + fourth Rover Bay card (user-approved addition) | done | Subtle SMIL card motion with static <picture> fallbacks; 2x2 card grid. |
 | T09 | Review meaningful source regression tests | ready_for_review | Five tests now cover traffic period wrap, periodic/finite CAD geometry, deterministic and changing scene output, sprite crop bounds, and the observed open-path polygon regression. The quality gate additionally covers SVG references and removed live-content references. Review preview regeneration coverage and extend where meaningful. |
 | T10 | Review handoff, registry and reproducibility | ready_for_review | All supplied artwork, active SVGs, legacy SVGs, scripts, template, ledger, entry point and model loop are included. `assets/MANIFEST.json` should describe files and hashes. The handoff must accurately identify completed versus pending work. |
 | T11 | Commit and push the entire handoff and profile project | implementing | Target is only `Zenithquonta/kushmodi`. Earlier writes to both Git Trees and Contents APIs failed with 403 `Resource not accessible by integration`. Refresh live permissions before retrying. Preserve HEAD/unrelated files and do not force-push. |
@@ -278,4 +279,21 @@ Reason: single cube, 3D at every pose, footprint matches the painted cube within
   no visible seam at README size; moons occluded correctly (approved in attempt 1).
 Remaining caveats: patch loses the plate's soft halo (glow strokes stand in); faint plate-shadow step at x<1452,
   y~741 visible only at 1672px brightness-boosted.
+```
+
+### T13 — animated cards + Rover Bay card (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: delegated coder agent (user-selected "Sonnet 5.5")
+Attempts: 2 (attempt 1 revise: SVG-internal reduced-motion query is ignored when the SVG is shown via <img>)
+Files changed: scripts/build_cards.py; assets/{observatory,flight,fablab,rover}-card.svg (+ -static.svg variants);
+  README.md (card table only: 2x2 grid, each card in <picture> with a reduced-motion static source); MANIFEST.
+Commands and outcomes: build_cards deterministic over 8 files (supervisor re-ran); static cards contain no
+  animate/fx/style; quality gate passes and fails when a static srcset file is missing (coder mutation check);
+  23 tests pass. Chromium: currentSrc = *-static.svg under reduced motion, animated cards otherwise.
+Visual evidence: supervisor inspected the 2x2 animated sheet, 390px table and reduced-motion table renders.
+Decision: approve
+Remaining caveats: GitHub's handling of <source media> inside the card table follows the hero's (verified in T05)
+  but the new table itself is verified after publication.
 ```
