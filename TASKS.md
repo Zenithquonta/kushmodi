@@ -16,7 +16,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T07 | Align SVG and GIF animation timings | done | The same scene functions render both versions, but some workshop SMIL motion interpolates linearly while raster frames use sine. Review resulting differences and make them intentional or identical. Compare selected times and the wrap at 24 seconds. |
 | T08 | Optimize size without damaging the approved look | pending | Current GIF: 1000×563, 240 frames at 10fps, 24s, 11,744,470 bytes. Review 840/1000px and 8/10/12fps tradeoffs if needed. Prefer one accepted version, no noisy blur or flickering palettes. Document final output dimensions, bytes, duration and tool versions. |
 | T02-R1 | Fix traffic clip, overlap and foreground crossings found in T02 | done |  Explorer hard-clipped at x=574 (t≈14.7); fighters overlap explorer and trees (t≈0/23.9); airplane crosses right trees/workshop roof (t≈15.6). Route geometry/fades only. |
-| T02-R2 | Register the CAD cube to the painted cube; moons pass behind the planet | assigned | Found in T01 (double cube in every frame) and the known moon-occlusion item. |
+| T02-R2 | Register the CAD cube to the painted cube; moons pass behind the planet | implementing | Found in T01 (double cube in every frame) and the known moon-occlusion item. |
 | T09 | Review meaningful source regression tests | ready_for_review | Five tests now cover traffic period wrap, periodic/finite CAD geometry, deterministic and changing scene output, sprite crop bounds, and the observed open-path polygon regression. The quality gate additionally covers SVG references and removed live-content references. Review preview regeneration coverage and extend where meaningful. |
 | T10 | Review handoff, registry and reproducibility | ready_for_review | All supplied artwork, active SVGs, legacy SVGs, scripts, template, ledger, entry point and model loop are included. `assets/MANIFEST.json` should describe files and hashes. The handoff must accurately identify completed versus pending work. |
 | T11 | Commit and push the entire handoff and profile project | implementing | Target is only `Zenithquonta/kushmodi`. Earlier writes to both Git Trees and Contents APIs failed with 403 `Resource not accessible by integration`. Refresh live permissions before retrying. Preserve HEAD/unrelated files and do not force-push. |
@@ -242,4 +242,22 @@ Commands and outcomes (Playwright 1.56.1 Chromium, 1280x900 and 390x844): playba
 Visual evidence: supervisor inspected original-vs-fixed Chromium render; coder screenshots in scratchpad/t06.
 Decision: approve
 Remaining caveats: Chromium only (no Firefox/WebKit); hotspots are fixed rectangles, not tracking moving sprites.
+```
+
+### T02-R2 — cube registration + moon occlusion, attempt 1 (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: delegated coder agent (user-selected "Sonnet 5.5")
+Attempt: 1
+Files changed (uncommitted): scripts/build_animation.py, scripts/test_scene.py
+Commands and outcomes: 21 tests pass; parity max cell 4 (limit 150); animated SVG +3.8 KB.
+Visual evidence: supervisor inspected cube mid-rotation sheet (both options), 1000px workshop comparison,
+  moon occlusion old/new x4.
+Decision: revise
+Reason: Moons approved (hidden behind the planet on the far half, in front on the near half, no pop at switches).
+  Cube: option 1 (overlay on painted cube) reads as a cluttered double hexagon while turning -> rejected.
+  Option 2 (plate-derived feathered patch + one cube) is correct, but the yaw-only projection collapses to a flat
+  rectangle every 90 deg and the painted hologram glow is lost. Attempt 2: fixed tilt, subtle glow stroke,
+  remove option-1 code, check faint patch bottom edge.
 ```
