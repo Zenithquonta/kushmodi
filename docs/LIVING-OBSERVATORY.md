@@ -69,5 +69,22 @@ amendments that follow from measured facts, open decisions, and phase status.
 | --- | --- |
 | 0 Repository audit | done (this file) |
 | 1 Baseline | done: live hero at `569b58b` (GIF/poster/SVG), 34 tests, CI green |
-| 2 SceneState (time, season, astronomy, seed) | in progress |
+| 2 SceneState (time, season, astronomy, seed) | done: `scripts/scene_state.py`, `config/observatory.json`, 22 tests; supervisor-verified sunset 14 Dec 2026 18:02 IST independently |
 | 3–14 | pending decisions above |
+
+## Phase 2 implementation notes
+
+- `config/observatory.json` holds the location, year window, renderer version and six Indian seasons with
+  `MM-DD` start boundaries and target environment values. `scripts/scene_state.py` is one function,
+  `scene_state(when, config=None)`, plus `season_for`, `environment_for`, `daylight` helpers. Dependency:
+  `astronomy-engine` (pure Python).
+- Season is chosen by the config boundaries (each season runs to the next start; Shishira wraps the year end).
+  Environment parameters are blended between season *centres* with smoothstep, so there is no step at a
+  boundary; the test enforces at most 0.03 change per day. Environment depends on the local date only.
+- Sun and moon altitudes are geometric (no refraction) so the -0.833 / -6 / -12 / -18 degree thresholds mean
+  what they say. Sunrise and sunset use astronomy-engine's rise/set (upper limb, standard refraction).
+  `phase_angle_deg` is the Sun-Moon-Earth angle: 0 at full moon, 180 at new moon.
+- `daylight` is smoothstep of sun altitude from -12 to +10 degrees. The seed is sha256 of
+  `kushmodi-YYYY-MM-DD` (local date); astronomy never reads it.
+- CLI: `python scripts/scene_state.py --at 2026-12-14T21:37:00+05:30` or `--date 2026-12-14` (21:00 local).
+- No visual output changes in this phase.

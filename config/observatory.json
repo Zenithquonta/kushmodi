@@ -1,0 +1,25 @@
+{
+  "location": {
+    "name": "Mumbai",
+    "latitude": 19.0760,
+    "longitude": 72.8777,
+    "elevation_m": 14,
+    "timezone": "Asia/Kolkata"
+  },
+  "year_window": {"start": "2026-10-01", "end": "2027-10-01"},
+  "renderer_version": "1.0.0",
+  "seasons": [
+    {"id": "vasanta", "name": "Vasanta", "start": "02-19",
+     "target": {"greenery": 0.45, "ground_wetness": 0.15, "haze": 0.45, "cloud_density": 0.15, "night_visibility": 0.65, "urban_glow": 0.60}},
+    {"id": "grishma", "name": "Grishma", "start": "04-20",
+     "target": {"greenery": 0.25, "ground_wetness": 0.05, "haze": 0.80, "cloud_density": 0.25, "night_visibility": 0.45, "urban_glow": 0.65}},
+    {"id": "varsha", "name": "Varsha", "start": "06-21",
+     "target": {"greenery": 0.95, "ground_wetness": 1.00, "haze": 0.55, "cloud_density": 0.90, "night_visibility": 0.20, "urban_glow": 0.50}},
+    {"id": "sharad", "name": "Sharad", "start": "08-23",
+     "target": {"greenery": 0.85, "ground_wetness": 0.50, "haze": 0.35, "cloud_density": 0.50, "night_visibility": 0.50, "urban_glow": 0.55}},
+    {"id": "hemanta", "name": "Hemanta", "start": "10-23",
+     "target": {"greenery": 0.60, "ground_wetness": 0.15, "haze": 0.40, "cloud_density": 0.15, "night_visibility": 0.80, "urban_glow": 0.60}},
+    {"id": "shishira", "name": "Shishira", "start": "12-22",
+     "target": {"greenery": 0.40, "ground_wetness": 0.05, "haze": 0.30, "cloud_density": 0.08, "night_visibility": 0.95, "urban_glow": 0.65}}
+  ]
+}
