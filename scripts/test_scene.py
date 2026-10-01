@@ -1,4 +1,7 @@
+import functools
 import math
+import random
+import re
 import unittest
 import xml.etree.ElementTree as ET
 import build_animation as scene
@@ -43,6 +46,131 @@ def smil_state(group,t):
   assert node.attrib.get('calcMode','linear')=='linear'
   out.append(lerp(keys,values,((t-begin)%dur)/dur))
  return out[0][0],out[1]
+
+
+# ---------------------------------------------------------------------------
+# Generic SMIL-vs-raster comparison.
+#
+# The animated SVG is parsed and every <animate>/<animateTransform> inside `.moving` is evaluated at time t
+# by the small linear-SMIL interpreter below (written independently of build_animation.Track).  The result
+# is a "snapshot" of the animated document at t.  Both that snapshot and the static frame scene(t, False) are
+# flattened to a list of leaf shapes in document order: (tag, numeric/text attributes, cumulative transform
+# matrix, cumulative opacity).  Flattening makes the comparison structure-independent (the moons nest
+# scaled/rotated groups in SMIL but use one translate in the raster) while still covering every animated
+# attribute: transform, opacity, x, y, x1, y1, x2, y2.
+# ---------------------------------------------------------------------------
+ANIMATIONS=(SVG+'animate',SVG+'animateTransform')
+LEAVES={SVG+name for name in ('path','rect','line','ellipse','svg')}  # nested <svg> is a sprite viewport
+PX=.02  # px tolerance
+OPACITY=.005
+LINEAR=1e-4  # tolerance for matrix a-d (rotation/scale terms)
+CHECK_TIMES=[0,.7,1.5,2.95,3.05,4.4,5.95,7.3,9.9,11.95,14.7,17.3,20.05,22.4,23.95]
+
+
+def seconds(text):
+ return float(text.rstrip('s'))
+
+
+def numbers(text):
+ return tuple(float(n) for n in text.replace(',',' ').split())
+
+
+def smil_value(node,t):
+ """Linear SMIL with repeatCount=indefinite and negative-begin semantics, as a browser evaluates it."""
+ attrib=node.attrib
+ assert attrib.get('repeatCount')=='indefinite',attrib
+ assert attrib.get('calcMode','linear')=='linear',attrib
+ assert not {'additive','accumulate','by','end','min','max','restart'} & set(attrib),attrib
+ begin=seconds(attrib.get('begin','0s'))
+ assert begin<=0,'positive begin would leave the first frames un-animated'
+ dur=seconds(attrib['dur'])
+ u=((t-begin)%dur)/dur
+ if 'values' in attrib:
+  values=[numbers(v) for v in attrib['values'].split(';')]
+  if 'keyTimes' in attrib:
+   keys=[float(k) for k in attrib['keyTimes'].split(';')]
+  else:
+   keys=[i/(len(values)-1) for i in range(len(values))]
+  assert len(keys)==len(values) and keys[0]==0 and keys[-1]==1 and keys==sorted(keys),attrib
+ else:
+  values=[numbers(attrib['from']),numbers(attrib['to'])]
+  keys=[0,1]
+ for i in range(1,len(keys)):
+  if u<=keys[i]:
+   f=1 if keys[i]==keys[i-1] else (u-keys[i-1])/(keys[i]-keys[i-1])
+   return tuple(a+(b-a)*f for a,b in zip(values[i-1],values[i]))
+ return values[-1]
+
+
+def matmul(m,n):
+ a,b,c,d,e,f=m
+ A,B,C,D,E,F=n
+ return (a*A+c*B,b*A+d*B,a*C+c*D,b*C+d*D,a*E+c*F+e,b*E+d*F+f)
+
+
+def parse_transform(text):
+ matrix=(1,0,0,1,0,0)
+ for name,args in re.findall(r'(\w+)\(([^)]*)\)',text or ''):
+  v=numbers(args)
+  if name=='translate':
+   step=(1,0,0,1,v[0],v[1] if len(v)>1 else 0)
+  elif name=='scale':
+   step=(v[0],0,0,v[1] if len(v)>1 else v[0],0,0)
+  elif name=='rotate':
+   c,s=math.cos(math.radians(v[0])),math.sin(math.radians(v[0]))
+   step=(c,s,-s,c,0,0)
+  else:
+   raise AssertionError(name)
+  matrix=matmul(matrix,step)
+ return matrix
+
+
+def flatten(node,t=0,matrix=(1,0,0,1,0,0),opacity=1.0,out=None):
+ """Leaf shapes under `node` at time t.  Animation children replace the attribute they target."""
+ out=[] if out is None else out
+ attrs=dict(node.attrib)
+ for anim in node:
+  if anim.tag in ANIMATIONS:
+   value=smil_value(anim,t)
+   name=anim.attrib['attributeName']
+   if anim.tag==SVG+'animateTransform':
+    attrs[name]=f'{anim.attrib["type"]}({" ".join(repr(v) for v in value)})'
+   else:
+    attrs[name]=repr(value[0])
+ matrix=matmul(matrix,parse_transform(attrs.pop('transform',None)))
+ opacity*=float(attrs.pop('opacity',1))
+ if node.tag in LEAVES:
+  out.append((node.tag.replace(SVG,''),attrs,matrix,opacity))
+ else:
+  for child in node:
+   if child.tag not in ANIMATIONS:
+    flatten(child,t,matrix,opacity,out)
+ return out
+
+
+WRAP='<g xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">{}</g>'
+
+
+def animated_root():
+ """The `.moving` content of scene(animated=True), i.e. layers(0,True), without the 6MB image data URIs."""
+ return ET.fromstring(WRAP.format(scene.layers(0,True)))
+
+
+@functools.lru_cache(maxsize=None)
+def static_cached(t):
+ return flatten(ET.fromstring(WRAP.format(scene.layers(t,False))))
+
+
+def same(a,b,tol):
+ try:
+  return abs(float(a)-float(b))<=tol
+ except ValueError:
+  return a==b
+
+
+def parents(root):
+ return {child:node for node in root.iter() for child in node}
+
 
 
 class SceneTests(unittest.TestCase):
@@ -171,6 +299,119 @@ class SceneTests(unittest.TestCase):
      self.assertGreater(a['y'],current[0]['y']+40)  # lower than the explorer
   for key,count in seen.items():
    self.assertGreaterEqual(count/len(SAMPLES),.35,key)
+
+ def test_every_animation_reproduces_the_raster_frame(self):
+  self.assertIn('<g class="moving">'+scene.layers(0,True)+'</g>',scene.scene(0,True))  # what animated_root() parses
+  self.assertIn('<g class="still">'+scene.layers(0,False)+'</g>',scene.scene(0,True))
+  moving=animated_root()
+  animations=[n for n in moving.iter() if n.tag in ANIMATIONS]
+  names={n.attrib['attributeName'] for n in animations}
+  self.assertTrue({'transform','opacity','x','y','x1','y1','x2','y2'}<=names,names)
+  self.assertGreater(len(animations),90)
+  for t in CHECK_TIMES:
+   animated=flatten(moving,t)
+   static=static_cached(t)
+   self.assertEqual([leaf[0] for leaf in animated],[leaf[0] for leaf in static],t)
+   for index,((tag,a_attrs,a_m,a_o),(_,s_attrs,s_m,s_o)) in enumerate(zip(animated,static)):
+    where=(t,index,tag,s_attrs.get('d','')[:20] or s_attrs.get('x') or s_attrs.get('x1'))
+    self.assertEqual(sorted(a_attrs),sorted(s_attrs),where)
+    for key in a_attrs:
+     self.assertTrue(same(a_attrs[key],s_attrs[key],PX),(where,key,a_attrs[key],s_attrs[key]))
+    self.assertAlmostEqual(a_o,s_o,delta=OPACITY,msg=where)
+    for k in range(4):
+     self.assertAlmostEqual(a_m[k],s_m[k],delta=LINEAR,msg=(where,'matrix',k))
+    for k in (4,5):
+     self.assertAlmostEqual(a_m[k],s_m[k],delta=PX,msg=(where,'matrix',k))
+
+ def test_animation_comparison_would_notice_a_phase_error(self):
+  moving=animated_root()
+  bob=[n for n in moving.iter(SVG+'animateTransform') if n.attrib['dur']=='24s' and n.attrib['type']=='translate'
+       and 'values' in n.attrib and n.attrib['values'].startswith('1480 ')][0]
+  true_y=lambda t:163+3*math.sin(2*math.pi*t/24)
+  self.assertAlmostEqual(smil_value(bob,6)[1],true_y(6),delta=.05)
+  # the old triangle (163,160,163,166,163) would have been 6px away from the raster here
+  self.assertGreater(abs(160-true_y(6)),5.9)
+
+ def test_motion_keeps_the_approved_raster_definitions(self):
+  def leaf(t,**match):
+   found=[l for l in static_cached(t) if all(l[1].get(k)==v for k,v in match.items())]
+   self.assertEqual(len(found),1,match)
+   return found[0]
+  for t in [i/10 for i in range(0,240,7)]:
+   sine=lambda period,phase=0:math.sin(2*math.pi*t/period+phase)
+   # planet bob, nozzle, scan: centre, amplitude, period of the approved GIF
+   planet_y=[l for l in static_cached(t) if l[0]=='svg'][2][2][5]  # sprites: galaxy, galaxy, planet
+   self.assertAlmostEqual(planet_y,163+3*sine(24),delta=.05,msg=t)
+   self.assertAlmostEqual(float(leaf(t,fill='#71edff')[1]['x']),1335+20*sine(3),delta=.25,msg=t)
+   self.assertAlmostEqual(float(leaf(t,fill='#83eaff')[1]['y']),749+18*sine(6),delta=.25,msg=t)
+   for x,phase in ((1596,0),(1380,.4),(1196,.7),(1505,.2)):
+    led=leaf(t,x=str(x),width='4')
+    self.assertAlmostEqual(led[3],.35+.65*(.5+.5*sine(3,phase)),delta=.01,msg=(t,x))
+   reticle=[l for l in static_cached(t) if l[1].get('stroke')=='#4ae8f2'][0]
+   self.assertAlmostEqual(reticle[3],.5+.3*sine(3),delta=.01,msg=t)
+   u=(t/12)%1
+   meteor=leaf(t,stroke='#88e4fc')
+   self.assertAlmostEqual(meteor[3],math.sin(math.pi*u/.16)**2 if u<.16 else 0,delta=.01,msg=t)
+   self.assertAlmostEqual(meteor[2][4],1100+390*u,delta=.01)
+   cube=scene.cube_points(t*2*math.pi/6)
+   edge=[l for l in static_cached(t) if l[1].get('stroke')=='#72f0ff'][0]  # cube edge from vertex 0 to 1
+   self.assertAlmostEqual(float(edge[1]['x1']),cube[0][0],delta=.25,msg=t)
+   self.assertAlmostEqual(float(edge[1]['y1']),cube[0][1],delta=.25,msg=t)
+   self.assertAlmostEqual(float(edge[1]['x2']),cube[1][0],delta=.25,msg=t)
+   self.assertAlmostEqual(float(edge[1]['y2']),cube[1][1],delta=.25,msg=t)
+  # seeded star field: same positions, periods and phases as the approved scene
+  rng=random.Random(29)
+  expected=[]
+  for _ in range(32):
+   x,y=rng.randint(20,1650),rng.randint(18,500)
+   if 30<x<565 and 218<y<375:
+    continue
+   expected.append((x,y,rng.choice([3,4,6,8]),rng.random()))
+  stars=[n for n in animated_root().iter(SVG+'path') if n.attrib.get('stroke')=='#a7deff']
+  self.assertEqual(len(stars),len(expected))
+  for node,(x,y,period,phase) in zip(stars,expected):
+   self.assertEqual(node.attrib['d'],f'M{x-3} {y}h6M{x} {y-3}v6')
+   anim=node.find(SVG+'animate')
+   self.assertEqual(seconds(anim.attrib['dur']),period)
+   self.assertAlmostEqual(seconds(anim.attrib['begin']),-phase*period,delta=1e-4)
+   for t in (0,1.3,period/3,5.5):
+    self.assertAlmostEqual(smil_value(anim,t)[0],.2+.8*(.5+.5*math.sin(2*math.pi*(t/period+phase))),delta=.01)
+
+ def test_every_animation_loops_without_a_jump(self):
+  moving=animated_root()
+  up=parents(moving)
+  count=0
+  for node in moving.iter():
+   if node.tag not in ANIMATIONS:
+    continue
+   ancestors=[]
+   walker=up.get(node)
+   while walker is not None:
+    ancestors.append(walker)
+    walker=up.get(walker)
+   if any('data-traffic' in g.attrib for g in ancestors):
+    continue  # traffic is an intentional sawtooth that wraps while fully transparent (see traffic tests)
+   count+=1
+   dur=seconds(node.attrib['dur'])
+   self.assertEqual(scene.PERIOD%dur,0,node.attrib)
+   if 'values' in node.attrib:
+    values=[numbers(v) for v in node.attrib['values'].split(';')]
+    self.assertEqual(values[0],values[-1],node.attrib)
+    keys=([float(k) for k in node.attrib['keyTimes'].split(';')] if 'keyTimes' in node.attrib
+          else [i/(len(values)-1) for i in range(len(values))])
+    slope=max((math.dist(a,b)/((k1-k0)*dur) for a,b,k0,k1 in zip(values,values[1:],keys,keys[1:]) if k1>k0),default=0)
+    before,after=smil_value(node,23.95),smil_value(node,24)
+    self.assertLessEqual(math.dist(before,after),.05*slope+1e-6,node.attrib)
+    for t in (0,2.9,5.5):
+     self.assertLess(math.dist(smil_value(node,t),smil_value(node,t+scene.PERIOD)),1e-6,node.attrib)
+   elif node.attrib['type']=='rotate':
+    self.assertEqual(abs(float(node.attrib['to'])-float(node.attrib['from'])),360,node.attrib)
+   else:
+    # the meteor translate restarts from its origin; it must be fully transparent at the wrap
+    fade=[n for n in up[node] if n.tag==SVG+'animate' and n.attrib['attributeName']=='opacity'][0]
+    for t in (23.95,24,0):
+     self.assertLessEqual(smil_value(fade,t)[0],VISIBLE,t)
+  self.assertGreater(count,80)
 
  @unittest.skipIf(Image is None,'Pillow not installed')
  def test_skyline_is_above_the_dark_foreground_of_the_plate(self):

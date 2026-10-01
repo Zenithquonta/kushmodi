@@ -13,9 +13,10 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T04 | Review README content, employer removal and scope | done | Name is Kush Modi; astronomy-first profile; four expandable sections; AstroFixxer project links; aviation/LEGO/CAD/printing interests; no removed-work references. Existing robotics/education/contact facts are grounded in the original README. |
 | T05 | Verify actual GitHub README interactions | done | Render on GitHub after push, verify picture fallback, image links, section anchors and details. GitHub README must not depend on JavaScript, image maps or iframe controls. |
 | T06 | Browser-test and refine the local interactive preview | pending | At desktop and mobile widths, check inline SVG playback, pause/resume, keyboard focus, clickable scene areas, mission panels, reduced-motion behavior and no horizontal overflow. Save screenshots/evidence. |
-| T07 | Align SVG and GIF animation timings | pending | The same scene functions render both versions, but some workshop SMIL motion interpolates linearly while raster frames use sine. Review resulting differences and make them intentional or identical. Compare selected times and the wrap at 24 seconds. |
+| T07 | Align SVG and GIF animation timings | done | The same scene functions render both versions, but some workshop SMIL motion interpolates linearly while raster frames use sine. Review resulting differences and make them intentional or identical. Compare selected times and the wrap at 24 seconds. |
 | T08 | Optimize size without damaging the approved look | pending | Current GIF: 1000×563, 240 frames at 10fps, 24s, 11,744,470 bytes. Review 840/1000px and 8/10/12fps tradeoffs if needed. Prefer one accepted version, no noisy blur or flickering palettes. Document final output dimensions, bytes, duration and tool versions. |
 | T02-R1 | Fix traffic clip, overlap and foreground crossings found in T02 | done |  Explorer hard-clipped at x=574 (t≈14.7); fighters overlap explorer and trees (t≈0/23.9); airplane crosses right trees/workshop roof (t≈15.6). Route geometry/fades only. |
+| T02-R2 | Register the CAD cube to the painted cube; moons pass behind the planet | assigned | Found in T01 (double cube in every frame) and the known moon-occlusion item. |
 | T09 | Review meaningful source regression tests | ready_for_review | Five tests now cover traffic period wrap, periodic/finite CAD geometry, deterministic and changing scene output, sprite crop bounds, and the observed open-path polygon regression. The quality gate additionally covers SVG references and removed live-content references. Review preview regeneration coverage and extend where meaningful. |
 | T10 | Review handoff, registry and reproducibility | ready_for_review | All supplied artwork, active SVGs, legacy SVGs, scripts, template, ledger, entry point and model loop are included. `assets/MANIFEST.json` should describe files and hashes. The handoff must accurately identify completed versus pending work. |
 | T11 | Commit and push the entire handoff and profile project | implementing | Target is only `Zenithquonta/kushmodi`. Earlier writes to both Git Trees and Contents APIs failed with 403 `Resource not accessible by integration`. Refresh live permissions before retrying. Preserve HEAD/unrelated files and do not force-push. |
@@ -194,4 +195,27 @@ Remaining caveats: github.githubassets.com is blocked by the sandbox egress poli
   (short-hash -> user-content- scrolling, dark theme) was not exercised live; anchor ids verified instead.
   On ~390px phones the three cards render ~92x35px and their text is unreadable; the text nav row above
   them provides the same links. GIF content-type is octet-stream (GitHub raw behaviour).
+```
+
+### T07 — SVG/GIF timing parity (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: delegated coder agent (user-selected "Sonnet 5.5")
+Attempt: 1
+Files changed: scripts/build_animation.py (Track keyframe helper; planet bob, nozzle, scan, LEDs, reticle,
+  twinkles, meteor fade, cube vertices driven by Tracks on both paths), scripts/test_scene.py (+4 tests)
+Commands and outcomes:
+  - unittest 16/16 pass (supervisor re-run, ~1.0s).
+  - Supervisor independent Chromium setCurrentTime vs librsvg parity (1672x941), pixels |diff|>60:
+      t=0 541->1, t=3 6435->4, t=6 8118->5, t=12 567->1, t=14.7 5794->5, t=18 8168->5, t=23.9 240->0.
+    Mean abs diff now 0.12-0.16 (renderer antialiasing only).
+  - Fixed: planet bob inverted (SMIL rose while GIF fell), nozzle/scan/LED/reticle/twinkle phase and shape,
+    reticle opacity applied on two nested nodes (multiplied), meteor fade shape, cube chord interpolation.
+  - Animated SVG +3.7 KB (+0.06%).
+Visual evidence: supervisor inspected workshop crops at t=0,1.5,3,6,12,23.9; all motions present, no jumps.
+Decision: approve
+Reason: SMIL and GIF frames are now identical by construction and verified in a real browser.
+Remaining caveats: raster motion is a 24-keyframe sine approximation (<=0.2 px deviation from the old analytic
+  curve); assets not yet regenerated (after T02-R2).
 ```

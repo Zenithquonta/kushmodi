@@ -49,12 +49,73 @@ def rotate_node(name, width, x, y, angle, animated, seconds=24):
     return f'<g transform="translate({x:.3f} {y:.3f})"><g transform="rotate({angle:.3f})">{motion}{sprite(name,width)}</g></g>'
 
 
-def opacity_motion(duration=3, low=.35, high=1):
-    return f'<animate attributeName="opacity" values="{low};{high};{low}" dur="{duration}s" repeatCount="indefinite"/>'
+def _num(value, digits=3):
+    """Fixed-point text without trailing zeros (and never '-0')."""
+    text = f'{value:.{digits}f}'
+    if '.' in text:
+        text = text.rstrip('0').rstrip('.')
+    return '0' if text in ('-0', '') else text
+
+
+class Track:
+    """One keyframed SMIL animation, evaluated identically for the SVG and the sampled raster.
+
+    ``values`` are scalars or equal-length tuples; ``key_times`` (None = evenly spaced) run 0..1 and
+    interpolation is always linear, repeating forever like ``repeatCount="indefinite"``.  A negative
+    ``begin`` means the animation is already that many seconds into its cycle at t=0.  Everything is
+    rounded to the precision that ``smil()`` prints, so ``at(t)`` returns exactly what a browser will
+    interpolate from the markup.
+    """
+
+    def __init__(self, values, key_times=None, dur=PERIOD, begin=0, digits=3):
+        rnd = lambda v: round(v, digits)+0.0
+        self.values = tuple(tuple(rnd(c) for c in v) if isinstance(v, (tuple, list)) else rnd(v) for v in values)
+        count = len(self.values)
+        self.explicit_times = key_times is not None
+        self.key_times = tuple(round(k, 6)+0.0 for k in key_times) if key_times is not None \
+            else tuple(i/(count-1) for i in range(count))
+        assert count >= 2 and len(self.key_times) == count
+        assert self.key_times[0] == 0 and self.key_times[-1] == 1 and list(self.key_times) == sorted(self.key_times)
+        assert PERIOD % dur == 0, 'every period must divide the master cycle'
+        self.dur, self.digits, self.begin = dur, digits, round(begin, 4)+0.0
+
+    @classmethod
+    def sine(cls, centre, amplitude, dur, phase=0, samples=24, lift=None, digits=3):
+        """Sample ``centre + amplitude*sin(2*pi*(t/dur + phase))`` (phase in cycles) into keyframes."""
+        values = [centre+amplitude*math.sin(2*math.pi*i/samples) for i in range(samples)]
+        values.append(values[0])  # exactly closed loop
+        if lift:
+            values = [lift(v) for v in values]
+        return cls(values, None, dur, -phase*dur, digits)
+
+    def at(self, t):
+        u = ((t-self.begin) % self.dur)/self.dur
+        times = self.key_times
+        for i in range(1, len(times)):
+            if u <= times[i]:
+                f = 1.0 if times[i] == times[i-1] else (u-times[i-1])/(times[i]-times[i-1])
+                a, b = self.values[i-1], self.values[i]
+                if isinstance(a, tuple):
+                    return tuple(x+(y-x)*f for x, y in zip(a, b))
+                return a+(b-a)*f
+        return self.values[-1]
+
+    def text(self, value):
+        return ' '.join(_num(c, self.digits) for c in value) if isinstance(value, tuple) else _num(value, self.digits)
+
+    def smil(self, attribute, transform=None):
+        """The ``<animate>`` / ``<animateTransform type=...>`` element for this track."""
+        tag, kind = ('animate', '') if transform is None else ('animateTransform', f' type="{transform}"')
+        times = f' keyTimes="{";".join(_num(k, 6) for k in self.key_times)}"' if self.explicit_times else ''
+        begin = f' begin="{_num(self.begin, 4)}s"' if self.begin else ''
+        return (f'<{tag} attributeName="{attribute}"{kind} values="{";".join(self.text(v) for v in self.values)}"'
+                f'{times} dur="{self.dur}s"{begin} repeatCount="indefinite"/>')
+
+    def value_text(self, t):
+        return self.text(self.at(t))
 
 
 def celestial(t, animated):
-    a = 2*math.pi*t/PERIOD
     parts = [rotate_node('galaxy', 390, 810, 184, t*360/PERIOD, animated),
              rotate_node('galaxy', 137, 1128, 228, -t*360/12, animated, seconds=12)]
     # Secondary galaxy counter-rotates with an independent 12-second loop.
@@ -63,9 +124,10 @@ def celestial(t, animated):
                     f'type="rotate" from="0" to="-360" dur="12s" repeatCount="indefinite"/>{sprite("galaxy",137)}</g></g>')
     orbit = '<ellipse cx="1480" cy="162" rx="150" ry="66" fill="none" stroke="#71d6ef" stroke-width="1.4" stroke-dasharray="3 10" opacity=".4"/>'
     parts.append(orbit)
-    px, py = 1480, 163+3*math.sin(a)
-    planet_motion = ('<animateTransform attributeName="transform" type="translate" values="1480 163;1480 160;1480 163;1480 166;1480 163" dur="24s" repeatCount="indefinite"/>' if animated else '')
-    parts.append(f'<g transform="translate({px} {py:.3f})">{planet_motion}{sprite("planet",305)}</g>')
+    # Gentle +-3px bob, sampled from a sine so SMIL and the raster follow the same keyframes.
+    bob = Track.sine(163, 3, 24, lift=lambda y: (1480, y))
+    parts.append(f'<g transform="translate({bob.value_text(t)})">{bob.smil("transform", "translate") if animated else ""}'
+                 f'{sprite("planet",305)}</g>')
     for phase, size, period in [(0,39,12),(math.pi,28,24)]:
         theta = 2*math.pi*t/period+phase
         mx, my = 1480+150*math.cos(theta), 162+66*math.sin(theta)
@@ -225,25 +287,23 @@ def cube_points(theta):
 def workshop(t, animated):
     parts=[]
     edges=[(0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),(0,4),(1,5),(2,6),(3,7)]
-    poses=[cube_points(i*2*math.pi/24) for i in range(25)]
-    current=cube_points(t*2*math.pi/6)
+    # Each projected vertex coordinate is one 24-pose track, shared by every edge that uses it.
+    poses=[cube_points(i*2*math.pi/24) for i in range(24)]
+    poses.append(poses[0])
+    cube=[[Track([pose[k][axis] for pose in poses], None, 6, digits=2) for axis in (0,1)] for k in range(8)]
     for i,j in edges:
-        p,q=current[i],current[j]
-        anim=''
-        if animated:
-            for attribute,k,axis in [('x1',i,0),('y1',i,1),('x2',j,0),('y2',j,1)]:
-                values=';'.join(f'{pose[k][axis]:.2f}' for pose in poses)
-                anim+=f'<animate attributeName="{attribute}" values="{values}" dur="6s" repeatCount="indefinite"/>'
-        parts.append(f'<line x1="{p[0]:.2f}" y1="{p[1]:.2f}" x2="{q[0]:.2f}" y2="{q[1]:.2f}" stroke="#72f0ff" stroke-width="1.8" opacity=".9">{anim}</line>')
-    nozzle=1335+20*math.sin(t*2*math.pi/3)
-    motion='<animate attributeName="x" values="1315;1355;1315" dur="3s" repeatCount="indefinite"/>' if animated else ''
-    parts.append(f'<rect x="{nozzle:.3f}" y="727" width="9" height="5" fill="#71edff">{motion}</rect>')
-    scan=749+18*math.sin(t*2*math.pi/6)
-    motion='<animate attributeName="y" values="731;767;731" dur="6s" repeatCount="indefinite"/>' if animated else ''
-    parts.append(f'<rect x="1318" y="{scan:.3f}" width="39" height="1.6" fill="#83eaff" opacity=".55">{motion}</rect>')
+        tracks=[('x1',cube[i][0]),('y1',cube[i][1]),('x2',cube[j][0]),('y2',cube[j][1])]
+        anim=''.join(track.smil(name) for name,track in tracks) if animated else ''
+        x1,y1,x2,y2=(track.value_text(t) for _,track in tracks)
+        parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#72f0ff" stroke-width="1.8" opacity=".9">{anim}</line>')
+    nozzle=Track.sine(1335,20,3)
+    parts.append(f'<rect x="{nozzle.value_text(t)}" y="727" width="9" height="5" fill="#71edff">{nozzle.smil("x") if animated else ""}</rect>')
+    scan=Track.sine(749,18,6)
+    parts.append(f'<rect x="1318" y="{scan.value_text(t)}" width="39" height="1.6" fill="#83eaff" opacity=".55">{scan.smil("y") if animated else ""}</rect>')
     for x,y,c,phase in [(1596,775,'#fa6cec',0),(1380,733,'#48dffc',.4),(1196,816,'#66eeeb',.7),(1505,591,'#e760e7',.2)]:
-        alpha=.35+.65*(.5+.5*math.sin(t*2*math.pi/3+phase))
-        parts.append(f'<rect x="{x}" y="{y}" width="4" height="3" fill="{c}" opacity="{alpha:.3f}">{opacity_motion() if animated else ""}</rect>')
+        # .35 + .65*(.5+.5*sin(2*pi*t/3 + phase)), phase in radians.
+        led=Track.sine(.675,.325,3,phase/(2*math.pi))
+        parts.append(f'<rect x="{x}" y="{y}" width="4" height="3" fill="{c}" opacity="{led.value_text(t)}">{led.smil("opacity") if animated else ""}</rect>')
     return ''.join(parts)
 
 
@@ -256,18 +316,22 @@ def sky_details(t, animated):
             continue
         period=rng.choice([3,4,6,8])
         phase=rng.random()
-        alpha=.2+.8*(.5+.5*math.sin(2*math.pi*(t/period+phase)))
-        motion=(f'<animate attributeName="opacity" values=".2;1;.2" dur="{period}s" begin="{-phase*period:.3f}s" repeatCount="indefinite"/>' if animated else '')
-        parts.append(f'<path d="M{x-3} {y}h6M{x} {y-3}v6" stroke="#a7deff" stroke-width="1.4" opacity="{alpha:.3f}">{motion}</path>')
+        twinkle=Track.sine(.6,.4,period,phase)
+        parts.append(f'<path d="M{x-3} {y}h6M{x} {y-3}v6" stroke="#a7deff" stroke-width="1.4" opacity="{twinkle.value_text(t)}">'
+                     f'{twinkle.smil("opacity") if animated else ""}</path>')
     parts.append('<path d="M811 551L1020 97L1460 133" fill="none" stroke="#40daed" stroke-width="1.6" stroke-dasharray="6 11" opacity=".38"/>')
-    parts.append(f'<g opacity="{.5+.3*math.sin(2*math.pi*t/3):.3f}"><path d="M996 94V72H1013M1028 72H1045V94M1045 104V121H1028M1013 121H996V104" fill="none" stroke="#4ae8f2" stroke-width="2">'
-                 f'{opacity_motion(3,.3,.8) if animated else ""}</path></g>')
+    reticle=Track.sine(.5,.3,3)
+    parts.append(f'<g opacity="{reticle.value_text(t)}">{reticle.smil("opacity") if animated else ""}'
+                 '<path d="M996 94V72H1013M1028 72H1045V94M1045 104V121H1028M1013 121H996V104" fill="none" stroke="#4ae8f2" stroke-width="2"/></g>')
     u=(t/12)%1
     mx,my=1100+390*u,380+150*u
-    alpha=math.sin(math.pi*u/.16)**2 if u<.16 else 0
+    # Meteor is visible for the first 16% of its 12s cycle: sin^2 fade-in/out, then hidden.
+    steps=24
+    meteor=Track([math.sin(math.pi*i/steps)**2 for i in range(steps+1)]+[0],
+                 [.16*i/steps for i in range(steps+1)]+[1],12)
     move=('<animateTransform attributeName="transform" type="translate" from="1100 380" to="1490 530" dur="12s" repeatCount="indefinite"/>' if animated else '')
-    fade=('<animate attributeName="opacity" values="0;1;0;0" keyTimes="0;.08;.16;1" dur="12s" repeatCount="indefinite"/>' if animated else '')
-    parts.append(f'<g transform="translate({mx:.3f} {my:.3f})" opacity="{alpha:.3f}">{move}{fade}<path d="M-58 -23L0 0" stroke="#88e4fc" stroke-width="2"/><rect x="-2" y="-2" width="4" height="4" fill="#ebfdff"/></g>')
+    parts.append(f'<g transform="translate({mx:.3f} {my:.3f})" opacity="{meteor.value_text(t)}">{move}{meteor.smil("opacity") if animated else ""}'
+                 '<path d="M-58 -23L0 0" stroke="#88e4fc" stroke-width="2"/><rect x="-2" y="-2" width="4" height="4" fill="#ebfdff"/></g>')
     return ''.join(parts)
 
 
