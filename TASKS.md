@@ -18,6 +18,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T02-R1 | Fix traffic clip, overlap and foreground crossings found in T02 | done |  Explorer hard-clipped at x=574 (t≈14.7); fighters overlap explorer and trees (t≈0/23.9); airplane crosses right trees/workshop roof (t≈15.6). Route geometry/fades only. |
 | T02-R2 | Register the CAD cube to the painted cube; moons pass behind the planet | done | Found in T01 (double cube in every frame) and the known moon-occlusion item. |
 | T13 | Animated mission cards + fourth Rover Bay card (user-approved addition) | done | Subtle SMIL card motion with static <picture> fallbacks; 2x2 card grid. |
+| T14 | Scene additions: telescope lock-on, warp/hyperspace transitions, airplane nav lights (user-approved) | done | M51 lock-on with pixel readout; explorer warp exit; fighter drop-outs; nav lights + strobe. |
 | T09 | Review meaningful source regression tests | ready_for_review | Five tests now cover traffic period wrap, periodic/finite CAD geometry, deterministic and changing scene output, sprite crop bounds, and the observed open-path polygon regression. The quality gate additionally covers SVG references and removed live-content references. Review preview regeneration coverage and extend where meaningful. |
 | T10 | Review handoff, registry and reproducibility | ready_for_review | All supplied artwork, active SVGs, legacy SVGs, scripts, template, ledger, entry point and model loop are included. `assets/MANIFEST.json` should describe files and hashes. The handoff must accurately identify completed versus pending work. |
 | T11 | Commit and push the entire handoff and profile project | implementing | Target is only `Zenithquonta/kushmodi`. Earlier writes to both Git Trees and Contents APIs failed with 403 `Resource not accessible by integration`. Refresh live permissions before retrying. Preserve HEAD/unrelated files and do not force-push. |
@@ -314,4 +315,22 @@ Visual evidence: supervisor inspected 1000px vs 840px vs source resampled to Git
   lettering and telescope indistinguishable; 840px is ~1:1 at display size.
 Decision: approve
 Remaining caveats: fewer source pixels for high-DPI zoom; assets regenerated after T14 scene additions.
+```
+
+### T14 — scene additions (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: delegated coder agent (user-selected "Sonnet 5.5")
+Attempts: 2 (attempt 1 revise: targeting line lost against the Milky Way; warp flash bar read as a "T")
+Files changed: scripts/build_animation.py (lock_on(), warp specs in ROUTES, nav_lights()), scripts/test_scene.py (34 tests)
+Content: telescope acquires the face-on spiral as M51 (real J2000 RA 13h29m, Dec +47 11'), pixel-font readout
+  (no <text>), single reticle at a time; explorer stretches to warp with a sparkle flash; fighters drop out of
+  hyperspace; airplane red/green lights and 1.5 s double-flash strobe.
+Commands and outcomes: 34/34 tests (supervisor re-run); parity worst cell <=5 (limit 150) at 7 standard times +
+  lock hold + warp frames; animated SVG +22 KB; scratch GIF 840px 7,955,864 B.
+Visual evidence: supervisor inspected lock hold full frame, GIF-decoded line crop at lock hold, readout x6 at GIF
+  scale, explorer warp 5-frame strip (attempts 1 and 2).
+Decision: approve
+Remaining caveats: warp/drop-out are 4-5 GIF frames by design; line overlays ships passing at that moment.
 ```

@@ -186,6 +186,80 @@ def parents(root):
 
 
 
+def path_points(d):
+ """Corner points of an absolute/relative M L H V h v l z path (the only commands the scene uses)."""
+ tokens=re.findall(r'[MLHVhvlz]|-?\d*\.?\d+',d)
+ points,x,y,start,i,cmd=[],0.0,0.0,(0.0,0.0),0,None
+ while i<len(tokens):
+  if tokens[i].isalpha():
+   cmd=tokens[i]
+   i+=1
+   if cmd=='z':
+    x,y=start
+    continue
+  if cmd in 'ML':
+   x,y=float(tokens[i]),float(tokens[i+1])
+   i+=2
+   if cmd=='M':
+    start=(x,y)
+    cmd='L'
+  elif cmd=='l':
+   x,y=x+float(tokens[i]),y+float(tokens[i+1])
+   i+=2
+  elif cmd=='H':
+   x=float(tokens[i]); i+=1
+  elif cmd=='h':
+   x+=float(tokens[i]); i+=1
+  elif cmd=='V':
+   y=float(tokens[i]); i+=1
+  elif cmd=='v':
+   y+=float(tokens[i]); i+=1
+  else:
+   raise AssertionError(cmd)
+  points.append((x,y))
+ return points
+
+
+def leaf_bbox(leaf):
+ """Scene-space bounding box of a flattened path/rect/line leaf, stroke included (None for anything else)."""
+ tag,attrs,m,_=leaf
+ if tag=='path':
+  points=path_points(attrs['d'])
+  pad=float(attrs.get('stroke-width',0))/2 if attrs.get('stroke') else 0
+ elif tag=='rect':
+  x,y,w,h=(float(attrs[k]) for k in ('x','y','width','height'))
+  points,pad=[(x,y),(x+w,y+h)],0
+ elif tag=='line':
+  points=[(float(attrs['x1']),float(attrs['y1'])),(float(attrs['x2']),float(attrs['y2']))]
+  pad=float(attrs['stroke-width'])/2
+ else:
+  return None
+ xs=[m[0]*x+m[2]*y+m[4] for x,y in points]
+ ys=[m[1]*x+m[3]*y+m[5] for x,y in points]
+ padx,pady=pad,pad
+ if tag=='line' and m[1]==0 and m[2]==0:  # butt caps: a horizontal line is only as thick as its stroke, a vertical one as wide
+  horizontal=points[0][1]==points[1][1]
+  vertical=points[0][0]==points[1][0]
+  padx,pady=(0 if horizontal else pad),(0 if vertical else pad)
+ return (min(xs)-padx,min(ys)-pady,max(xs)+padx,max(ys)+pady)
+
+
+def contains(outer,inner,slack=.05):
+ return outer[0]-slack<=inner[0] and outer[1]-slack<=inner[1] and inner[2]<=outer[2]+slack and inner[3]<=outer[3]+slack
+
+
+def lock_parts(t):
+ """{part name: [(bbox, effective opacity)]} of every leaf of the lock-on layer in the static frame at t."""
+ root=ET.fromstring(WRAP.format(scene.lock_on(t,False)))
+ return {g.attrib['data-lock']:[(leaf_bbox(l),l[3]) for l in flatten(g) if leaf_bbox(l)] for g in root}
+
+
+def distance_to_box(point,box):
+ dx=max(box[0]-point[0],0,point[0]-box[2])
+ dy=max(box[1]-point[1],0,point[1]-box[3])
+ return math.hypot(dx,dy)
+
+
 class SceneTests(unittest.TestCase):
  def test_space_traffic_repeats_after_master_cycle(self):
   for t in (0,3,7.4,18):
@@ -254,6 +328,13 @@ class SceneTests(unittest.TestCase):
      # exhaust must not be painted across another craft either
      self.assertFalse(overlap(a['trail_bbox'],b['sprite_bbox']),(t,a['id'],'trail',b['id']))
      self.assertFalse(overlap(b['trail_bbox'],a['sprite_bbox']),(t,b['id'],'trail',a['id']))
+     # warp streaks are light, but still must not be painted across another craft or its exhaust
+     for p,q in ((a,b),(b,a)):
+      if p['streak_bbox']:
+       self.assertFalse(overlap(p['streak_bbox'],q['sprite_bbox']),(t,p['id'],'streak',q['id']))
+       self.assertFalse(overlap(p['streak_bbox'],q['trail_bbox']),(t,p['id'],'streak',q['id'],'trail'))
+       if q['streak_bbox']:
+        self.assertFalse(overlap(p['streak_bbox'],q['streak_bbox']),(t,p['id'],q['id'],'streaks'))
 
  def test_no_hard_clip_and_traffic_fades_smoothly(self):
   for animated in (False,True):
@@ -263,20 +344,25 @@ class SceneTests(unittest.TestCase):
   for route in scene.ROUTES:
    keys=route['fade_keys']
    for (u0,v0),(u1,v1) in zip(keys,keys[1:]):
-    if v0!=v1:
+    if v0!=v1 and not route.get('warp'):
      self.assertGreaterEqual((u1-u0)*route['period'],1.0,(route['id'],'fade shorter than 1s'))
   previous=None
   for t in SAMPLES+[scene.PERIOD]:
    states=scene.traffic_state(t)
    if previous:
     for a,b in zip(previous,states):
-     if abs(a['opacity']-b['opacity'])>.11:
-      # only allowed as a wrap-around while the object is wholly outside the canvas
+     if abs(a['opacity']-b['opacity'])>.11 and not (a['warp'] and (a['warp']['active'] or b['warp']['active'])):
+      # only allowed as a wrap-around while the object is wholly outside the canvas (warps handle their own transition)
       for side in (a,b):
        self.assertFalse(side['opacity']>VISIBLE and on_canvas(side['bbox']),(t,side['id']))
    previous=states
   explorer=[s for s in scene.traffic_state(14.7) if s['id']=='explorer'][0]
   self.assertLessEqual(explorer['opacity'],VISIBLE)  # formerly sliced at x=574
+  # the explorer is only ever visible right of its warp point, well clear of the text block
+  for t in SAMPLES:
+   explorer=[s for s in scene.traffic_state(t) if s['id']=='explorer'][0]
+   if explorer['opacity']>VISIBLE:
+    self.assertGreater(explorer['bbox'][0],scene.TEXT_RECT[2]+30,t)
 
  def test_animated_traffic_smil_reproduces_traffic_state(self):
   root=ET.fromstring(scene.scene(0,True))
@@ -361,7 +447,7 @@ class SceneTests(unittest.TestCase):
     led=leaf(t,x=str(x),width='4')
     self.assertAlmostEqual(led[3],.35+.65*(.5+.5*sine(3,phase)),delta=.01,msg=(t,x))
    reticle=[l for l in static_cached(t) if l[1].get('stroke')=='#4ae8f2'][0]
-   self.assertAlmostEqual(reticle[3],.5+.3*sine(3),delta=.01,msg=t)
+   self.assertAlmostEqual(reticle[3],(.5+.3*sine(3))*scene.LOCK['idle'].at(t),delta=.01,msg=t)  # steps aside during the lock-on
    u=(t/12)%1
    meteor=leaf(t,stroke='#88e4fc')
    self.assertAlmostEqual(meteor[3],math.sin(math.pi*u/.16)**2 if u<.16 else 0,delta=.01,msg=t)
@@ -474,7 +560,7 @@ class SceneTests(unittest.TestCase):
    self.assertGreater(max(edges)/min(edges),1.08,step)
 
  def test_cube_has_restrained_glow_under_the_crisp_edges(self):
-  strokes=[l for l in static_cached(0) if l[0]=='line']
+  strokes=[l for l in static_cached(0) if l[0]=='line' and l[1].get('stroke-linecap')=='round']  # warp streaks are other <line>s
   crisp=[l for l in strokes if l[1]['stroke']=='#72f0ff']
   glow=[l for l in strokes if l[1]['stroke']!='#72f0ff']
   self.assertEqual(len(crisp),12)
@@ -544,6 +630,277 @@ class SceneTests(unittest.TestCase):
    self.assertEqual(len(keys),6)
    self.assertEqual(keys[1],keys[2])
    self.assertEqual(keys[3],keys[4])
+
+ # ------------------------------------------------------------------ telescope lock-on
+ def test_lock_on_never_touches_the_text_block_or_covers_the_galaxy_core(self):
+  core=scene.LOCK_CORE
+  seen=set()
+  for t in SAMPLES:
+   parts=lock_parts(t)
+   state=scene.lock_state(t)
+   self.assertEqual(sorted(parts),['leader','line','readout','reticle'])
+   for name,leaves in parts.items():
+    for box,opacity in leaves:
+     self.assertFalse(overlap(box,scene.TEXT_RECT),(t,name,box))   # every leaf, visible or not
+     self.assertGreaterEqual(box[0],0); self.assertLessEqual(box[2],scene.W)
+     self.assertGreaterEqual(box[1],0); self.assertLessEqual(box[3],scene.H)
+     if name in ('readout','leader'):
+      self.assertGreater(distance_to_box(core,box),60,(t,name,box))  # core and its immediate bright disc stay clear
+     if opacity>VISIBLE:
+      seen.add(name)
+      if name!='line':  # the dotted line deliberately starts on the telescope finder itself
+       self.assertLess(box[3],scene.skyline_top(box[0],box[2]),(t,name))
+    # the declared boxes (used for the area budget) really contain the drawn geometry
+    union=(min(b[0] for b,_ in leaves),min(b[1] for b,_ in leaves),max(b[2] for b,_ in leaves),max(b[3] for b,_ in leaves))
+    self.assertTrue(contains(state[name]['bbox'],union,1.0) or name=='readout',(t,name,union,state[name]['bbox']))
+   readout=[b for b,_ in parts['readout']]
+   for box in readout:
+    self.assertTrue(contains(scene.LOCK_READOUT_BOX,box),(t,box,scene.LOCK_READOUT_BOX))
+  self.assertEqual(seen,{'line','reticle','leader','readout'})  # and it really does show up
+
+ def test_lock_on_sequence_runs_once_and_holds_for_a_few_seconds(self):
+  visible=[t for t in SAMPLES if scene.lock_state(t)['readout']['opacity']>.5]
+  self.assertTrue(4<=len(visible)/10<=6.5,len(visible)/10)  # hold ~4-6 s with the full readout
+  self.assertEqual([round(v*10) for v in visible],[round(visible[0]*10)+i for i in range(len(visible))])  # one contiguous hold per loop
+  first=min(t for t in SAMPLES if scene.lock_state(t)['line']['opacity']>VISIBLE)
+  last=max(t for t in SAMPLES if scene.lock_state(t)['reticle']['opacity']>VISIBLE)
+  self.assertLess(first,visible[0]); self.assertLess(visible[-1],last)  # line first, readout once locked, then it fades
+  for t in (0,5,11,22,23.9):
+   state=scene.lock_state(t)
+   self.assertLessEqual(max(state[k]['opacity'] for k in ('line','reticle','leader','readout')),VISIBLE,t)
+  # the reticle snaps around the galaxy core: brackets close in, overshoot slightly, then settle on LOCK_HALF
+  half=scene.LOCK['half']
+  self.assertGreater(half.at(13.4),2*scene.LOCK_HALF)
+  self.assertLess(min(half.at(i/100) for i in range(1300,1600)),scene.LOCK_HALF)
+  self.assertEqual(half.at(17),scene.LOCK_HALF)
+  box=scene.lock_state(17)['reticle']['bbox']
+  self.assertEqual(((box[0]+box[2])/2,(box[1]+box[3])/2),scene.LOCK_CORE)
+  # the dotted line starts at the finder and ends under the reticle, drawn on by its end point only
+  self.assertEqual((scene.LOCK['line_x'].at(12),scene.LOCK['line_y'].at(12)),scene.LOCK_FROM)
+  self.assertEqual((scene.LOCK['line_x'].at(17),scene.LOCK['line_y'].at(17)),scene.LOCK_END)
+  self.assertLess(scene.LOCK_END[1],scene.LOCK_CORE[1]+scene.LOCK_HALF+10)
+
+ def test_there_is_never_more_than_one_reticle_and_the_lock_stays_small(self):
+  sky=scene.W*580  # sky above the horizon
+  for t in SAMPLES:
+   state=scene.lock_state(t)
+   idle=scene.LOCK['idle'].at(t)
+   self.assertFalse(idle>.25 and state['reticle']['opacity']>.25,t)  # old target reticle steps aside for the lock
+   area=sum((state[k]['bbox'][2]-state[k]['bbox'][0])*(state[k]['bbox'][3]-state[k]['bbox'][1])
+            for k in ('line','reticle','leader','readout') if state[k]['opacity']>VISIBLE)
+   self.assertLess(area,.10*sky,t)
+  # the idle reticle really is the only other one: a single 4-corner bracket in each layer
+  idle_group=[g for g in ET.fromstring(WRAP.format(scene.sky_details(0,False))).iter(SVG+'g') if 'data-idle' in g.attrib]
+  self.assertEqual(len(idle_group),1)
+  reticles=[l for l in flatten(idle_group[0]) if l[1].get('stroke')=='#4ae8f2']
+  self.assertEqual(len(reticles),1)
+
+ def test_readout_is_pixel_font_rectangles_and_says_what_was_requested(self):
+  svg=scene.scene(0,True)
+  self.assertNotIn('<text',svg)
+  self.assertNotIn('<script',svg)
+  self.assertEqual(scene.LOCK_READOUT,("TARGET LOCK \u00b7 M51","RA 13h29m","DEC +47\u00b011'"))
+  self.assertEqual(len(scene.LOCK_LINES),3)
+  for text,(d,x,y,w,h) in zip(scene.LOCK_READOUT,scene.LOCK_LINES):
+   d2,w2,h2=scene.pixel_text(text,x,y)
+   self.assertEqual((d,w,h),(d2,w2,h2))
+   points=path_points(d)
+   cell=scene.CELL
+   self.assertTrue(all(x<=px<=x+w and y<=py<=y+h for px,py in points),text)
+   self.assertTrue(all((px-x)%cell==0 and (py-y)%cell==0 for px,py in points))  # snapped to the cell grid
+   self.assertEqual(h,5*cell)
+  # glyph coverage and shape sanity: every character is defined, rows are the same width
+  for char,rows in scene.FONT.items():
+   self.assertEqual(len(rows),5,char)
+   self.assertEqual(len({len(r) for r in rows}),1,char)
+  for text in scene.LOCK_READOUT:
+   for char in text:
+    self.assertIn(char,scene.FONT)
+  # the readout appears below the lock layer's own cyan, translucent text colour
+  self.assertIn('fill="#72f0ff"',scene.lock_on(15,False))
+
+ # ------------------------------------------------------------------ warp / hyperspace
+ def test_warp_geometry_stays_in_open_sky_and_inside_its_declared_boxes(self):
+  streak_seen={'explorer':0,'fighter-a':0,'fighter-b':0}
+  stretched=flashes=0
+  for t in SAMPLES:
+   states=scene.traffic_state(t)
+   root=ET.fromstring(WRAP.format(scene.traffic(t,False)))
+   lines=[l for l in flatten(root) if l[0]=='line']
+   expected=sum(len(r['warp']['lines']) for r in scene.ROUTES if r.get('warp'))
+   self.assertEqual(len(lines),expected)
+   cursor=0
+   for route,state in zip(scene.ROUTES,states):
+    warp=route.get('warp')
+    if not warp:
+     continue
+    mine,cursor=lines[cursor:cursor+len(warp['lines'])],cursor+len(warp['lines'])
+    for leaf in mine:
+     box=leaf_bbox(leaf)
+     if leaf[3]>VISIBLE:
+      streak_seen[state['id']]+=1
+      self.assertIsNotNone(state['streak_bbox'],(t,state['id']))
+      self.assertTrue(contains(state['streak_bbox'],box),(t,state['id'],box,state['streak_bbox']))
+      self.assertFalse(overlap(box,scene.TEXT_RECT),(t,state['id'],'streak',box))
+      top=scene.skyline_top(box[0],box[2])
+      self.assertTrue(top is None or box[3]<top,(t,state['id'],'streak'))
+    if warp['flash']:  # the sparkle must lie inside the declared streak box and clear of the text block while visible
+     for leaf in flatten(root):
+      if leaf[0]=='path' and leaf[1].get('fill') in ('#f2ffff','#8af0ff') and leaf[3]>VISIBLE:
+       flashes+=1
+       box=leaf_bbox(leaf)
+       self.assertTrue(contains(state['streak_bbox'],box),(t,'sparkle',box,state['streak_bbox']))
+       self.assertFalse(overlap(box,scene.TEXT_RECT),(t,'sparkle',box))
+       self.assertTrue(9<=box[2]-box[0]<=22,box)
+    if state['opacity']>VISIBLE:
+     box=state['bbox']
+     self.assertFalse(overlap(box,scene.TEXT_RECT),(t,state['id'],box))
+     top=scene.skyline_top(box[0],box[2])
+     self.assertTrue(top is None or box[3]<top,(t,state['id']))
+    if state['warp'] and state['warp']['sx']>1.01:
+     stretched+=1
+     self.assertLessEqual(state['warp']['sx'],3.0)
+     self.assertEqual(state['id'],'explorer')
+  self.assertTrue(all(streak_seen.values()),streak_seen)
+  self.assertGreaterEqual(stretched,3)
+  self.assertGreaterEqual(flashes,4)  # the sparkle shows up in the sampled frames (core + halo)
+
+ def test_warp_sequences_are_short_and_end_in_normal_flight(self):
+  for route in scene.ROUTES:
+   warp=route.get('warp')
+   if not warp:
+    continue
+   self.assertTrue(.3<=warp['span']<=.6,(route['id'],warp['span']))
+   self.assertEqual(scene.PERIOD%warp['ship'].dur,0)
+   speed=(route['end']-route['start'])/route['period']
+   if warp['kind']=='out':
+    # stretch from the nose only, up to 3x, in the last half second; the ship is gone at the event
+    scales=[v[0] for v in warp['stretch'].values]
+    self.assertEqual(max(scales),3.0)
+    self.assertEqual(warp['stretch'].values[0],(1.0,1.0))
+    event=(warp['u0']*route['period']-route['phase']*route['period'])%route['period']
+    self.assertAlmostEqual(warp['ship'].at(event),0,delta=.01)
+    self.assertEqual(warp['ship'].at(event-.6),1)
+    self.assertEqual(warp['stretch'].at(event-.6),(1,1))
+    self.assertEqual(warp['stretch'].at(event-.01)[1],1)  # y is never scaled
+    self.assertLess(warp['nose'],0)  # nose is on the flight side (these ships head left)
+    flash=warp['flash']
+    peak=event-.12
+    self.assertGreater(flash['a'].at(peak),.99)
+    self.assertLess(flash['a'].at(peak+.21),.01)       # the sparkle fades out over about 0.2 s
+    self.assertLess(warp['ship'].at(peak+.1),.01)      # and the hull is gone one 10 fps frame after the flash
+    self.assertGreater(warp['ship'].at(peak),.2)
+    self.assertTrue(9<=flash['size']<=13)
+    self.assertAlmostEqual(flash['pos'].at(peak)[0],warp['lines'][0]['x1'].at(peak),delta=.05)  # centred on the streak end
+    self.assertLess(speed,0)
+   else:
+    event=(warp['u0']*route['period']-route['phase']*route['period'])%route['period']
+    self.assertEqual(warp['ship'].at(event-.45),0)
+    self.assertAlmostEqual(warp['ship'].at(event),1,delta=.01)       # fully there when the streaks have collapsed
+    self.assertAlmostEqual(warp['streak'].at(event),0,delta=.01)
+    self.assertEqual(warp['streak'].at(event+.3),0)
+    self.assertEqual(warp['streak'].at(event-.45),0)
+    for line in warp['lines']:
+     self.assertAlmostEqual(line['x1'].at(event),0,delta=.1)  # collapsed to a point
+     self.assertAlmostEqual(line['x2'].at(event),0,delta=.1)
+     self.assertGreater(line['x2'].at(event-.4)-line['x1'].at(event-.4),60)
+     self.assertLessEqual(abs(line['y'].at(event)),abs(line['y'].at(event-.4)))  # converging on the hull
+    self.assertEqual({l['stroke'] for l in warp['lines']}<={'#ed78fc','#fff0ff'},True)  # magenta and white only
+  # every warp channel is a Track on the route's own clock, so SMIL equals the raster by construction
+  for route in scene.ROUTES:
+   warp=route.get('warp')
+   if warp:
+    tracks=[warp['ship'],warp['streak']]+([warp['stretch']] if warp['stretch'] else [])
+    for line in warp['lines']:
+     tracks+=[v for v in (line['x1'],line['x2'],line['y']) if isinstance(v,scene.Track)]
+    for track in tracks:
+     self.assertEqual((track.dur,track.begin),(route['period'],round(-route['phase']*route['period'],4)+0.0))
+
+ def test_objects_are_off_canvas_when_warp_channels_wrap(self):
+  for route in scene.ROUTES:
+   for t in (i/100 for i in range(0,2400,5)):
+    u=(t/route['period']+route['phase'])%1
+    if u<.01 or u>.99:
+     state=[s for s in scene.traffic_state(t) if s['id']==route['id']][0]
+     self.assertFalse(on_canvas(state['bbox']) and state['opacity']>VISIBLE,(route['id'],t,state['bbox']))
+
+ def test_warp_markup_is_one_group_per_route_inside_the_moving_object(self):
+  moving=animated_root()
+  up=parents(moving)
+  groups=[g for g in moving.iter(SVG+'g') if 'data-warp' in g.attrib]
+  self.assertEqual([g.attrib['data-warp'] for g in groups],['out','in','in'])
+  for g in groups:
+   walker,ids=up.get(g),[]
+   while walker is not None:
+    ids.append(walker.attrib.get('data-traffic'))
+    walker=up.get(walker)
+   self.assertTrue(any(ids),ids)  # inside a data-traffic group, so it inherits the route motion
+   anims=[n for n in g.iter() if n.tag in ANIMATIONS]
+   self.assertGreaterEqual(len(anims),3)
+   for n in anims:
+    self.assertEqual(n.attrib['repeatCount'],'indefinite')
+    self.assertLess(seconds(n.attrib['begin']),0)
+   self.assertIsNone(g.find(SVG+'filter'))
+  layers=scene.layers(0,True)
+  for forbidden in ('<filter','filter=','<text','<script','<image','<foreignObject','<mask'):
+   self.assertNotIn(forbidden,layers)
+
+ # ------------------------------------------------------------------ airplane navigation lights
+ def test_navigation_lights_ride_the_airplane_and_their_periods_divide_the_loop(self):
+  moving=animated_root()
+  up=parents(moving)
+  lights=[g for g in moving.iter(SVG+'g') if g.attrib.get('data-lights')=='airplane']
+  self.assertEqual(len(lights),1)
+  walker,ancestors=up.get(lights[0]),[]
+  while walker is not None:
+   ancestors.append(walker.attrib.get('data-traffic'))
+   walker=up.get(walker)
+  self.assertIn('airplane',ancestors)  # inside the airplane's own moving group
+  durations={}
+  for node in lights[0].iter():
+   if node.tag in ANIMATIONS:
+    dur=seconds(node.attrib['dur'])
+    self.assertEqual(scene.PERIOD%dur,0,node.attrib)  # period divides 24 s
+    self.assertEqual(node.attrib['attributeName'],'opacity')
+    durations[dur]=durations.get(dur,0)+1
+  self.assertEqual(durations,{3.0:2,scene.STROBE_PERIOD:1})  # red + green lamps (3 s), one strobe
+  self.assertTrue(1<=scene.STROBE_PERIOD<=1.5)
+  self.assertEqual(scene.PERIOD/scene.STROBE_PERIOD,16)
+  # three lamps: red, green, white, each only a few pixels across
+  rects=[l for l in flatten(lights[0]) if l[0]=='rect']
+  cores=[l for l in rects if float(l[1]['width'])<=3]
+  self.assertEqual(sorted(l[1]['fill'] for l in cores),['#38ff7a','#ff3b3b','#ffffff'])
+  for l in rects:
+   self.assertLessEqual(float(l[1]['width']),8)
+  red=[l for l in cores if l[1]['fill']=='#ff3b3b'][0]
+  green=[l for l in cores if l[1]['fill']=='#38ff7a'][0]
+  # heading right, seen from starboard: the far (port, red) wing tip is up and aft of the near (starboard, green) one
+  self.assertLess(float(red[1]['y']),float(green[1]['y'])-1)
+  self.assertLess(float(red[1]['x']),float(green[1]['x']))
+
+ def test_strobe_double_flashes_and_is_seen_in_the_gif_frames(self):
+  strobe=scene.Track([v for _,v in scene.STROBE_KEYS],[s/scene.STROBE_PERIOD for s,_ in scene.STROBE_KEYS],scene.STROBE_PERIOD)
+  samples=[strobe.at(i/1000) for i in range(0,1500)]
+  flashes=sum(1 for a,b,c in zip(samples,samples[1:],samples[2:]) if b>a and b>=c and b>.5)
+  self.assertEqual(flashes,2)  # exactly two flashes per period
+  gif=[strobe.at(i/10) for i in range(240)]
+  on=[v>.99 for v in gif]
+  self.assertEqual(sum(on),32)  # 16 periods x 2 flashes: each lands exactly on a GIF frame
+  self.assertTrue(all(v>.99 or v<.01 for v in gif))  # a frame sees a flash fully on or fully off
+  self.assertEqual(sum(1 for a,b in zip(on,on[1:]) if a and b),0)  # never lit in two consecutive frames
+  self.assertEqual(strobe.at(0),strobe.at(scene.STROBE_PERIOD))
+
+ def test_every_new_animated_group_is_covered_by_the_generic_raster_comparison(self):
+  moving=animated_root()
+  def count(predicate):
+   return sum(1 for g in moving.iter(SVG+'g') if predicate(g) for n in g.iter() if n.tag in ANIMATIONS)
+  self.assertGreaterEqual(count(lambda g:'data-lock' in g.attrib),14)
+  self.assertGreaterEqual(count(lambda g:'data-warp' in g.attrib),12)
+  self.assertGreaterEqual(count(lambda g:'data-lights' in g.attrib),3)
+  # the generic test flattens every animated attribute; make sure the new ones are among those it evaluates
+  kinds={(n.tag.replace(SVG,''),n.attrib['attributeName'],n.attrib.get('type')) for n in moving.iter() if n.tag in ANIMATIONS}
+  for needed in (('animateTransform','transform','scale'),('animate','x2',None),('animate','y2',None),('animate','x1',None),('animate','y1',None)):
+   self.assertIn(needed,kinds)
 
 
 if __name__=='__main__':

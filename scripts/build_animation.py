@@ -115,6 +115,20 @@ class Track:
     def value_text(self, t):
         return self.text(self.at(t))
 
+    @classmethod
+    def timeline(cls, points, base, dur=PERIOD, digits=3):
+        """Keyframes given as ``(seconds, value)``; the track rests at ``base`` at both ends of the cycle.
+
+        Hidden-state resets (a line collapsing back to its start) belong where the object is invisible.
+        """
+        pts = list(points)
+        if pts[0][0] > 0:
+            pts.insert(0, (0, base))
+        if pts[-1][0] < dur:
+            pts.append((dur, base))
+        assert pts[0][1] == pts[-1][1], 'a looping track must end where it starts'
+        return cls([v for _, v in pts], [s/dur for s, _ in pts], dur, 0, digits)
+
 
 # (start phase in radians, sprite width, period in seconds); theta = 2*pi*t/period + phase.
 MOONS = [(0, 39, 12), (math.pi, 28, 24)]
@@ -202,14 +216,19 @@ BOX_PAD = 2
 TRAIL_BOX = {'explorer': (115, -18.5, 208, 8.5), 'fighter': (44, -10, 117, 10), 'airplane': (-174, 0, -57, 2)}
 
 
-def _x_keys(start, end, pairs):
-    """[(x, value)] along a straight route -> [(u, value)] padded to u=0 and u=1."""
-    keys = [((x-start)/(end-start), v) for x, v in pairs]
+def _pad_u(keys):
+    """[(u, value)] held at its first/last value out to u=0 and u=1."""
+    keys = list(keys)
     if keys[0][0] > 0:
         keys.insert(0, (0, keys[0][1]))
     if keys[-1][0] < 1:
         keys.append((1, keys[-1][1]))
     return keys
+
+
+def _x_keys(start, end, pairs):
+    """[(x, value)] along a straight route -> [(u, value)] padded to u=0 and u=1."""
+    return _pad_u([((x-start)/(end-start), v) for x, v in pairs])
 
 
 def _interp(keys, u):
@@ -219,25 +238,108 @@ def _interp(keys, u):
     return keys[-1][1]
 
 
-def _route(oid, sprite_name, width, y_at, fade_at, start, end, period, phase):
-    return dict(id=oid, sprite=sprite_name, width=width, start=start, end=end, period=period, phase=phase,
-                y_keys=_x_keys(start, end, y_at), fade_keys=_x_keys(start, end, fade_at))
+def _route(oid, sprite_name, width, y_at, fade_at, start, end, period, phase, warp=None):
+    route = dict(id=oid, sprite=sprite_name, width=width, start=start, end=end, period=period, phase=phase,
+                 y_keys=_x_keys(start, end, y_at), fade_keys=_x_keys(start, end, fade_at))
+    if warp:
+        route['warp'] = _build_warp(route, warp)
+    return route
 
 
+def _build_warp(route, spec):
+    """Warp description -> Tracks on the route's own clock (same period and begin as its motion).
+
+    Channels are ``[(seconds relative to the warp event, value)]``; ``spec['x']`` is the scene x of the
+    event (the instant the ship has just vanished 'out', or has just finished materialising 'in').
+    """
+    start, end, period = route['start'], route['end'], route['period']
+    u0 = (spec['x']-start)/(end-start)
+
+    def track(pairs):
+        keys = _pad_u([(u0+dt/period, v) for dt, v in pairs])
+        return Track([v for _, v in keys], [u for u, _ in keys], period, -route['phase']*period)
+
+    lines = [{**line, **{k: track(line[k]) if isinstance(line[k], list) else line[k] for k in ('x1', 'x2', 'y')}}
+             for line in spec['lines']]
+    return dict(kind=spec['kind'], x=spec['x'], u0=u0, span=spec['span'], nose=spec.get('nose', 0),
+                stretch=track(spec['stretch']) if 'stretch' in spec else None,
+                ship=track(spec['ship']), streak=track(spec['streak']), lines=lines,
+                flash=({'a': track(spec['flash']['opacity']), 'pos': track(spec['flash']['pos']), 'size': spec['flash']['size']}
+                       if 'flash' in spec else None))
+
+
+def _at(route_start, route_end, period, x, seconds):
+    """Scene x of a ship that is at ``x`` ``seconds`` later (negative: earlier) on its straight route."""
+    return x+(route_end-route_start)/period*seconds
+
+
+# Explorer: goes to warp.  In its last half second the hull stretches along the flight axis from the nose
+# (up to 3x) while a short cyan-white streak runs ahead of the nose, then it is gone.  The ship leaves
+# well right of the galaxy and the text block, so the streak never reaches TEXT_RECT.
+EXPLORER_NOSE = -240*295/500  # painted left (nose) edge in the hull's frame
+EXPLORER_STREAK = [(-.5, EXPLORER_NOSE), (-.3, EXPLORER_NOSE-50), (-.12, EXPLORER_NOSE-130),
+                   (.08, EXPLORER_NOSE-130), (.1, EXPLORER_NOSE)]
+# The jump happens at the flash (-.12 s): the sparkle peaks where the streak ends, the hull is gone 0.06 s later and
+# the sparkle holds through the next frame and has faded by 0.2 s after its start.  The route stays visible a little longer so that fade can play out.
+EXPLORER_WARP = dict(
+    kind='out', x=980, span=.5, nose=EXPLORER_NOSE,
+    stretch=[(-.5, (1, 1)), (-.3, (1.35, 1)), (-.2, (2, 1)), (-.1, (3, 1)), (.14, (3, 1)), (.2, (1, 1))],
+    ship=[(-.5, 1), (-.2, 1), (-.12, .4), (-.06, 0), (.14, 0), (.2, 1)],
+    streak=[(-.5, 0), (-.32, .55), (-.16, 1), (-.08, 1), (0, 0)],
+    lines=[dict(y=-4, stroke='#43c6ff', width=10, opacity=.25, x1=EXPLORER_STREAK, x2=EXPLORER_NOSE+10),
+           dict(y=-4, stroke='#8af0ff', width=5, opacity=.6, x1=EXPLORER_STREAK, x2=EXPLORER_NOSE+10),
+           dict(y=-4, stroke='#f2ffff', width=2.4, opacity=.95, x1=EXPLORER_STREAK, x2=EXPLORER_NOSE+10)],
+    # 4-point sparkle (like the star twinkles) centred on the streak's far end
+    flash=dict(opacity=[(-.18, 0), (-.12, 1), (-.03, 1), (.09, 0)], pos=[(-.5, (EXPLORER_NOSE, -4)), (-.12, (EXPLORER_NOSE-130, -4)),
+                                                              (.14, (EXPLORER_NOSE-130, -4))], size=13))
+
+
+def _fighter_warp(x, k):
+    """Fighter drops out of hyperspace: magenta/white streaks collapse into the ship over 0.4 s, then it flies on."""
+    def line(y, stroke, width, back, front):
+        # the streaks start spread out around the flight axis and converge on the hull as they shorten
+        return dict(y=[(-.4, y*2.2*k), (0, y*.5*k)], stroke=stroke, width=width, opacity=.9,
+                    x1=[(-.4, -back*k), (0, 0)], x2=[(-.4, front*k), (0, 0)])
+    return dict(kind='in', x=x, span=.4,
+                ship=[(-.4, 0), (-.2, 0), (0, 1)],
+                streak=[(-.44, 0), (-.4, .75), (-.1, .75), (0, 0)],
+                lines=[line(-12, '#ed78fc', 1.6, 55, 95), line(-2, '#fff0ff', 1.4, 65, 110),
+                       line(8, '#ed78fc', 1.6, 50, 90)])
+
+
+_FIGHTER_SPEED = (1840+170)/12  # px/s along the lane
 # Fades are written as (x, opacity); every key is a straight segment, so SMIL keyTimes reproduce them.
 ROUTES = [
-    # Hero ship: leaves visibility before the text block instead of being clipped by a hard edge.
-    _route('explorer', 'explorer', 295, [(1900, 338)], [(900, 1), (720, 0)], 1900, 490, 24, .31),
-    _route('fighter-a', 'fighter', 133, [(1840, 434)], [(1340, 0), (1170, 1)], 1840, -170, 12, .15),
-    _route('fighter-b', 'fighter', 103, [(1840, 458)], [(1330, 0), (1150, 1)], 1840, -170, 12, .245),
+    # Hero ship: flies on at full strength, then jumps to warp (see EXPLORER_WARP).
+    _route('explorer', 'explorer', 295, [(1900, 338)], [(_at(1900, 490, 24, 980, .12), 1), (_at(1900, 490, 24, 980, .14), 0)], 1900, 490, 24, .31,
+           warp=EXPLORER_WARP),
+    # Fighters are invisible until their streaks appear 0.4 s before they finish dropping out of hyperspace.
+    _route('fighter-a', 'fighter', 133, [(1840, 434)],
+           [(_at(1840, -170, 12, 1250, -.44), 0), (_at(1840, -170, 12, 1250, -.4), 1)], 1840, -170, 12, .15,
+           warp=_fighter_warp(1250, 1)),
+    _route('fighter-b', 'fighter', 103, [(1840, 458)],
+           [(_at(1840, -170, 12, 1230, -.44), 0), (_at(1840, -170, 12, 1230, -.4), 1)], 1840, -170, 12, .245,
+           warp=_fighter_warp(1230, .8)),
     # Airliner stays in open sky and dissolves before the workshop roof and right-hand trees.
     _route('airplane', 'airplane', 142, [(-200, 518)], [(1180, 1), (1330, 0)], -200, 1830, 24, .23),
 ]
 
 
-def _box(rel, scale, node):
-    l, t, r, b = rel
-    return (node[0]+l*scale, node[1]+t*scale, node[0]+r*scale, node[1]+b*scale)
+def _stretch_box(box, nose, sx):
+    return (nose+(box[0]-nose)*sx, box[1], nose+(box[2]-nose)*sx, box[3])
+
+
+def _union(boxes):
+    boxes = [b for b in boxes if b]
+    return (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+
+
+def _shift(box, x, y):
+    return (box[0]+x, box[1]+y, box[2]+x, box[3]+y)
+
+
+def _unshift(box, x, y):
+    return _shift(box, -x, -y)
 
 
 def traffic_state(t):
@@ -250,12 +352,35 @@ def traffic_state(t):
         opacity = _interp(route['fade_keys'], u)
         l, tp, r, b = PAINTED[route['sprite']]
         scale = route['width']/RECTS[route['sprite']][0][2]
-        sprite_box = _box((l-BOX_PAD/scale, tp-BOX_PAD/scale, r+BOX_PAD/scale, b+BOX_PAD/scale), scale, (x, y))
-        trail_box = _box(TRAIL_BOX[route['sprite']], 1, (x, y))
+        sprite_loc = (l*scale-BOX_PAD, tp*scale-BOX_PAD, r*scale+BOX_PAD, b*scale+BOX_PAD)
+        trail_loc = TRAIL_BOX[route['sprite']]
+        warp, streak_box, info = route.get('warp'), None, None
+        if warp:
+            sx = warp['stretch'].at(t)[0] if warp['stretch'] else 1.0
+            ship, streak = warp['ship'].at(t), warp['streak'].at(t)
+            if sx != 1:
+                sprite_loc, trail_loc = _stretch_box(sprite_loc, warp['nose'], sx), _stretch_box(trail_loc, warp['nose'], sx)
+            if streak > VISIBLE_OPACITY:
+                boxes = []
+                for ln in warp['lines']:
+                    a, c, ly = (v.at(t) if isinstance(v, Track) else v for v in (ln['x1'], ln['x2'], ln['y']))
+                    h = ln.get('h', 0)
+                    side = ln['width']/2 if h else 0  # a vertical bar is as wide as its stroke
+                    boxes.append((min(a, c)-side, ly-h-(0 if h else ln['width']/2),
+                                  max(a, c)+side, ly+h+(0 if h else ln['width']/2)))
+                streak_box = _shift(_union(boxes), x, y)
+            if warp['flash'] and warp['flash']['a'].at(t) > VISIBLE_OPACITY:
+                fx, fy = warp['flash']['pos'].at(t)
+                half = warp["flash"]["size"]/2*1.6  # the halo is the largest part
+                streak_box = _shift(_union([streak_box and _unshift(streak_box, x, y),
+                                            (fx-half, fy-half, fx+half, fy+half)]), x, y)
+            lead, tail = (warp['span']+.05)/route['period'], .22/route['period']
+            info = dict(kind=warp['kind'], sx=sx, ship=ship, streak=streak,
+                        active=warp['u0']-lead <= u <= warp['u0']+tail)
+        sprite_box, trail_box = _shift(sprite_loc, x, y), _shift(trail_loc, x, y)
         states.append(dict(id=route['id'], sprite=route['sprite'], width=route['width'], x=x, y=y, u=u,
-                           opacity=opacity, sprite_bbox=sprite_box, trail_bbox=trail_box,
-                           bbox=(min(sprite_box[0], trail_box[0]), min(sprite_box[1], trail_box[1]),
-                                 max(sprite_box[2], trail_box[2]), max(sprite_box[3], trail_box[3]))))
+                           opacity=opacity, sprite_bbox=sprite_box, trail_bbox=trail_box, streak_bbox=streak_box,
+                           warp=info, bbox=_union([sprite_box, trail_box, streak_box])))
     return states
 
 
@@ -288,6 +413,78 @@ def _key_times(keys):
     return ';'.join(f'{u:.6f}' for u, _ in keys)
 
 
+# Airliner navigation lights in the fuselage frame (heading right, seen from its starboard side): the far (port, red)
+# wing tip peeks out above the fuselage, the near (starboard, green) lamp sits out on the near wing by the engine,
+# and the white anti-collision strobe is on the fin tip.  Sizes are in scene px.
+NAV_RED, NAV_GREEN, NAV_STROBE = (-26.5, -17.1), (11, 4.5), (-51.3, -22.1)
+STROBE_PERIOD = 1.5  # divides the 24 s master cycle exactly (16 double flashes per loop)
+# Two short flashes, 0.2 s apart; the peaks sit on 0.1 s multiples, so every 10 fps GIF frame sees either a
+# full flash or none.
+STROBE_KEYS = [(0, 0), (.02, 0), (.1, 1), (.18, 0), (.22, 0), (.3, 1), (.38, 0), (STROBE_PERIOD, 0)]
+
+
+def nav_lights(t, animated):
+    strobe = Track([v for _, v in STROBE_KEYS], [s/STROBE_PERIOD for s, _ in STROBE_KEYS], STROBE_PERIOD)
+    parts = []
+    for (x, y), colour, glow, phase in ((NAV_RED, '#ff3b3b', '#ff7070', 0), (NAV_GREEN, '#38ff7a', '#8dffb2', .5)):
+        pulse = Track.sine(.85, .15, 3, phase)  # steady lamps with a faint breathing so they read as lamps
+        parts.append(f'<g opacity="{pulse.value_text(t)}">{pulse.smil("opacity") if animated else ""}'
+                     f'<rect x="{_num(x-3.5)}" y="{_num(y-3.5)}" width="7" height="7" fill="{glow}" opacity=".22"/>'
+                     f'<rect x="{_num(x-1.5)}" y="{_num(y-1.5)}" width="3" height="3" fill="{colour}"/></g>')
+    x, y = NAV_STROBE
+    parts.append(f'<g opacity="{strobe.value_text(t)}">{strobe.smil("opacity") if animated else ""}'
+                 f'<rect x="{_num(x-4)}" y="{_num(y-4)}" width="8" height="8" fill="#ffffff" opacity=".28"/>'
+                 f'<rect x="{_num(x-1.5)}" y="{_num(y-1.5)}" width="3" height="3" fill="#ffffff"/></g>')
+    return f'<g data-lights="airplane">{"".join(parts)}</g>'
+
+
+def _warp_streaks(warp, t, animated):
+    lines = []
+    for line in warp['lines']:
+        half = line.get('h', 0)
+        coords, anim = {}, ''
+        for name, key, offset in (('x1', 'x1', 0), ('x2', 'x2', 0), ('y1', 'y', -half), ('y2', 'y', half)):
+            value = line[key]
+            if isinstance(value, Track):
+                assert not offset
+                coords[name] = value.value_text(t)
+                anim += value.smil(name) if animated else ''
+            else:
+                coords[name] = _num(value+offset)
+        lines.append(f'<line x1="{coords["x1"]}" y1="{coords["y1"]}" x2="{coords["x2"]}" y2="{coords["y2"]}" '
+                     f'stroke="{line["stroke"]}" stroke-width="{line["width"]}" opacity="{line["opacity"]}">{anim}</line>')
+    streak = warp['streak']
+    return (f'<g data-warp="{warp["kind"]}" opacity="{streak.value_text(t)}">'
+            f'{streak.smil("opacity") if animated else ""}{"".join(lines)}</g>')
+
+
+def _warp_flash(warp, t, animated):
+    """Small 4-point sparkle at the far end of the streak (position, opacity are Tracks)."""
+    flash = warp['flash']
+    r, h = flash['size']/2, flash['size']/2*.3
+    star = lambda k: ('M0 {a}L{h} {h}L{a} 0L{h} -{h}L0 -{a}L-{h} -{h}L-{a} 0L-{h} {h}Z'
+                      .format(a=_num(r*k), h=_num(h*k)))
+    pos, a = flash['pos'], flash['a']
+    return (f'<g data-warp-flash="{warp["kind"]}" opacity="{a.value_text(t)}">{a.smil("opacity") if animated else ""}'
+            f'<g transform="translate({pos.value_text(t)})">{pos.smil("transform", "translate") if animated else ""}'
+            f'<path d="{star(1.6)}" fill="#8af0ff" opacity=".5"/><path d="{star(1)}" fill="#f2ffff"/></g></g>')
+
+
+def _ship_markup(route, t, animated):
+    """Exhaust + sprite, wrapped for the warp (stretch from the nose, opacity) when the route has one."""
+    body = _trail_markup(route['sprite'])+sprite(route['sprite'], route['width'])
+    warp = route.get('warp')
+    if not warp:
+        return body
+    if warp['stretch']:
+        nose = _num(warp['nose'])
+        body = (f'<g transform="translate({nose} 0)"><g transform="scale({warp["stretch"].value_text(t)})">'
+                f'{warp["stretch"].smil("transform", "scale") if animated else ""}'
+                f'<g transform="translate({_num(-warp["nose"])} 0)">{body}</g></g></g>')
+    ship = warp['ship']
+    return f'<g opacity="{ship.value_text(t)}">{ship.smil("opacity") if animated else ""}{body}</g>'
+
+
 def traffic(t, animated):
     parts = []
     for route, state in zip(ROUTES, traffic_state(t)):
@@ -305,7 +502,14 @@ def traffic(t, animated):
         parts.append(f'<g data-traffic="{route["id"]}" opacity="{state["opacity"]:.4f}">{fade}'
                      f'<g transform="translate({state["x"]:.3f} {state["y"]:.3f})">{motion}')
         # Exhaust is part of the moving object, rather than a fixed streak.
-        parts.append(_trail_markup(route['sprite'])+sprite(route['sprite'], route['width'])+'</g></g>')
+        parts.append(_ship_markup(route, t, animated))
+        if route.get('warp'):
+            parts.append(_warp_streaks(route['warp'], t, animated))
+            if route['warp']['flash']:
+                parts.append(_warp_flash(route['warp'], t, animated))
+        if route['sprite'] == 'airplane':
+            parts.append(nav_lights(t, animated))
+        parts.append('</g></g>')
     return ''.join(parts)
 
 
@@ -385,6 +589,142 @@ def workshop(t, animated):
     return ''.join(parts)
 
 
+# ---------------------------------------------------------------------------
+# Telescope lock-on: once per loop the telescope acquires the main galaxy (M51, the Whirlpool).
+# ---------------------------------------------------------------------------
+# Pixel font, 3 columns by 5 rows (a few glyphs are wider), drawn as filled rectangles so the readout looks the
+# same in every renderer; <text> would depend on installed fonts.
+FONT = {
+    'A': ('.#.', '#.#', '###', '#.#', '#.#'), 'C': ('.##', '#..', '#..', '#..', '.##'),
+    'D': ('##.', '#.#', '#.#', '#.#', '##.'), 'E': ('###', '#..', '##.', '#..', '###'),
+    'G': ('.##', '#..', '#.#', '#.#', '.##'), 'K': ('#.#', '#.#', '##.', '#.#', '#.#'),
+    'L': ('#..', '#..', '#..', '#..', '###'), 'M': ('#...#', '##.##', '#.#.#', '#...#', '#...#'),
+    'O': ('###', '#.#', '#.#', '#.#', '###'), 'R': ('##.', '#.#', '##.', '#.#', '#.#'),
+    'T': ('###', '.#.', '.#.', '.#.', '.#.'),
+    '1': ('.#.', '##.', '.#.', '.#.', '###'), '2': ('##.', '..#', '.#.', '#..', '###'),
+    '3': ('##.', '..#', '.#.', '..#', '##.'), '4': ('#.#', '#.#', '###', '..#', '..#'),
+    '5': ('###', '#..', '##.', '..#', '##.'), '7': ('###', '..#', '.#.', '.#.', '.#.'),
+    '9': ('###', '#.#', '###', '..#', '..#'),
+    'h': ('#..', '#..', '##.', '#.#', '#.#'), 'm': ('.....', '.....', '####.', '#.#.#', '#.#.#'),
+    '+': ('...', '.#.', '###', '.#.', '...'), '\u00b0': ('.#.', '#.#', '.#.', '...', '...'),
+    "'": ('#', '#', '.', '.', '.'), '\u00b7': ('.', '.', '#', '.', '.'), ' ': ('..', '..', '..', '..', '..'),
+}
+CELL = 3  # scene px per font cell (1.5 px in the 840 px GIF)
+
+
+def pixel_text(text, x, y, cell=CELL):
+    """Filled-rectangle path for ``text`` with its top-left at (x, y); returns (d, width, height)."""
+    rows, cursor = [[] for _ in range(5)], 0
+    for char in text:
+        glyph = FONT[char]
+        for r, bits in enumerate(glyph):
+            rows[r] += [cursor+c for c, ch in enumerate(bits) if ch == '#']
+        cursor += len(glyph[0])+1
+    d = []
+    for r, cells in enumerate(rows):
+        for run in _runs(sorted(cells)):
+            d.append(f'M{_num(x+run[0]*cell)} {_num(y+r*cell)}h{_num((run[1]-run[0]+1)*cell)}v{cell}h{_num(-(run[1]-run[0]+1)*cell)}z')
+    return ''.join(d), (cursor-1)*cell, 5*cell
+
+
+def _runs(cells):
+    runs = []
+    for c in cells:
+        if runs and runs[-1][1] == c-1:
+            runs[-1][1] = c
+        else:
+            runs.append([c, c])
+    return runs
+
+
+LOCK_CORE = (810, 184)        # main galaxy core
+LOCK_FROM = (811, 551)        # telescope finder, where the dotted line starts
+LOCK_HALF = 44                # final half-size of the reticle
+LOCK_ARM = 14                 # length of each bracket arm
+LOCK_END = (810, LOCK_CORE[1]+LOCK_HALF+6)  # the dotted line stops just below the reticle
+LOCK_READOUT = ("TARGET LOCK \u00b7 M51", "RA 13h29m", "DEC +47\u00b011'")  # M51 J2000: RA 13h29m52.7s, Dec +47d11m43s
+LOCK_TEXT_XY = (946, 98)
+LOCK_LINE_PITCH = 7*CELL
+LOCK_LEADER = 'M860 134L890 106H938'
+LOCK_OPACITY = (.95, .8, .8)   # readout line opacities: title a little brighter than the coordinates
+
+
+def _lock_tracks():
+    t = {}
+    # Timeline (seconds): the dotted line grows 12.8-14.4, the reticle flies in 13.4-14.6, snaps tight at 14.75 with a
+    # brighter pulse, the readout types in line by line from 14.9, everything holds until 20.0 and fades by 20.9.
+    # Fighters fade in and the explorer is away around then; the old idle reticle steps aside meanwhile.
+    t['line_x'] = Track.timeline([(12.8, LOCK_FROM[0]), (14.4, LOCK_END[0]), (20.9, LOCK_END[0]), (21.0, LOCK_FROM[0])], LOCK_FROM[0])
+    t['line_y'] = Track.timeline([(12.8, LOCK_FROM[1]), (14.4, LOCK_END[1]), (20.9, LOCK_END[1]), (21.0, LOCK_FROM[1])], LOCK_FROM[1])
+    t['line_a'] = Track.timeline([(12.8, 0), (13.1, .85), (20.0, .85), (20.9, 0)], 0)
+    t['half'] = Track.timeline([(13.4, 100), (14.6, 50), (14.75, 38), (14.95, LOCK_HALF), (20.9, LOCK_HALF), (21.0, 100)], 100)
+    t['ret_a'] = Track.timeline([(13.4, 0), (13.8, .65), (14.75, .9), (20.0, .9), (20.9, 0)], 0)
+    t['pulse'] = Track.timeline([(14.5, 0), (14.75, 1), (15.3, 0)], 0)
+    t['leader_a'] = Track.timeline([(14.9, 0), (15.3, .6), (20.0, .6), (20.9, 0)], 0)
+    t['text_a'] = [Track.timeline([(15.0+.3*i, 0), (15.3+.3*i, LOCK_OPACITY[i]), (20.0, LOCK_OPACITY[i]), (20.9, 0)], 0)
+                   for i in range(3)]
+    # The always-on target path/reticle steps aside while the lock sequence owns the sky (no two reticles at once).
+    t['idle'] = Track.timeline([(12.4, 1), (13.0, 0), (20.9, 0), (21.9, 1)], 1)
+    return t
+
+
+LOCK = _lock_tracks()
+LOCK_LINES = []  # (path d, x, y, width, height) of each readout line
+for _i, _text in enumerate(LOCK_READOUT):
+    _d, _w, _h = pixel_text(_text, LOCK_TEXT_XY[0], LOCK_TEXT_XY[1]+_i*LOCK_LINE_PITCH)
+    LOCK_LINES.append((_d, LOCK_TEXT_XY[0], LOCK_TEXT_XY[1]+_i*LOCK_LINE_PITCH, _w, _h))
+LOCK_READOUT_BOX = (LOCK_TEXT_XY[0], LOCK_TEXT_XY[1], LOCK_TEXT_XY[0]+max(l[3] for l in LOCK_LINES),
+                    LOCK_LINES[-1][2]+LOCK_LINES[-1][4])
+LOCK_STROKE = 2.5
+LOCK_BOX = (min(LOCK_FROM[0], LOCK_END[0])-3, LOCK_END[1]-3, max(LOCK_FROM[0], LOCK_END[0])+3, LOCK_FROM[1]+3)
+
+
+def lock_state(t):
+    """Boxes (x0, y0, x1, y1) and opacities of each lock-on part at time t, derived from the same tracks."""
+    half = LOCK['half'].at(t)+LOCK_STROKE/2
+    line_end = (LOCK['line_x'].at(t), LOCK['line_y'].at(t))
+    cx, cy = LOCK_CORE
+    return dict(
+        line=dict(opacity=LOCK['line_a'].at(t), bbox=(min(LOCK_FROM[0], line_end[0])-3, line_end[1]-3,
+                                                      max(LOCK_FROM[0], line_end[0])+3, LOCK_FROM[1]+3)),
+        reticle=dict(opacity=LOCK['ret_a'].at(t), bbox=(cx-half, cy-half, cx+half, cy+half)),
+        leader=dict(opacity=LOCK['leader_a'].at(t), bbox=(860-1, 106-1, 938, 134+1)),
+        readout=dict(opacity=max(track.at(t) for track in LOCK['text_a']), bbox=LOCK_READOUT_BOX),
+        idle=LOCK['idle'].at(t))
+
+
+def lock_on(t, animated):
+    anim = lambda track, name, kind=None: track.smil(name, kind) if animated else ''
+    cx, cy = LOCK_CORE
+    parts = []
+    # dotted targeting line, drawn on by moving its end point so the dots stay put
+    x2, y2 = LOCK['line_x'], LOCK['line_y']
+    parts.append(f'<g data-lock="line" opacity="{LOCK["line_a"].value_text(t)}">{anim(LOCK["line_a"], "opacity")}'
+                 # dark under-stroke (a dash 2 px longer than each dot on both sides) separates the dots from the bright band
+                 f'<line x1="{LOCK_FROM[0]}" y1="{LOCK_FROM[1]}" x2="{x2.value_text(t)}" y2="{y2.value_text(t)}" '
+                 f'stroke="#04101c" stroke-width="6" stroke-dasharray="9 3" stroke-dashoffset="2" opacity=".55">{anim(x2, "x2")}{anim(y2, "y2")}</line>'
+                 f'<line x1="{LOCK_FROM[0]}" y1="{LOCK_FROM[1]}" x2="{x2.value_text(t)}" y2="{y2.value_text(t)}" '
+                 f'stroke="#a8f6ff" stroke-width="3" stroke-dasharray="5 7">{anim(x2, "x2")}{anim(y2, "y2")}</line></g>')
+    # reticle: four corner brackets that fly in and snap around the core; each corner is a translate of one shape
+    half = LOCK['half']
+    corners = []
+    for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        pose = Track([(cx+sx*h, cy+sy*h) for h in half.values], half.key_times, half.dur, half.begin, half.digits)
+        arm = f'M0 0H{-sx*LOCK_ARM}M0 0V{-sy*LOCK_ARM}'
+        corners.append(f'<g transform="translate({pose.value_text(t)})">{anim(pose, "transform", "translate")}'
+                       f'<path d="{arm}" fill="none" stroke="#6cf4ff" stroke-width="{LOCK_STROKE}"/>'
+                       f'<path d="{arm}" fill="none" stroke="#f2ffff" stroke-width="{LOCK_STROKE}" opacity="{LOCK["pulse"].value_text(t)}">'
+                       f'{anim(LOCK["pulse"], "opacity")}</path></g>')
+    parts.append(f'<g data-lock="reticle" opacity="{LOCK["ret_a"].value_text(t)}">{anim(LOCK["ret_a"], "opacity")}{"".join(corners)}</g>')
+    parts.append(f'<g data-lock="leader" opacity="{LOCK["leader_a"].value_text(t)}">{anim(LOCK["leader_a"], "opacity")}'
+                 f'<path d="{LOCK_LEADER}" fill="none" stroke="#40daed" stroke-width="1.2"/></g>')
+    rows = []
+    for (d, *_), track in zip(LOCK_LINES, LOCK['text_a']):
+        rows.append(f'<g opacity="{track.value_text(t)}">{anim(track, "opacity")}<path d="{d}" fill="#72f0ff"/></g>')
+    parts.append(f'<g data-lock="readout">{"".join(rows)}</g>')
+    return ''.join(parts)
+
+
 def sky_details(t, animated):
     rng=random.Random(29)
     parts=[]
@@ -397,10 +737,13 @@ def sky_details(t, animated):
         twinkle=Track.sine(.6,.4,period,phase)
         parts.append(f'<path d="M{x-3} {y}h6M{x} {y-3}v6" stroke="#a7deff" stroke-width="1.4" opacity="{twinkle.value_text(t)}">'
                      f'{twinkle.smil("opacity") if animated else ""}</path>')
-    parts.append('<path d="M811 551L1020 97L1460 133" fill="none" stroke="#40daed" stroke-width="1.6" stroke-dasharray="6 11" opacity=".38"/>')
+    idle=LOCK['idle']
+    parts.append(f'<g data-idle="target" opacity="{idle.value_text(t)}">{idle.smil("opacity") if animated else ""}'
+                 '<path d="M811 551L1020 97L1460 133" fill="none" stroke="#40daed" stroke-width="1.6" stroke-dasharray="6 11" opacity=".38"/>')
     reticle=Track.sine(.5,.3,3)
     parts.append(f'<g opacity="{reticle.value_text(t)}">{reticle.smil("opacity") if animated else ""}'
-                 '<path d="M996 94V72H1013M1028 72H1045V94M1045 104V121H1028M1013 121H996V104" fill="none" stroke="#4ae8f2" stroke-width="2"/></g>')
+                 '<path d="M996 94V72H1013M1028 72H1045V94M1045 104V121H1028M1013 121H996V104" fill="none" stroke="#4ae8f2" stroke-width="2"/></g></g>')
+    parts.append(lock_on(t,animated))
     u=(t/12)%1
     mx,my=1100+390*u,380+150*u
     # Meteor is visible for the first 16% of its 12s cycle: sin^2 fade-in/out, then hidden.
