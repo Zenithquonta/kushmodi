@@ -1240,6 +1240,7 @@ def season(light, state):
     light['haze'] = HAZE_PEAK*env['haze']
     light['haze_colour'] = _colour_for(light, (40, 46, 70), _mix((214, 220, 226), (226, 210, 180),
                                                                  _smooth((env['haze']-.5)/.3)), (240, 176, 150))
+    light['deck'] = _colour_for(light, (18, 22, 34), (150, 158, 170), (190, 130, 128))
     light['city'] = city_markup(light)+city_glow(light)
     light['weather'] = season_markup(light)
     return light
@@ -1341,8 +1342,7 @@ def season_markup(light):
         out += '</g>'
     veil = ''
     if light['overcast'] > .005:
-        deck = _colour_for(light, (18, 22, 34), (150, 158, 170), (190, 130, 128))
-        veil += (f'<rect data-season="overcast" width="{W}" height="{HORIZON_Y+10}" fill="{_rgb(deck)}" '
+        veil += (f'<rect data-season="overcast" width="{W}" height="{HORIZON_Y+10}" fill="{_rgb(light["deck"])}" '
                  f'opacity="{_num(light["overcast"], 4)}"/>')
     murk = (1-env['night_visibility'])*.45*night_factor(light['altitude'])
     if murk > .005:
@@ -1352,7 +1352,7 @@ def season_markup(light):
     grey = _smooth((density-.4)/.5)
     # Fair-weather clouds are white with blue-grey bases; rain clouds are darker than the overcast deck behind them.
     under = CLOUD_UNDERGLOW*env['urban_glow']
-    night_tones = [_mix(c, (150, 88, 60), under*f) for c, f in (((52, 60, 88), .5), ((36, 42, 66), .8), ((24, 28, 46), 1))]
+    night_tones = [_mix(c, (176, 96, 58), under*f) for c, f in (((52, 60, 88), .5), ((36, 42, 66), .8), ((24, 28, 46), 1))]
     tones = (_colour_for(light, night_tones[0], _mix((250, 250, 252), (168, 176, 188), grey), (255, 196, 160)),
              _colour_for(light, night_tones[1], _mix((226, 232, 240), (126, 134, 148), grey), (238, 150, 140)),
              _colour_for(light, night_tones[2], _mix((184, 194, 210), (90, 98, 112), grey), (150, 96, 124)))
@@ -1410,8 +1410,8 @@ CITY_SHORES = [(424, 640, 714), (884, 1104, 716)]   # x from, x to, base y of ea
 CITY_OCCLUDER = 24          # plate luminance below which a far-band pixel is a near silhouette (trees, rock)
 CITY_REGION = (330, 600, 1190, 770)
 SEA_LINK = dict(x0=900, x1=1076, deck=745, pylons=(958, 1018), height=34)
-CITY_GLOW = dict(colour=(255, 146, 70), peak=.34, centre=(760, 716), radii=(640, 150))
-CLOUD_UNDERGLOW = .32       # share of the night cloud colour taken from the city glow at urban_glow = 1
+CITY_GLOW = dict(colour=(255, 140, 60), peak=.62, centre=(760, 716), radii=(700, 190))
+CLOUD_UNDERGLOW = .55       # share of the night cloud colour taken from the city glow at urban_glow = 1
 
 
 @functools.lru_cache(maxsize=1)
@@ -1440,15 +1440,18 @@ def city_towers():
             cap = rng.choice(('flat', 'flat', 'flat', 'step', 'spire')) if h > 20 else 'flat'
             towers.append((x, base-h, w, base, cap))
             x += w+rng.choice((0, 0, 2, 4, 6))
-    return sorted(towers, key=lambda tower: tower[3]-tower[1])   # short in front of tall would hide nothing; tall first
+    return towers   # towers never overlap, so drawing order does not matter
 
 
 def _city_colours(light):
     env = light['env']
-    # Distance haze is baked into the colours, since the skyline is drawn over the season's haze layer.
+    # Distance haze and the overcast deck are baked into the colours, since the skyline is drawn over the weather.
     haze = .2+.45*env['haze']
     lit = _colour_for(light, (26, 32, 58), _mix((178, 190, 208), light['haze_colour'], haze), (222, 156, 132))
     shade = _colour_for(light, (16, 20, 40), _mix((104, 118, 146), light['haze_colour'], haze*.7), (132, 92, 108))
+    overcast = light['overcast']/OVERCAST[2]   # 0..1
+    lit = _mix(lit, light['deck'], .6*overcast)
+    shade = _mix(shade, _mix(light['deck'], (0, 0, 0), .2), .45*overcast)
     return lit, shade
 
 
@@ -1524,7 +1527,7 @@ def city_glow(light):
         return ''
     (cx, cy), (rx, ry) = g['centre'], g['radii']
     return (f'<ellipse data-city="glow" cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}" fill="url(#city-glow)" '
-            f'opacity="{_num(min(.6, strength), 4)}" mask="url(#sky-mask)"/>')
+            f'opacity="{_num(min(.75, strength), 4)}" mask="url(#sky-mask)"/>')
 
 
 def city_defs():

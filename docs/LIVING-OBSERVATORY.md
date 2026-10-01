@@ -162,11 +162,15 @@ amendments that follow from measured facts, open decisions, and phase status.
   cable-stayed bridge across the bay is a stylized nod to the Bandra-Worli Sea Link, not a survey of it.
 - **Occlusion:** `city_mask()` is measured from the plate: far-band pixels darker than 24 are near silhouettes (trees,
   rock), closed with a 5 px max/min filter to fill their bright specks. No tower stands behind the telescope.
-- **Light:** colours follow daylight and the sunrise/sunset glow, with the season's haze baked in (the skyline is drawn
-  over the haze layer). At night 16-46 % of window cells light up (more with urban_glow), the sea link deck has lamps,
+- **Light:** colours follow daylight and the sunrise/sunset glow, with the season's haze and the monsoon overcast deck
+  baked in (the skyline is drawn over the weather layer, so it must match it). At night 16-46 % of window cells light up (more with urban_glow), the sea link deck has lamps,
   and towers over 40 px plus both pylons carry red aviation lights blinking on a 2 s period.
-- **Urban glow:** an orange ellipse over the city on the sky mask, opacity 0.34 x urban_glow x darkness, stronger with
-  haze and cloud. Night cloud tones take up to 32 % of a sodium orange from below.
+- **Urban glow:** an orange ellipse over the city on the sky mask, opacity 0.62 x urban_glow x darkness (capped at
+  0.75), stronger with haze and cloud. Night cloud tones take up to 55 % of a sodium orange from below. A/B at 840 px
+  (urban_glow forced to 0): low-sky difference 30 (winter) and 37 (monsoon) summed RGB; plainly visible on cloudy
+  monsoon nights, subtle on clear winter nights.
+- **Live SVG size now:** 6.2 MB (winter night), 8.8 MB (monsoon morning), 9.9 MB (Grishma noon, day + dry plates). The
+  animated file also repeats the static city and cloud markup in its reduced-motion copy. WebP re-encode is Phase 10.
 - **Sky-mask fix:** the telescope's counterweight arm pokes above SKYLINE and was painted over by the day sky. Its box
   is now measured like the band below; the day, golden and dry plates were rebuilt against the corrected mask.
 - Browser parity (winter night 23:00 and December 17:50, t = 0, 3 and 12 s): worst cell 0 to 10 px (limit 150).

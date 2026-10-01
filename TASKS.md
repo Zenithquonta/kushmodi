@@ -491,5 +491,9 @@ Self-review fixes during the phase: day towers looked ghostly because haze cover
 Commands and outcomes: 92 tests pass; quality gate passes; default scene byte-identical to published assets;
   Chromium vs librsvg at winter 23:00 and December 17:50, t = 0/3/12 s: worst cell 0 to 10 px.
 Visual evidence: skyline zooms at noon, golden hour, winter night and monsoon night; full frames 10 Jan 2027.
+Advisor review (after first push): CI confirmed green for Phases 4 and 5; July 11:00 towers popped out of the grey
+  overcast (now mixed toward the deck colour); city glow was not visible at 840 px (peak 0.34 -> 0.62, cloud
+  underglow 0.32 -> 0.55, re-measured by A/B); tree-edge fringe checked at 4x, none; counterweight fix noted as a
+  change to Phase 3/3b output.
 Decision: approve
 ```
