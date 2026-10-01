@@ -60,7 +60,7 @@ def smil_state(group,t):
 # attribute: transform, opacity, x, y, x1, y1, x2, y2.
 # ---------------------------------------------------------------------------
 ANIMATIONS=(SVG+'animate',SVG+'animateTransform')
-LEAVES={SVG+name for name in ('path','rect','line','ellipse','svg')}  # nested <svg> is a sprite viewport
+LEAVES={SVG+name for name in ('path','rect','line','ellipse','circle','svg')}  # nested <svg> is a sprite viewport
 PX=.02  # px tolerance
 OPACITY=.005
 LINEAR=1e-4  # tolerance for matrix a-d (rotation/scale terms)
@@ -490,6 +490,8 @@ class SceneTests(unittest.TestCase):
     walker=up.get(walker)
    if any('data-traffic' in g.attrib for g in ancestors):
     continue  # traffic is an intentional sawtooth that wraps while fully transparent (see traffic tests)
+   if any('data-spin' in g.attrib for g in ancestors):
+    continue  # galaxy copies hand over to each other at their wrap (see the slow-spin test)
    count+=1
    dur=seconds(node.attrib['dur'])
    self.assertEqual(scene.PERIOD%dur,0,node.attrib)
@@ -890,6 +892,91 @@ class SceneTests(unittest.TestCase):
   self.assertEqual(sum(1 for a,b in zip(on,on[1:]) if a and b),0)  # never lit in two consecutive frames
   self.assertEqual(strobe.at(0),strobe.at(scene.STROBE_PERIOD))
 
+ def test_galaxies_turn_slowly_and_hand_over_without_a_jump(self):
+  moving=animated_root()
+  spins=[g for g in moving.iter(SVG+'g') if 'data-spin' in g.attrib]
+  self.assertEqual(len(spins),2)
+  dissolving=[]
+  for group in spins:
+   copies=list(group)
+   self.assertEqual(len(copies),2)
+   def state(t):
+    out=[]
+    for copy in copies:
+     fade=copy.find(SVG+'animate')
+     turn=copy.find(SVG+'g').find(SVG+'animateTransform')
+     out.append((smil_value(fade,t)[0],smil_value(turn,t)[0]))
+    return out
+   turn=copies[0].find(SVG+'g').find(SVG+'animateTransform')
+   self.assertEqual(abs(float(turn.attrib['to'])-float(turn.attrib['from'])),180)  # half the old speed
+   begin=-seconds(turn.attrib.get('begin','0s'))
+   wrap=(scene.PERIOD-begin)%scene.PERIOD or scene.PERIOD
+   # just before the wrap only the incoming copy shows, at the angle the outgoing copy restarts from
+   (a_end,_),(b_end,b_angle)=state(wrap-1e-6)
+   (a_start,a_angle),(b_start,_)=state(wrap)
+   self.assertLess(a_end,1e-3)
+   self.assertLess(b_start,1e-3)
+   self.assertAlmostEqual(b_end,1,delta=1e-3)
+   self.assertAlmostEqual(a_start,1,delta=1e-3)
+   self.assertLess(abs((b_angle-a_angle+180)%360-180),.01)
+   # normal blending: where both copies are opaque the incoming one on top keeps the core bright
+   times=[i/10 for i in range(scene.PERIOD*10)]
+   for t in times:
+    (a,_),(b,_)=state(t)
+    self.assertGreaterEqual(b+(1-b)*a,.93,(group.attrib['data-spin'],t))
+   dissolving.append({t for t in times if .01<state(t)[1][0]<.99})
+  self.assertFalse(dissolving[0]&dissolving[1],'the two galaxies should not dissolve at the same moment')
+
+ def test_twinkling_stars_are_painted_stars_in_open_sky(self):
+  stars=scene.bright_stars()
+  self.assertEqual(len(stars),scene.TWINKLE_COUNT)
+  self.assertEqual(sum(1 for star in stars if star[2]),scene.TWINKLE_BIG)
+  for x,y,*_ in stars:
+   self.assertFalse(scene.quiet(x,y,10),(x,y))
+   self.assertFalse(overlap((x-15,y-15,x+15,y+15),scene.TEXT_RECT),(x,y))
+  for plan in scene.twinkle_plan():
+   for track in plan[-2:]:
+    self.assertEqual(scene.PERIOD%track.dur,0)
+    self.assertEqual(track.values[0],track.values[-1])
+  # the stars actually twinkle: some are dimmed and some flare at any moment of the loop
+  for t in (0,5.3,11.7,19.1):
+   self.assertGreater(sum(1 for p in scene.twinkle_plan() if p[-2].at(t)>.3),10,t)
+   self.assertGreater(sum(1 for p in scene.twinkle_plan() if p[-1].at(t)>.3),10,t)
+
+ def test_shooting_stars_stay_in_open_sky_and_reset_while_invisible(self):
+  plan=scene.meteor_plan()
+  self.assertEqual(len(plan),scene.METEOR_COUNT)
+  self.assertEqual(sum(1 for m in plan if m[-1]),1)  # one big, bright one
+  for start,duration,x0,y0,dx,dy,tail,bright in plan:
+   self.assertLess(start+duration+.05,scene.PERIOD)
+   fade,move=scene.meteor_tracks(start,duration,x0,y0,dx,dy)
+   length=math.hypot(dx,dy)
+   for t in SAMPLES+[start+i*duration/50 for i in range(51)]:
+    if fade.at(t)<=VISIBLE:
+     continue
+    x,y=move.at(t)
+    tail_end=(x-dx/length*tail,y-dy/length*tail)
+    for px,py in ((x,y),tail_end):
+     self.assertFalse(scene.quiet(px,py),(t,px,py))
+     self.assertTrue(0<px<scene.W and py<560,(t,px,py))
+   # it snaps back to its start only after it has faded out
+   self.assertLessEqual(fade.at(start+duration+.025),VISIBLE)
+  starts=sorted(m[0] for m in plan)
+  self.assertLessEqual(max(b-a for a,b in zip(starts,starts[1:]+[starts[0]+scene.PERIOD])),6)
+
+ def test_satellite_crosses_once_and_returns_while_invisible(self):
+  fade,move=scene.satellite_tracks()
+  previous=None
+  for t in SAMPLES:
+   x,y=move.at(t)
+   if fade.at(t)>VISIBLE:
+    self.assertTrue(y<120 and not overlap((x-4,y-4,x+4,y+4),scene.TEXT_RECT),(t,x,y))
+    if previous is not None:
+     self.assertGreater(x,previous)
+    previous=x
+  for t in (23.9,23.95,0):
+   self.assertLessEqual(fade.at(t),VISIBLE)
+
  def test_every_new_animated_group_is_covered_by_the_generic_raster_comparison(self):
   moving=animated_root()
   def count(predicate):
@@ -897,6 +984,10 @@ class SceneTests(unittest.TestCase):
   self.assertGreaterEqual(count(lambda g:'data-lock' in g.attrib),14)
   self.assertGreaterEqual(count(lambda g:'data-warp' in g.attrib),12)
   self.assertGreaterEqual(count(lambda g:'data-lights' in g.attrib),3)
+  self.assertGreaterEqual(count(lambda g:'data-spin' in g.attrib),8)
+  self.assertGreaterEqual(count(lambda g:g.attrib.get('data-sky')=='twinkles'),2*scene.TWINKLE_COUNT)
+  self.assertGreaterEqual(count(lambda g:g.attrib.get('data-sky')=='meteors'),2*scene.METEOR_COUNT)
+  self.assertGreaterEqual(count(lambda g:g.attrib.get('data-sky')=='satellite'),2)
   # the generic test flattens every animated attribute; make sure the new ones are among those it evaluates
   kinds={(n.tag.replace(SVG,''),n.attrib['attributeName'],n.attrib.get('type')) for n in moving.iter() if n.tag in ANIMATIONS}
   for needed in (('animateTransform','transform','scale'),('animate','x2',None),('animate','y2',None),('animate','x1',None),('animate','y1',None)):

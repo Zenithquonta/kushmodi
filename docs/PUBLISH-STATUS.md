@@ -13,7 +13,7 @@ Updated 2026-10-01.
 
 ## What is live
 
-`main` serves the README with the 840×473 GIF (240 frames, 10fps, 24s, 7,955,864 bytes), the poster PNG for reduced motion, and the 2×2 table of four animated cards with static reduced-motion twins. The full project (builders, tests, docs, ledger, source artwork, preview, workflow) is currently on `main` as well. Live rendering of the README was verified from github.com in T05, against `316e993`; the new 2×2 card table has not yet been checked on github.com.
+`main` serves the README with the 840×473 GIF (240 frames, 10fps, 24s, 8,150,550 bytes), the poster PNG for reduced motion, and the 2×2 table of four animated cards with static reduced-motion twins. The full project (builders, tests, docs, ledger, source artwork, preview, workflow) is currently on `main` as well. Live rendering of the README was verified from github.com in T05, against `316e993`; the new 2×2 card table has not yet been checked on github.com.
 
 ## CI
 

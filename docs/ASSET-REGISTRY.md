@@ -11,10 +11,10 @@
 | `assets/observatory-background.png` | Edited stable scene plate | Typography, telescope, foreground and workshop stay here |
 | `assets/space-sprites.png` | Transparent moving-object atlas | Galaxy, planet, exploration ship, fighter, plane and moon |
 | `assets/profile-picture.png` | Square matching pixel profile image, 1254×1254 | Static image; reviewed and unchanged (T03, see below) |
-| `assets/observatory.svg` | Self-contained animated scene, 1672×941 | All motion is declarative SVG (264 animation elements); no JavaScript dependency |
+| `assets/observatory.svg` | Self-contained animated scene, 1672×941 | All motion is declarative SVG (504 animation elements); no JavaScript dependency |
 | `assets/poster.svg` | Static time-zero scene, 1672×941 | Regenerable; useful to inspect composition |
 | `assets/observatory-poster.png` | Static raster fallback, 840×473 | Matches GIF dimensions; reduced-motion and loading fallback |
-| `assets/observatory.gif` | Portable actual looping hero, 840×473, 240 frames, 10fps, 24s, 7,955,864 bytes | Current README source |
+| `assets/observatory.gif` | Portable actual looping hero, 840×473, 240 frames, 10fps, 24s, 8,150,550 bytes | Current README source |
 | `assets/observatory-card.svg` | Animated pixel astronomy navigation card, 360×136 | Link to README Observatory anchor |
 | `assets/flight-card.svg` | Animated pixel aviation navigation card, 360×136 | Link to README Flight Deck anchor |
 | `assets/fablab-card.svg` | Animated pixel maker navigation card, 360×136 | Link to README Fab Lab anchor |

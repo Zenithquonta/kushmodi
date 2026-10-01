@@ -35,7 +35,7 @@ The user approved Star Trek-inspired exploration vessels and Star Wars-inspired 
 | Clean animation background | Generated from approved banner | `assets/observatory-background.png` |
 | Transparent sprite atlas | Generated to match banner | `assets/space-sprites.png` |
 | Square pixel profile picture | Generated; small/circular-crop review done (T03), unchanged | `assets/profile-picture.png` |
-| Animated layered SVG | Built; 264 animation elements; checked against Chromium in T05/T07 | `assets/observatory.svg` |
+| Animated layered SVG | Built; 504 animation elements; checked against Chromium in T05/T07/T15 | `assets/observatory.svg` |
 | Static SVG at first frame | Built | `assets/poster.svg` |
 | Static PNG poster | Rendered with FFmpeg/librsvg, 840×473 | `assets/observatory-poster.png` |
 | Looping GIF | Exported at 840px (T08) with the T14 scene additions; metadata/motion checked | `assets/observatory.gif` |
@@ -46,12 +46,12 @@ The user approved Star Trek-inspired exploration vessels and Star Wars-inspired 
 | Reproducible animation builder | Supplied; extended by T02-R1, T02-R2, T07, T08, T14 | `scripts/build_animation.py` |
 | Card builder | Deterministic over all eight card files | `scripts/build_cards.py` |
 | Asset quality gate | Passing | `scripts/quality_gate.py` |
-| Source regression tests | 34 tests | `scripts/test_scene.py` |
+| Source regression tests | 38 tests | `scripts/test_scene.py` |
 | CI workflow | Read-only validation (quality gate and unittest); run 36819742217 on `316e993` succeeded | `.github/workflows/validate-profile.yml` |
 | Agent gate, protocol, prompt and ledger | Supplied; ledger holds review records | `AGENTS.md`, `docs/AGENT-LOOP.md`, `SUPERVISOR-PROMPT.md`, `TASKS.md` |
 | Earlier rejected ASCII SVGs | Reference-only archive | `assets/legacy/` |
 
-The GIF is an actual animation: **840×473**, **240 frames**, **10fps**, **24 seconds**, infinite looping, **7,955,864 bytes**. (The first export was 1000×563 and 11,744,470 bytes; T08 moved to 840px.) The animated SVG now has **264 animation elements** (98 in the first package). The source background is 1672×941; the sprite atlas is 1536×1024 RGBA. Inspect `assets/MANIFEST.json` for final file hashes and metadata rather than relying on prose after later changes.
+The GIF is an actual animation: **840×473**, **240 frames**, **10fps**, **24 seconds**, infinite looping, **8,150,550 bytes**. (The first export was 1000×563 and 11,744,470 bytes; T08 moved to 840px. After T14 it was 7,955,864 bytes; T15 added the living sky.) The animated SVG now has **504 animation elements** (98 in the first package, 264 after T14). The source background is 1672×941; the sprite atlas is 1536×1024 RGBA. Inspect `assets/MANIFEST.json` for final file hashes and metadata rather than relying on prose after later changes.
 
 ## 4. Project structure and asset use
 
@@ -99,7 +99,7 @@ Retain the approved concept and user photo. If the artwork needs artistic change
 
 ## 5. Reproducible build
 
-Use Python 3.12 or another compatible Python 3 version. The builder uses the Python standard library and an external FFmpeg executable. The quality gate uses Pillow to inspect image metadata, alpha and sampled frames.
+Use Python 3.12 or another compatible Python 3 version. The builder uses the Python standard library, Pillow (to find the painted stars that twinkle) and an external FFmpeg executable. The quality gate uses Pillow to inspect image metadata, alpha and sampled frames.
 
 ```bash
 python -m pip install -r requirements.txt
@@ -109,7 +109,7 @@ python scripts/build_animation.py --gif --fps 10       # default width is 840 (G
 python scripts/build_preview.py                        # embeds assets/observatory.svg in preview.html
 python scripts/build_manifest.py                       # refresh assets/MANIFEST.json last
 python scripts/quality_gate.py
-python -m unittest discover -s scripts -p 'test_*.py' -v   # 34 tests
+python -m unittest discover -s scripts -p 'test_*.py' -v   # 38 tests
 ```
 
 Without `--gif`, `build_animation.py` writes only `observatory.svg`, `poster.svg` and the poster PNG. The manifest builder also needs Pillow. The last verified toolchain (T00) was Python 3.11, Pillow 12.3 and FFmpeg 6.1.1 with the librsvg decoder.
@@ -134,6 +134,8 @@ The detailed map is in `docs/ANIMATION-SPEC.md`. The builder's major functions a
 | `sprite` | Select one atlas region through a nested SVG viewport and position its origin |
 | `rotate_node` | Place and rotate a sprite, with SMIL for the animated export |
 | `Track` | One keyframed animation (`values`, `key_times`, `dur`, `begin`) evaluated by `at(t)` for raster frames and printed by `smil()` for the SVG, so both use identical keyframes (T07). `Track.sine` samples a sine into 24 keyframes; `Track.timeline` builds one-shot sequences that rest at both ends of the cycle |
+| `twinkles`, `bright_stars`, `meteors`, `meteor_plan`, `satellite`, `QUIET` | Living sky (T15): 110 painted stars that dim and flare, six shooting stars per loop and a satellite, all kept out of `QUIET` |
+| `slow_spin` | Half-turn-per-loop galaxy spin with an A/B cross-dissolve hand-over at the wrap |
 | `celestial` | Main/secondary galaxies, ringed planet (bobbing on a Track) and two projected moon orbits |
 | `moon`, `moon_layer` | Each moon is drawn twice, behind and in front of the planet, switched by complementary step Tracks at theta 0 and pi (T02-R2) |
 | `ROUTES`, `traffic_state`, `SKYLINE` | `ROUTES` is the single route table (lane, range, period, phase, fades, warp) for the explorer, two fighters and the airplane. `traffic_state(t)` returns each object's position, opacity and bounding boxes; `SKYLINE` is the conservative foreground outline traffic must stay above (T02-R1) |
@@ -205,7 +207,7 @@ Verified in T06: playback advances, pause/resume by click, Enter and Space with 
 
 The quality gate checks local README image/anchor resolution, disclosure structure and removed-work absence; parses SVGs and checks IDs, animation key times and embedded resource references; verifies the GIF's actual frame count, infinite loop, duration, dimensions, differing sampled frames and byte budget; and checks atlas transparency.
 
-The quality gate passes on the current tree: it reports 240 frames, 24 seconds, 840×473, 7,955,864 bytes and different content in at least three of four sampled frames. This is evidence of actual animation, not a substitute for assessing its visual rhythm. The 25MB gate budget is a ceiling, not a target. The unittest suite has 34 tests (traffic, skyline, warp, lock-on, cube, moons, navigation lights, SVG/raster parity and loop continuity).
+The quality gate passes on the current tree: it reports 240 frames, 24 seconds, 840×473, 8,150,550 bytes and different content in at least three of four sampled frames. This is evidence of actual animation, not a substitute for assessing its visual rhythm. The 25MB gate budget is a ceiling, not a target. The unittest suite has 34 tests (traffic, skyline, warp, lock-on, cube, moons, navigation lights, SVG/raster parity and loop continuity).
 
 Browser and rendering checks done so far (details in the `TASKS.md` review records):
 
