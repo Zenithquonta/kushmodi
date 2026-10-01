@@ -12,7 +12,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T03 | Review and refine the square profile picture | done | `assets/profile-picture.png` exists. Check telescope/galaxy readability at 96px and 192px, and in a circular crop preview. Keep source image unchanged. |
 | T04 | Review README content, employer removal and scope | done | Name is Kush Modi; astronomy-first profile; four expandable sections; AstroFixxer project links; aviation/LEGO/CAD/printing interests; no removed-work references. Existing robotics/education/contact facts are grounded in the original README. |
 | T05 | Verify actual GitHub README interactions | done | Render on GitHub after push, verify picture fallback, image links, section anchors and details. GitHub README must not depend on JavaScript, image maps or iframe controls. |
-| T06 | Browser-test and refine the local interactive preview | pending | At desktop and mobile widths, check inline SVG playback, pause/resume, keyboard focus, clickable scene areas, mission panels, reduced-motion behavior and no horizontal overflow. Save screenshots/evidence. |
+| T06 | Browser-test and refine the local interactive preview | done | At desktop and mobile widths, check inline SVG playback, pause/resume, keyboard focus, clickable scene areas, mission panels, reduced-motion behavior and no horizontal overflow. Save screenshots/evidence. |
 | T07 | Align SVG and GIF animation timings | done | The same scene functions render both versions, but some workshop SMIL motion interpolates linearly while raster frames use sine. Review resulting differences and make them intentional or identical. Compare selected times and the wrap at 24 seconds. |
 | T08 | Optimize size without damaging the approved look | pending | Current GIF: 1000×563, 240 frames at 10fps, 24s, 11,744,470 bytes. Review 840/1000px and 8/10/12fps tradeoffs if needed. Prefer one accepted version, no noisy blur or flickering palettes. Document final output dimensions, bytes, duration and tool versions. |
 | T02-R1 | Fix traffic clip, overlap and foreground crossings found in T02 | done |  Explorer hard-clipped at x=574 (t≈14.7); fighters overlap explorer and trees (t≈0/23.9); airplane crosses right trees/workshop roof (t≈15.6). Route geometry/fades only. |
@@ -218,4 +218,28 @@ Decision: approve
 Reason: SMIL and GIF frames are now identical by construction and verified in a real browser.
 Remaining caveats: raster motion is a 24-keyframe sine approximation (<=0.2 px deviation from the old analytic
   curve); assets not yet regenerated (after T02-R2).
+```
+
+### T06 — local preview browser test (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: delegated coder agent (user-selected "Sonnet 5.5")
+Attempt: 1
+Files changed: preview.template.html; preview.html regenerated via scripts/build_preview.py
+Defects fixed:
+  1. `.scene svg{width:100%}` also matched the 18 nested sprite <svg> viewports, so Chromium blew sprites up
+     to full width (giant galaxy/fighter over the telescope). Present in the originally supplied preview.html;
+     supervisor reproduced it in Chromium (original vs fixed screenshot). Selector now `.scene>svg`.
+  2. <summary> had no visible focus ring on the dark page -> added to the #fe7cdc focus rule.
+  3. Telescope/planet hotspots realigned to their landmarks.
+  4. Under reduced motion the disabled button read "RESUME MOTION" -> "MOTION REDUCED", dimmed.
+Commands and outcomes (Playwright 1.56.1 Chromium, 1280x900 and 390x844): playback advances; pause/resume by
+  click, Enter and Space with aria-pressed/text; focus order motion -> 3 hotspots -> 3 cards -> 3 summaries ->
+  footer, all with visible ring; hotspots and cards open + scroll to their <details>; reduced motion hides
+  .moving, shows .still, disables the button and reacts to runtime changes; scrollWidth == innerWidth at both
+  widths; 0 console/page errors.
+Visual evidence: supervisor inspected original-vs-fixed Chromium render; coder screenshots in scratchpad/t06.
+Decision: approve
+Remaining caveats: Chromium only (no Firefox/WebKit); hotspots are fixed rectangles, not tracking moving sprites.
 ```
