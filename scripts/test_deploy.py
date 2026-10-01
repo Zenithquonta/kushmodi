@@ -96,6 +96,11 @@ class DeployFiles(unittest.TestCase):
         self.assertIn('install -d -o obsync -g obsync -m 700', text)
         self.assertIn("sparse-checkout set --no-cone '/archive/'", text)
 
+    def test_small_servers_render_less_often(self):
+        text = (DEPLOY/'install.sh').read_text()
+        self.assertIn('memory_mb < 2000 ? 15 : 5', text)
+        self.assertIn("OnCalendar=\\nOnCalendar=*:0/%s", text)   # clear the unit's 5-minute schedule first
+
     def test_install_validates_the_hostname_before_using_it(self):
         text = (DEPLOY/'install.sh').read_text()
         self.assertLess(text.index('[[ "$HOST" =~'), text.index('sed -e "s|__SITE__|$HOST|"'))

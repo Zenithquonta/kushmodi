@@ -56,6 +56,19 @@ fi
 
 say "systemd timer"
 install -m 644 "$APP/repo/deploy/observatory-live.service" "$APP/repo/deploy/observatory-live.timer" /etc/systemd/system/
+# Small servers (under 2 GB of memory, such as Oracle's E2.1.Micro with a fraction of a CPU) render every 15 minutes
+# with a longer time limit instead of every 5; override with OBSERVATORY_EVERY=<minutes>.
+memory_mb=$(( $(awk '/MemTotal/ {print $2}' /proc/meminfo) / 1024 ))
+every="${OBSERVATORY_EVERY:-$(( memory_mb < 2000 ? 15 : 5 ))}"
+[[ "$every" =~ ^(5|10|15|20|30|60)$ ]] || die "OBSERVATORY_EVERY must be 5, 10, 15, 20, 30 or 60"
+install -d -m 755 /etc/systemd/system/observatory-live.timer.d /etc/systemd/system/observatory-live.service.d
+printf '[Timer]\nOnCalendar=\nOnCalendar=*:0/%s\n' "$every" > /etc/systemd/system/observatory-live.timer.d/interval.conf
+if (( every > 5 )); then
+  printf '[Service]\nTimeoutStartSec=%s\n' "$(( every * 60 - 60 ))" > /etc/systemd/system/observatory-live.service.d/timeout.conf
+else
+  rm -f /etc/systemd/system/observatory-live.service.d/timeout.conf
+fi
+say "rendering every $every minutes (${memory_mb} MB of memory)"
 systemctl daemon-reload
 systemctl enable --quiet --now observatory-live.timer
 say "first render (up to a minute or two)"

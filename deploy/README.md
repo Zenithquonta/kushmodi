@@ -36,6 +36,9 @@ sudo bash deploy/install.sh sky.example.com      # your host name
 sudo bash /opt/observatory/repo/deploy/check.sh sky.example.com
 ```
 
+On a server with less than 2 GB of memory (for example Oracle's free VM.Standard.E2.1.Micro) the picture is
+rendered every 15 minutes instead of 5; set `OBSERVATORY_EVERY=10` (5, 10, 15, 20, 30 or 60) before `sudo` to choose.
+
 `install.sh` refuses to run if the system is not Ubuntu 24.04, if something other than Caddy already uses ports
 80/443, or if `/etc/caddy/Caddyfile` has been customised. It is safe to run again.
 
