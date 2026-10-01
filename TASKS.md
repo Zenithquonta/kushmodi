@@ -544,3 +544,15 @@ Commands and outcomes: 120 tests pass; quality gate passes; default scene byte-i
 Visual evidence: dusk crescent 13 Dec 2026, daytime quarter moon 18 Oct 2026, full moon 27 Oct 2026, 24 Jan 2027.
 Decision: approve
 ```
+
+### LO-P9 — Daily day/night generator (2026-10-01)
+
+```text
+Requested by: user ("yes start phase 9 yourself, don't wait")
+Implemented and reviewed by: supervisor agent (user-selected "Opus 5.5"); approach reviewed by the advisor before coding
+Files: scripts/render_daily.py (new), scripts/test_render_daily.py (7 tests), config/observatory.json (archive), docs
+Commands and outcomes: 127 tests pass; quality gate passes; a week (12-18 Dec 2026) and one date per season rendered
+  into the scratchpad: 79 KB per frame on average, about 58 MB per year projected.
+Not done by design: no archive frames committed (Phase 11 adds one day at a time).
+Decision: approve
+```

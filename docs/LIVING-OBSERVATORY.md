@@ -87,7 +87,8 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 6 Daily seed variation | done: seeded twinkles, meteors, sky crosses, clouds; 4 checked airliner timings and 4 satellite passes; more meteors on approximate shower peaks; 10 tests |
 | 7 Portfolio objects | done: drone pad and hovering quadcopter, field ground station with telemetry trace, tracker controller on the tripod, PCB and soldering iron on the lantern crate; 8 tests |
 | 8 Real Moon and planets | done: true Moon position and phase with the lit side towards the sun, moonlight on the ground, Mercury/Venus/Mars/Jupiter/Saturn by magnitude; dome projection; no real star field (no verifiable catalogue); 10 tests |
-| 9–14 | pending |
+| 9 Daily day/night generator | done: `scripts/render_daily.py` (--date/--range), WebP frames at solar noon and 21:00, atomic + locked + idempotent, `archive/index.json`; 7 tests; no frames committed yet |
+| 10–14 | pending |
 
 ## Phase 2 implementation notes
 
@@ -246,3 +247,22 @@ amendments that follow from measured facts, open decisions, and phase status.
   catalogue is drawn: none could be verified in this environment, and real constellations turning across the fixed
   painted sky would show two skies that disagree.
 - Browser parity on the full-moon night (t = 0, 3, 12, 18 s): worst cell 0 to 8 px.
+
+## Phase 9 notes — daily archive generator
+
+- `python scripts/render_daily.py [--date D | --range START END] [--out DIR] [--width W] [--force]`. With no date it
+  renders today **in Asia/Kolkata**, whatever the machine's clock zone (a UTC VPS would otherwise be a day behind
+  between 00:00 and 05:30 IST; tested).
+- Frame times live in `config/observatory.json` (`archive`): day at local solar noon (sun hour angle 0, rounded to the
+  minute; tested to be the day's highest sun all year), night at 21:00 (sun below -18 degrees all year; tested).
+- Output: `archive/YYYY/YYYY-MM-DD-day.webp` and `-night.webp` (840 px, WebP quality 85) and `archive/index.json`
+  with a small entry per date (season, frame times, moon illuminated fraction, meteor shower, planets up at night,
+  file sizes, renderer version).
+- Both frames are rendered in a temporary directory, validated (decode, size, dimensions, not blank) and moved into
+  place together; the index is rewritten atomically after every date; `archive/.lock` (flock) serializes writers.
+  A date is skipped when both frames exist and decode (validity, not byte equality, since another libwebp or librsvg
+  gives other bytes), unless `--force`. Dates outside the year window are refused.
+- Measured: 13 dates across all six seasons average 79 KB per frame (day ~58 KB, night 57-112 KB; monsoon nights are
+  smallest) -> about 58 MB for the year's 730 frames. A week renders in about 48 s here.
+- No archive frames are committed in this phase: the archive is meant to grow one day at a time (Phase 11 sync).
+- Tests mock the rasterizer except one real-render test that runs only where FFmpeg has librsvg.

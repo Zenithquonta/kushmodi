@@ -8,6 +8,13 @@
   },
   "year_window": {"start": "2026-10-01", "end": "2027-10-01"},
   "renderer_version": "1.0.0",
+  "archive": {
+    "note": "Daily frames: day at local solar noon, night at a fixed local time; WebP in archive/YYYY/.",
+    "day_time": "solar_noon",
+    "night_time": "21:00",
+    "width": 840,
+    "webp_quality": 85
+  },
   "meteor_showers": {
     "note": "Approximate annual peak dates; a shower counts as active one day either side of its peak.",
     "window_days": 1,
