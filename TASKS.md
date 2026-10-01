@@ -476,3 +476,20 @@ Commands and outcomes: 86 tests pass; quality gate passes; default scene byte-id
 Visual evidence: six-season sheet (10:00-10:30 for each season plus Varsha and Shishira nights), July and May day sheets.
 Decision: approve
 ```
+
+### LO-P5 — Mumbai skyline, haze and urban glow (2026-10-01)
+
+```text
+Requested by: user ("yes start phase 5 yourself, don't wait")
+Implemented and reviewed by: supervisor agent (user-selected "Opus 5.5")
+Files: scripts/build_animation.py (city_mask, city_towers, city_markup, city_windows, city_beacons, city_glow, cloud
+  underglow, counterweight sky-mask fix), assets/observatory-day.png, -golden.png, -dry.png (rebuilt for the
+  corrected mask), scripts/test_lighting.py (+6 tests, mask probes updated), assets/MANIFEST.json, docs
+Self-review fixes during the phase: day towers looked ghostly because haze covered them only above the ridge (skyline
+  now drawn over the haze with haze baked into its colours); low day contrast; telescope counterweight erased by the
+  day sky since Phase 3.
+Commands and outcomes: 92 tests pass; quality gate passes; default scene byte-identical to published assets;
+  Chromium vs librsvg at winter 23:00 and December 17:50, t = 0/3/12 s: worst cell 0 to 10 px.
+Visual evidence: skyline zooms at noon, golden hour, winter night and monsoon night; full frames 10 Jan 2027.
+Decision: approve
+```

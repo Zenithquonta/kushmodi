@@ -113,8 +113,8 @@
     },
     {
       "path": "assets/observatory-day.png",
-      "bytes": 971425,
-      "sha256": "945e9660b61cb8966630a9345f3cfab87f42053f53f2cfc346991d5b96914489",
+      "bytes": 972721,
+      "sha256": "14aed2dabe890be9d672797a85d86441bce33b9670616d2dad62c56e5631421b",
       "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
       "width": 1672,
       "height": 941,
@@ -123,8 +123,8 @@
     },
     {
       "path": "assets/observatory-dry.png",
-      "bytes": 438460,
-      "sha256": "de658223b0e993a4699e45e3b2251e7aa12c39ff1110c29c48353e6de5e1562e",
+      "bytes": 438568,
+      "sha256": "0ed3ac6ef418f780a45753f84249a2edaba4ef1a2050a8db4e9870408b2e2c39",
       "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
       "width": 1672,
       "height": 941,
@@ -133,8 +133,8 @@
     },
     {
       "path": "assets/observatory-golden.png",
-      "bytes": 900766,
-      "sha256": "b07b102684cb4f4dabe90c0c828006212f59f4337804031e283417fd02001fa6",
+      "bytes": 902044,
+      "sha256": "4ac70da79cda2dd6d873712e3483edc39ae907f9e3748611a395fffb3a607bc7",
       "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
       "width": 1672,
       "height": 941,

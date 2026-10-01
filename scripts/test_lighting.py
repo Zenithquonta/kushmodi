@@ -85,7 +85,7 @@ class Lighting(unittest.TestCase):
 class PlateMasks(unittest.TestCase):
     def test_sky_mask_follows_the_painted_silhouettes(self):
         sky = mask_image('sky')
-        for point in ((830, 600), (812, 556), (150, 630), (1400, 575), (1640, 433), (1500, 500), (950, 712), (60, 650)):
+        for point in ((757, 672), (752, 675), (830, 600), (812, 556), (150, 630), (1400, 575), (1640, 433), (1500, 500), (950, 712), (60, 650)):
             self.assertEqual(sky.getpixel(point), 0, f'foreground {point} must not be sky')
         for point in ((800, 20), (100, 260), (950, 670), (700, 600), (200, 610)):
             self.assertEqual(sky.getpixel(point), 255, f'{point} must be sky')
@@ -95,7 +95,9 @@ class PlateMasks(unittest.TestCase):
         sky, ground = mask_image('sky'), mask_image('ground')
         for x in range(0, scene.W, 7):
             for y in range(0, int(scene._interp_pts(scene.SKYLINE, x))-1, 13):
-                self.assertEqual(sky.getpixel((x, y)), 255)
+                bx0, by0, bx1, by1 = scene.COUNTERWEIGHT_BOX
+                if not (bx0 <= x < bx1 and by0 <= y < by1):
+                    self.assertEqual(sky.getpixel((x, y)), 255)
         self.assertIsNone(ImageChops.difference(ImageChops.invert(sky), ground).getbbox())
 
     def test_glyph_mask_covers_the_three_title_lines_and_nothing_else(self):
@@ -244,6 +246,54 @@ class Seasons(unittest.TestCase):
             if previous:
                 self.assertTrue(all(abs(x-y) < .15 for x, y in zip(values, previous)), when)   # < .05 a day
             previous = values
+
+
+WINTER_NIGHT = datetime(2027, 1, 10, 23, 0, tzinfo=IST)
+
+
+class Mumbai(unittest.TestCase):
+    def test_city_mask_keeps_near_trees_and_the_rock_in_front(self):
+        # No tower stands behind the telescope (x 640-884), so its bright metal legs need no mask.
+        from PIL import Image
+        mask = Image.open(io.BytesIO(base64.b64decode(scene.city_mask().split(',', 1)[1]))).convert('L')
+        for point in ((740, 720), (400, 740), (420, 750), (1150, 700)):
+            self.assertEqual(mask.getpixel(point), 0, f'{point} is a near silhouette')
+        for point in ((500, 690), (980, 700), (1000, 740)):
+            self.assertEqual(mask.getpixel(point), 255, f'{point} is open far band')
+
+    def test_skyline_is_fixed_and_stands_on_its_shores(self):
+        towers = scene.city_towers()
+        self.assertGreater(len(towers), 20)
+        for x, top, w, base, cap in towers:
+            self.assertTrue(any(x0 <= x < x1 and base == b for x0, x1, b in scene.CITY_SHORES))
+            self.assertGreater(top, scene.HORIZON_Y-70)
+        self.assertEqual(scene.city_towers.__wrapped__(), towers)
+
+    def test_windows_beacons_and_glow_belong_to_the_night(self):
+        night = scene.scene(0, False, state=scene_state.scene_state(WINTER_NIGHT))
+        noon = scene.scene(0, False, state=scene_state.scene_state(NOON))
+        for marker in ('data-city="windows"', 'data-city="beacons"', 'data-city="glow"'):
+            self.assertIn(marker, night)
+            self.assertNotIn(marker, noon)
+        self.assertIn('data-city="skyline"', noon)
+        self.assertIn('data-city="sea-link"', noon)
+
+    def test_beacons_blink_within_the_loop(self):
+        svg = scene.scene(0, True, state=scene_state.scene_state(WINTER_NIGHT))
+        self.assertIn('dur="2s"', svg[svg.index('data-city="beacons"'):])
+        self.assertEqual(scene.PERIOD % 2, 0)
+
+    def test_city_glow_warms_the_undersides_of_night_clouds(self):
+        state = scene_state.scene_state(WINTER_NIGHT)
+        glowing = scene.season_markup(scene.lighting(state))
+        state['environment'] = dict(state['environment'], urban_glow=0)
+        dark = scene.season_markup(scene.lighting(state))
+        self.assertNotEqual(glowing, dark)
+
+    def test_skyline_sits_over_the_haze_and_under_the_name(self):
+        svg = scene.scene(0, False, state=scene_state.scene_state(SUMMER_NOON))
+        self.assertLess(svg.index('data-season="haze"'), svg.index('data-city="skyline"'))
+        self.assertLess(svg.index('data-city="skyline"'), svg.index('data-light="title"'))
 
 
 class LiveRender(unittest.TestCase):

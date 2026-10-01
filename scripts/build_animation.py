@@ -974,9 +974,10 @@ def layers(t, animated, light=None):
     overlay = '' if light is None else light['markup']
     weather = '' if light is None else light['weather']
     showers = '' if light is None else rain(t, animated, light)
+    city = '' if light is None else light['city']+city_beacons(t, animated, light)
     return (night_group('twinkles', twinkles(t, animated), night)+overlay
             +night_group('celestial', celestial(t, animated), night)+night_group('satellite', satellite(t, animated), night)
-            +weather+('' if light is None else light['title'])+traffic(t, animated, night)+night_group('sky-details', sky_details(t, animated), night)
+            +weather+city+('' if light is None else light['title'])+traffic(t, animated, night)+night_group('sky-details', sky_details(t, animated), night)
             +night_group('meteors', meteors(t, animated), night)+showers+workshop(t, animated))
 
 
@@ -995,6 +996,7 @@ FOREGROUND_LIFT = (.34, (170, 190, 225))   # twilight lift on the night ground, 
 # Foreground plates derived from the night painting by scripts/build_day_art.py; (sun altitude, opacity) keys.
 GOLDEN_KEYS = [(-5, 0), (1, 1), (8, 1), (14, 0)]
 DAY_KEYS = [(4, 0), (14, 1)]
+COUNTERWEIGHT_BOX = (728, 636, 786, 700)   # telescope counterweight and arm, above SKYLINE but not sky
 SKY_THRESHOLD = .55        # a band pixel joins the sky when brighter than this share of its column's sky above
 TITLE_OUTLINE = '#050c1c'  # dark pixel outline that keeps the painted name legible on a bright sky
 # (sun altitude, top rgb, top opacity, horizon rgb, horizon opacity), interpolated linearly in between.  Both
@@ -1109,8 +1111,10 @@ def plate_masks():
         above = sorted(px[x, y] for y in range(max(0, top-40), max(1, top-4)))
         draw.line([(x, 0), (x, H)], fill=max(12, round(SKY_THRESHOLD*above[len(above)//2])))
     passable = ImageChops.subtract(lum, threshold).point(lambda v: 255 if v > 0 else 0)
+    measured = passable.crop(COUNTERWEIGHT_BOX)
     fill = ImageDraw.Draw(passable)
     fill.polygon([(0, 0), (W, 0)]+[(x, y) for x, y in SKYLINE[::-1]], fill=255)
+    passable.paste(measured, COUNTERWEIGHT_BOX[:2])   # the counterweight arm pokes above SKYLINE: measure it too
     fill.rectangle([0, HORIZON_Y+10, W, H], fill=0)
     ImageDraw.floodfill(passable, (W//2, 2), 128)
     sky = passable.point(lambda v: 255 if v == 128 else 0).convert('1')
@@ -1236,6 +1240,7 @@ def season(light, state):
     light['haze'] = HAZE_PEAK*env['haze']
     light['haze_colour'] = _colour_for(light, (40, 46, 70), _mix((214, 220, 226), (226, 210, 180),
                                                                  _smooth((env['haze']-.5)/.3)), (240, 176, 150))
+    light['city'] = city_markup(light)+city_glow(light)
     light['weather'] = season_markup(light)
     return light
 
@@ -1314,7 +1319,7 @@ def season_defs(light):
             f'<stop offset=".74" stop-color="{_rgb(light["haze_colour"])}" stop-opacity="1"/>'
             f'<stop offset="1" stop-color="{_rgb(light["haze_colour"])}" stop-opacity="1"/></linearGradient>'
             + (f'<image id="plate-dry" width="{W}" height="{H}" href="{day_plate("dry")}" xlink:href="{day_plate("dry")}"/>'
-               if light['dry'] > 0 else ''))
+               if light['dry'] > 0 else '')+city_defs())
 
 
 def season_markup(light):
@@ -1346,9 +1351,11 @@ def season_markup(light):
     density = env['cloud_density']
     grey = _smooth((density-.4)/.5)
     # Fair-weather clouds are white with blue-grey bases; rain clouds are darker than the overcast deck behind them.
-    tones = (_colour_for(light, (52, 60, 88), _mix((250, 250, 252), (168, 176, 188), grey), (255, 196, 160)),
-             _colour_for(light, (36, 42, 66), _mix((226, 232, 240), (126, 134, 148), grey), (238, 150, 140)),
-             _colour_for(light, (24, 28, 46), _mix((184, 194, 210), (90, 98, 112), grey), (150, 96, 124)))
+    under = CLOUD_UNDERGLOW*env['urban_glow']
+    night_tones = [_mix(c, (150, 88, 60), under*f) for c, f in (((52, 60, 88), .5), ((36, 42, 66), .8), ((24, 28, 46), 1))]
+    tones = (_colour_for(light, night_tones[0], _mix((250, 250, 252), (168, 176, 188), grey), (255, 196, 160)),
+             _colour_for(light, night_tones[1], _mix((226, 232, 240), (126, 134, 148), grey), (238, 150, 140)),
+             _colour_for(light, night_tones[2], _mix((184, 194, 210), (90, 98, 112), grey), (150, 96, 124)))
     # One path per tone, so neighbouring cells merge without anti-aliased seams; later clouds cover earlier ones.
     clouds = ''
     for box, puffs in cloud_shapes(light['seed'], density):
@@ -1393,6 +1400,141 @@ def rain(t, animated, light):
         out += (f'<g transform="translate({fall.value_text(t)})">{fall.smil("transform", "translate") if animated else ""}'
                 f'<path d="{d}" stroke="{_rgb(colour)}" stroke-width="{width}" fill="none"/></g>')
     return out+'</g>'
+
+
+# ---------------------------------------------------------------------------
+# Mumbai (Phase 5): a fixed pixel skyline on both shores of the bay, the sea link across it, lit windows and aviation
+# lights at night, and the city's sodium glow on the low sky and the undersides of clouds.
+# ---------------------------------------------------------------------------
+CITY_SHORES = [(424, 640, 714), (884, 1104, 716)]   # x from, x to, base y of each tower cluster
+CITY_OCCLUDER = 24          # plate luminance below which a far-band pixel is a near silhouette (trees, rock)
+CITY_REGION = (330, 600, 1190, 770)
+SEA_LINK = dict(x0=900, x1=1076, deck=745, pylons=(958, 1018), height=34)
+CITY_GLOW = dict(colour=(255, 146, 70), peak=.34, centre=(760, 716), radii=(640, 150))
+CLOUD_UNDERGLOW = .32       # share of the night cloud colour taken from the city glow at urban_glow = 1
+
+
+@functools.lru_cache(maxsize=1)
+def city_mask():
+    """White where the skyline may show: far-band pixels that are not near silhouettes (closed to fill highlights)."""
+    from PIL import Image, ImageChops, ImageFilter
+    lum = Image.open(ASSETS/'observatory-background.png').convert('L')
+    near = lum.point(lambda v: 255 if v < CITY_OCCLUDER else 0)
+    near = near.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.MinFilter(5))   # close the trees' bright specks
+    region = Image.new('L', (W, H), 0)
+    region.paste(255, CITY_REGION)
+    return _png_uri(ImageChops.subtract(region, near).convert('1'))
+
+
+@functools.lru_cache(maxsize=1)
+def city_towers():
+    """(x, top, width, base, cap) for every tower; fixed, so Mumbai keeps the same skyline all year."""
+    rng = random.Random(1534)   # the year Bombay's islands were ceded to Portugal; any fixed seed would do
+    towers = []
+    for x0, x1, base in CITY_SHORES:
+        x = x0
+        while x < x1:
+            w = rng.choice((6, 8, 8, 10, 12, 14))
+            tall = rng.random()
+            h = rng.randint(44, 58) if tall > .9 else rng.randint(24, 40) if tall > .55 else rng.randint(10, 22)
+            cap = rng.choice(('flat', 'flat', 'flat', 'step', 'spire')) if h > 20 else 'flat'
+            towers.append((x, base-h, w, base, cap))
+            x += w+rng.choice((0, 0, 2, 4, 6))
+    return sorted(towers, key=lambda tower: tower[3]-tower[1])   # short in front of tall would hide nothing; tall first
+
+
+def _city_colours(light):
+    env = light['env']
+    # Distance haze is baked into the colours, since the skyline is drawn over the season's haze layer.
+    haze = .2+.45*env['haze']
+    lit = _colour_for(light, (26, 32, 58), _mix((178, 190, 208), light['haze_colour'], haze), (222, 156, 132))
+    shade = _colour_for(light, (16, 20, 40), _mix((104, 118, 146), light['haze_colour'], haze*.7), (132, 92, 108))
+    return lit, shade
+
+
+def city_markup(light):
+    """Static skyline, sea link, windows and the city glow (masked so trees, rock and telescope stay in front)."""
+    lit, shade = _city_colours(light)
+    paths = {'lit': '', 'shade': ''}
+    for x, top, w, base, cap in city_towers():
+        half = w//2
+        paths['lit'] += f'M{x} {top}h{half}V{base}h{-half}z'
+        paths['shade'] += f'M{x+half} {top}h{w-half}V{base}h{half-w}z'
+        if cap == 'step':
+            paths['lit'] += f'M{x+2} {top-4}h{w-4}v4h{4-w}z'
+        elif cap == 'spire':
+            paths['shade'] += f'M{x+half-1} {top-10}h2v10h-2z'
+    s = SEA_LINK
+    link = f'M{s["x0"]} {s["deck"]}H{s["x1"]}v2H{s["x0"]}z'
+    for px in s['pylons']:
+        link += f'M{px-1} {s["deck"]-s["height"]}h3V{s["deck"]+4}h-3z'
+    cables = ''.join(f'M{px} {s["deck"]-s["height"]+3+i*5}L{px+d*(10+i*9)} {s["deck"]}'
+                     for px in s['pylons'] for d in (-1, 1) for i in range(4))
+    out = (f'<g data-city="skyline" mask="url(#city-mask)">'
+           f'<path d="{paths["shade"]}" fill="{_rgb(shade)}"/><path d="{paths["lit"]}" fill="{_rgb(lit)}"/>'
+           f'<path data-city="sea-link" d="{link}" fill="{_rgb(shade)}"/>'
+           f'<path d="{cables}" stroke="{_rgb(lit)}" stroke-width="1" fill="none" opacity=".8"/>')
+    darkness = 1-light['daylight']
+    urban = light['env']['urban_glow']
+    if darkness > .02:
+        out += city_windows(urban, darkness)
+    return out+'</g>'
+
+
+def city_windows(urban, darkness):
+    rng = random.Random(1661)   # Bombay's islands passed to England as a dowry
+    chance = .16+.3*urban
+    warm, cool = '', ''
+    for x, top, w, base, _ in city_towers():
+        for wy in range(top+3, base-2, 4):
+            for wx in range(x+2, x+w-1, 3):
+                roll = rng.random()
+                if roll < chance:
+                    if rng.random() < .8:
+                        warm += f'M{wx} {wy}h1v2h-1z'
+                    else:
+                        cool += f'M{wx} {wy}h1v2h-1z'
+    deck = SEA_LINK
+    lamps = ''.join(f'M{x} {deck["deck"]-1}h1v1h-1z' for x in range(deck['x0']+3, deck['x1'], 7))
+    return (f'<g data-city="windows" opacity="{_num(darkness, 4)}"><path d="{warm}" fill="rgb(255,206,128)"/>'
+            f'<path d="{cool}" fill="rgb(206,226,255)"/><path d="{lamps}" fill="rgb(255,180,90)"/></g>')
+
+
+def city_beacons(t, animated, light):
+    """Red aviation lights on the tallest towers and the sea link pylons, blinking once every two seconds."""
+    darkness = 1-light['daylight']
+    if darkness <= .02:
+        return ''
+    tops = [(x+w//2-1, top-(10 if cap == 'spire' else 4 if cap == 'step' else 0)-2)
+            for x, top, w, base, cap in city_towers() if base-top > 40]
+    tops += [(px, SEA_LINK['deck']-SEA_LINK['height']-2) for px in SEA_LINK['pylons']]
+    blink = Track([1, 1, .15, .15, 1], [0, .45, .5, .95, 1], dur=2)
+    lights = ''.join(f'M{x} {y}h2v2h-2z' for x, y in tops)
+    return (f'<g data-city="beacons" mask="url(#city-mask)" opacity="{_num(darkness, 4)}">'
+            f'<path d="{lights}" fill="rgb(255,58,48)" opacity="{blink.value_text(t)}">'
+            f'{blink.smil("opacity") if animated else ""}</path></g>')
+
+
+def city_glow(light):
+    """Sodium glow over the city on the low sky, strongest on dark, hazy, cloudy nights."""
+    g = CITY_GLOW
+    env = light['env']
+    strength = g['peak']*env['urban_glow']*(1-light['daylight'])*(.7+.3*env['haze']+.3*env['cloud_density'])
+    if strength < .005:
+        return ''
+    (cx, cy), (rx, ry) = g['centre'], g['radii']
+    return (f'<ellipse data-city="glow" cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}" fill="url(#city-glow)" '
+            f'opacity="{_num(min(.6, strength), 4)}" mask="url(#sky-mask)"/>')
+
+
+def city_defs():
+    colour = _rgb(CITY_GLOW['colour'])
+    uri = city_mask()
+    return (f'<mask id="city-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="{W}" height="{H}">'
+            f'<image width="{W}" height="{H}" href="{uri}" xlink:href="{uri}"/></mask>'
+            f'<radialGradient id="city-glow"><stop offset="0" stop-color="{colour}" stop-opacity="1"/>'
+            f'<stop offset=".5" stop-color="{colour}" stop-opacity=".45"/>'
+            f'<stop offset="1" stop-color="{colour}" stop-opacity="0"/></radialGradient>')
 
 
 def feather_defs():

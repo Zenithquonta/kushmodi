@@ -83,7 +83,8 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 3 Day/night lighting on existing art | done: optional `state` path in the renderer, pixel-exact plate masks, `scripts/render_live.py`, 11 tests |
 | 3b Day and golden-hour foreground art | done: `scripts/build_day_art.py`, `assets/observatory-day.png` and `-golden.png`, 6 tests |
 | 4 Six-season visuals | done: dry vegetation plate, pixel clouds, monsoon overcast and seeded showers, wet ground and puddles, horizon haze, night visibility; 9 tests |
-| 5–14 | pending |
+| 5 Mumbai skyline, haze and urban glow | done: fixed pixel skyline on both shores, sea link, night windows and blinking aviation lights, sodium glow on the low sky and cloud undersides; 6 tests |
+| 6–14 | pending |
 
 ## Phase 2 implementation notes
 
@@ -153,3 +154,19 @@ amendments that follow from measured facts, open decisions, and phase status.
 - The redrawn name is now drawn above clouds, haze and overcast.
 - Browser parity (monsoon rain at 09:00 and Grishma noon, t = 0, 3 and 12 s): worst cell 0 to 10 px (limit 150).
 - Implemented by the supervisor agent at the user's request ("start phase 4 yourself, don't wait").
+
+## Phase 5 notes — Mumbai
+
+- **Skyline:** 38 pixel towers in two clusters standing on the far shores of the bay (x 424-640 at y 714, x 884-1104
+  at y 716), with flat, stepped and spire tops; fixed by a constant seed so Mumbai keeps one skyline all year. A
+  cable-stayed bridge across the bay is a stylized nod to the Bandra-Worli Sea Link, not a survey of it.
+- **Occlusion:** `city_mask()` is measured from the plate: far-band pixels darker than 24 are near silhouettes (trees,
+  rock), closed with a 5 px max/min filter to fill their bright specks. No tower stands behind the telescope.
+- **Light:** colours follow daylight and the sunrise/sunset glow, with the season's haze baked in (the skyline is drawn
+  over the haze layer). At night 16-46 % of window cells light up (more with urban_glow), the sea link deck has lamps,
+  and towers over 40 px plus both pylons carry red aviation lights blinking on a 2 s period.
+- **Urban glow:** an orange ellipse over the city on the sky mask, opacity 0.34 x urban_glow x darkness, stronger with
+  haze and cloud. Night cloud tones take up to 32 % of a sodium orange from below.
+- **Sky-mask fix:** the telescope's counterweight arm pokes above SKYLINE and was painted over by the day sky. Its box
+  is now measured like the band below; the day, golden and dry plates were rebuilt against the corrected mask.
+- Browser parity (winter night 23:00 and December 17:50, t = 0, 3 and 12 s): worst cell 0 to 10 px (limit 150).
