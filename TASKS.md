@@ -440,3 +440,22 @@ Visual evidence: supervisor inspected contact sheets for 2026-12-14 and 2027-07-
   re-renders at 07:08 and 18:14.
 Decision: approve (interim tint; day art still required for a convincing daytime foreground)
 ```
+
+### LO-P3b — Day and golden-hour foreground art (2026-10-01)
+
+```text
+Requested by: user ("yes" to generating day and golden-hour versions matched to the approved art, originals untouched)
+Implemented and reviewed by: supervisor agent (user-selected "Opus 5.5"); the coder agent was still usage-limited
+Files: scripts/build_day_art.py (new, offline, Pillow + NumPy), assets/observatory-day.png, assets/observatory-golden.png
+  (RGBA, ground only, alpha = plate ground mask), scripts/build_animation.py (plate crossfade, sunrise sky depth),
+  scripts/test_lighting.py (+6 tests), assets/MANIFEST.json, docs
+Method: per-region relight of the night painting (vegetation, telescope, rock, van, workshop wood, rover, far haze);
+  lamp-lit wood, lantern, screens and neon keep their own colour; city lights off by day; shadow floor under pure black.
+Commands and outcomes: 77 tests pass (includes committed plates == builder output, alpha == ground mask);
+  quality gate passes; default scene byte-identical to the published assets; Chromium vs librsvg at 12:30 and 17:40
+  live states: worst cell 0 px.
+Visual evidence: contact sheets 2026-12-14 (06:40 to 18:14) and 2027-07-15 (06:30 to 19:05) inspected.
+Known limits: live.svg is 8.7 MB with PNG plates (WebP re-encode belongs to Phase 10); the art is a derived relight,
+  not a new painting.
+Decision: approve
+```

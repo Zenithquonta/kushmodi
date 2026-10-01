@@ -1,7 +1,8 @@
-"""Phase 3 day/night lighting: unchanged default output, sky/title masks, fades, sun placement, atomic live render."""
+"""Day/night lighting: unchanged default output, sky/title masks, fades, sun, day plates, atomic live render."""
 import base64
 from datetime import datetime
 import hashlib
+import importlib.util
 import io
 from pathlib import Path
 import re
@@ -127,6 +128,46 @@ class PlateMasks(unittest.TestCase):
         around = [frame.getpixel((x, y)) for x in range(x0, x1) for y in range(y0, y1) if ring.getpixel((x, y))]
         contrast = (luminance(inside)+.05)/(luminance(around)+.05)
         self.assertGreaterEqual(contrast, 3, f'title contrast {contrast:.2f}')
+
+
+class DayPlates(unittest.TestCase):
+    def test_noon_draws_the_day_plate_and_embeds_nothing_unused(self):
+        svg = scene.scene(0, False, state=scene_state.scene_state(NOON))
+        self.assertIn('data-light="plate-day" href="#plate-day"', svg)
+        self.assertNotIn('plate-golden', svg)
+        self.assertEqual(svg.count('id="plate-day"'), 1)
+
+    def test_night_draws_no_day_art(self):
+        self.assertNotIn('plate-', scene.scene(0, False, state=scene_state.scene_state(NIGHT)).replace('id="plate"', ''))
+
+    def test_low_sun_uses_the_golden_plate_and_hands_over_to_day(self):
+        self.assertEqual(scene._keyed(scene.GOLDEN_KEYS, 3), 1)
+        self.assertEqual(scene._keyed(scene.DAY_KEYS, 3), 0)
+        self.assertEqual(scene._keyed(scene.GOLDEN_KEYS, -6), 0)
+        self.assertEqual(scene._keyed(scene.DAY_KEYS, 20), 1)
+        for keys in (scene.DAY_KEYS, scene.GOLDEN_KEYS):
+            values = [scene._keyed(keys, a/10) for a in range(-200, 400)]
+            self.assertTrue(all(0 <= v <= 1 for v in values))
+            self.assertTrue(all(abs(b-a) < .05 for a, b in zip(values, values[1:])), 'no visible step')
+
+    def test_twilight_lift_is_gone_once_a_day_plate_is_fully_in(self):
+        self.assertNotIn('data-light="foreground"', scene.scene(0, False, state=scene_state.scene_state(NOON)))
+
+    def test_plates_cover_exactly_the_ground(self):
+        from PIL import Image, ImageChops
+        ground = mask_image('ground')
+        for name in ('day', 'golden'):
+            with Image.open(scene.ASSETS/f'observatory-{name}.png') as plate:
+                self.assertEqual((plate.mode, plate.size), ('RGBA', (scene.W, scene.H)))
+                self.assertIsNone(ImageChops.difference(plate.getchannel('A'), ground).getbbox(), name)
+
+    @unittest.skipUnless(importlib.util.find_spec('numpy'), 'NumPy is a build-time dependency of the day art')
+    def test_committed_plates_match_the_builder(self):
+        import build_day_art
+        from PIL import Image, ImageChops
+        for name in ('day', 'golden'):
+            with Image.open(scene.ASSETS/f'observatory-{name}.png') as committed:
+                self.assertIsNone(ImageChops.difference(build_day_art.build(name), committed.convert('RGBA')).getbbox(), name)
 
 
 class LiveRender(unittest.TestCase):

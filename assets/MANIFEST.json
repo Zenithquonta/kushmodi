@@ -112,6 +112,26 @@
       "animation_elements": 4
     },
     {
+      "path": "assets/observatory-day.png",
+      "bytes": 971425,
+      "sha256": "945e9660b61cb8966630a9345f3cfab87f42053f53f2cfc346991d5b96914489",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "format": "PNG"
+    },
+    {
+      "path": "assets/observatory-golden.png",
+      "bytes": 900766,
+      "sha256": "b07b102684cb4f4dabe90c0c828006212f59f4337804031e283417fd02001fa6",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "format": "PNG"
+    },
+    {
       "path": "assets/observatory-poster.png",
       "bytes": 966370,
       "sha256": "b1d525daed3fa103333b7a327da11306b4ce4ff86c0e091ed3fbf09cdc54b51e",

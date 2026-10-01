@@ -60,6 +60,7 @@ amendments that follow from measured facts, open decisions, and phase status.
 - Phase 3 may tint the existing night plate until deliberate day/golden-hour art exists (user: yes).
 - The earlier "main = README + images only" cleanup is cancelled; renderer, config and archive stay in this repo (user: yes).
 - Defaults pending objection: archive as WebP in git; stylized galaxy/planet kept as art; Modi Fintelli excluded.
+- Day and golden-hour foreground art may be generated from the approved painting, originals untouched (user: yes).
 - Portfolio objects confirmed by the CV: drone station (NETRA, ESP32-S3 micro drone), telemetry console (ROS serial,
   ESP-NOW, GPS/IMU), PCB bench (user statement), star-tracker mount. Not confirmed: research terminal, LoRa.
 
@@ -68,7 +69,7 @@ amendments that follow from measured facts, open decisions, and phase status.
 - Keep or supersede the earlier "main = README + images only" cleanup (the plan places the renderer,
   config and archive in this repository).
 - Archive format (WebP proposed) and whether the archive lives in git or on the VPS only.
-- Public hostname/HTTPS for the live endpoint on the VPS.
+- Public hostname/HTTPS for the live endpoint on the VPS (user agreed it is needed; the hostname itself is still to come).
 - Stylized galaxy/planet: keep as art, or replace with the real sky.
 - Which portfolio objects are real (drone/UAV, telemetry, PCB boards) — needs CV or confirmation.
 
@@ -80,6 +81,7 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 1 Baseline | done: live hero at `569b58b` (GIF/poster/SVG), 34 tests, CI green |
 | 2 SceneState (time, season, astronomy, seed) | done: `scripts/scene_state.py`, `config/observatory.json`, 22 tests; supervisor-verified sunset 14 Dec 2026 18:02 IST independently |
 | 3 Day/night lighting on existing art | done: optional `state` path in the renderer, pixel-exact plate masks, `scripts/render_live.py`, 11 tests |
+| 3b Day and golden-hour foreground art | done: `scripts/build_day_art.py`, `assets/observatory-day.png` and `-golden.png`, 6 tests |
 | 4–14 | pending |
 
 ## Phase 2 implementation notes
@@ -109,10 +111,24 @@ amendments that follow from measured facts, open decisions, and phase status.
   with a dark pixel outline; noon contrast is tested at >= 3:1 on a real rasterized frame.
 - Faint sky art (stars, galaxies, planet, lock-on, meteors, satellite) fades with its own curve: full at <= -14 deg,
   gone at >= -4 deg sun altitude. Ships stay; airliner nav lights fade by day.
-- Interim look: the foreground is the night plate with a light lift by day. Deliberate day/golden-hour art is still
-  needed for a convincing daytime foreground.
+- Interim look (superseded by 3b): the foreground was the night plate with a light lift by day.
 - `scripts/render_live.py --at ISO --out DIR` writes live.svg/live.png/live.json, validated in a temp dir and moved
   into place only when all three are valid; a failed render leaves the previous files untouched (tested).
 - Browser parity on a daytime live SVG: worst 167x94 cell 4 px (limit 150).
 - Implementation: coder agent (stopped by a usage limit partway); the two review fixes (title box, stair-step sky
   clip), the celestial fade curve and the tests were written by the supervisor agent at the user's request.
+
+## Phase 3b notes — day and golden-hour foreground
+
+- `scripts/build_day_art.py` derives two RGBA plates from the night painting, offline (Pillow + NumPy; the renderer
+  never needs NumPy). Alpha is exactly the plate's ground mask, so the sky stays the renderer's.
+- Per region (feathered polygons in plate pixels): moonlit blues become foliage green, workshop wood, van khaki,
+  grey metal for the telescope and rover, grey stone for the rock; the far band (mountains, city, far trees) keeps its
+  blue and fades into haze, and its city lights are off. Lamp-lit wood, the lanterns, screens and neon keep their own
+  colours. A shadow floor stops pure black from reading as night.
+- Renderer: golden plate fades in from -5 to +1 degrees and out from +8 to +14; the day plate fades in from +4 to +14
+  and is drawn over golden. Only plates with non-zero opacity are embedded. The twilight lift fades out as plates come in.
+- The sunrise sky overlay is a little deeper (-0.8 deg top 0.86, +4 deg 0.97) so the painted Milky Way does not show
+  through a sunlit sky.
+- Size: a live SVG with a day plate is 8.7 MB as PNG. The WebP re-encode (amendment 2) is part of Phase 10.
+- This is a derived relight, not a new painting; a hand-painted day plate can replace the files without code changes.

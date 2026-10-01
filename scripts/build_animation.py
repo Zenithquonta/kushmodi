@@ -988,7 +988,10 @@ HORIZON_Y = 690            # the plate's distant horizon (mountain and city line
 SUN_RADIUS = 22
 SUN_VISIBLE_ALT = -2       # degrees; below this the disc is never drawn
 SUN_PIXEL = 4              # sun centre and rings snap to this grid for a pixel-art look
-FOREGROUND_LIFT = (.34, (170, 190, 225))   # opacity at full daylight, colour
+FOREGROUND_LIFT = (.34, (170, 190, 225))   # twilight lift on the night ground, gone once the day plates are in
+# Foreground plates derived from the night painting by scripts/build_day_art.py; (sun altitude, opacity) keys.
+GOLDEN_KEYS = [(-5, 0), (1, 1), (8, 1), (14, 0)]
+DAY_KEYS = [(4, 0), (14, 1)]
 SKY_THRESHOLD = .55        # a band pixel joins the sky when brighter than this share of its column's sky above
 TITLE_OUTLINE = '#050c1c'  # dark pixel outline that keeps the painted name legible on a bright sky
 # (sun altitude, top rgb, top opacity, horizon rgb, horizon opacity), interpolated linearly in between.  Both
@@ -997,8 +1000,8 @@ TITLE_OUTLINE = '#050c1c'  # dark pixel outline that keeps the painted name legi
 SKY_KEYS = [(-18, (8, 14, 40), 0, (12, 30, 70), 0),
             (-12, (14, 26, 78), .04, (30, 64, 140), .38),
             (-6, (26, 52, 128), .32, (74, 104, 176), .78),
-            (-.8, (54, 98, 186), .74, (190, 150, 160), .92),
-            (4, (68, 124, 210), .92, (238, 208, 178), .98),
+            (-.8, (54, 98, 186), .86, (190, 150, 160), .92),
+            (4, (68, 124, 210), .97, (238, 208, 178), .98),
             (12, (66, 138, 226), 1, (166, 208, 246), 1),
             (30, (52, 124, 220), 1, (150, 200, 245), 1)]
 CELESTIAL_FADE = (-14, -4)  # sun altitudes (degrees) where faint sky art starts and finishes fading out
@@ -1027,6 +1030,16 @@ def sky_colours(altitude):
     return keys[-1][1:]
 
 
+def _keyed(keys, altitude):
+    """Piecewise-smoothstep value through (altitude, value) keys, flat outside them."""
+    if altitude <= keys[0][0]:
+        return keys[0][1]
+    for (a0, v0), (a1, v1) in zip(keys, keys[1:]):
+        if altitude <= a1:
+            return round(v0+(v1-v0)*_smooth((altitude-a0)/(a1-a0)), 4)
+    return keys[-1][1]
+
+
 def night_factor(altitude):
     """Opacity of stars, galaxies and other faint sky art: full below -14 degrees, gone by -4 (before civil dusk)."""
     return 1-_smooth((altitude-CELESTIAL_FADE[0])/(CELESTIAL_FADE[1]-CELESTIAL_FADE[0]))
@@ -1050,7 +1063,8 @@ def lighting(state):
     light = dict(daylight=daylight, night=round(night_factor(altitude), 4), altitude=altitude, azimuth=azimuth,
                  top=top, top_opacity=top_a, horizon=horizon, horizon_opacity=horizon_a,
                  glow=glow, glow_x=min(max(x, -400), W+400), sun=(x, y) if visible else None,
-                 foreground=FOREGROUND_LIFT[0]*daylight)
+                 plates={'golden': _keyed(GOLDEN_KEYS, altitude), 'day': _keyed(DAY_KEYS, altitude)})
+    light['foreground'] = FOREGROUND_LIFT[0]*daylight*(1-max(light['plates'].values()))
     light['markup'] = lighting_markup(light)
     return light
 
@@ -1064,6 +1078,12 @@ def _png_uri(image):
     buffer = io.BytesIO()
     image.save(buffer, 'PNG', optimize=True)
     return 'data:image/png;base64,'+base64.b64encode(buffer.getvalue()).decode()
+
+
+@functools.lru_cache(maxsize=None)
+def day_plate(name):
+    """Data URI of a derived foreground plate (assets/observatory-<name>.png), loaded only when it is drawn."""
+    return png_uri(f'observatory-{name}.png')
 
 
 @functools.lru_cache(maxsize=1)
@@ -1128,13 +1148,15 @@ def lighting_defs(light):
                     f'stop-opacity="{_num(_mix(light["top_opacity"], light["horizon_opacity"], o**2.2), 3)}"/>'
                     for o in (0, .35, .65, .85, 1))
     warm = _rgb(_mix((255, 112, 118), (255, 196, 122), _smooth((light['altitude']+3)/8)))
+    plates = ''.join(f'<image id="plate-{name}" width="{W}" height="{H}" href="{day_plate(name)}" '
+                     f'xlink:href="{day_plate(name)}"/>' for name, opacity in light['plates'].items() if opacity > 0)
     masks = ''.join(f'<mask id="{name}-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="{W}" height="{H}">'
                     f'<image width="{W}" height="{H}" href="{uri}" xlink:href="{uri}"/></mask>'
                     for name, uri in plate_masks().items())
     return (f'<linearGradient id="sky-grad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="{HORIZON_Y}">{stops}</linearGradient>'
             f'<radialGradient id="sky-glow"><stop offset="0" stop-color="{warm}" stop-opacity="1"/>'
             f'<stop offset=".4" stop-color="{warm}" stop-opacity=".55"/><stop offset="1" stop-color="{warm}" stop-opacity="0"/></radialGradient>'
-            f'{masks}')
+            f'{masks}{plates}')
 
 
 def sun_markup(light):
@@ -1167,6 +1189,11 @@ def lighting_markup(light):
                f'<g data-light="title"><rect width="{W}" height="{H}" fill="{TITLE_OUTLINE}" '
                f'opacity="{_num(min(.9, outline), 4)}" mask="url(#outline-mask)"/>'
                f'<use href="#plate" xlink:href="#plate" mask="url(#glyphs-mask)"/></g>')
+    # Day and golden-hour foregrounds (transparent sky) replace the moonlit ground; day is drawn over golden.
+    for name, opacity in light['plates'].items():
+        if opacity > 0:
+            out += (f'<use data-light="plate-{name}" href="#plate-{name}" xlink:href="#plate-{name}" '
+                    f'opacity="{_num(opacity, 4)}"/>')
     if light['foreground'] > .001:
         out += (f'<rect data-light="foreground" width="{W}" height="{H}" fill="{_rgb(FOREGROUND_LIFT[1])}" '
                 f'opacity="{_num(light["foreground"], 4)}" mask="url(#ground-mask)"/>')
