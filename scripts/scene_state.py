@@ -136,10 +136,24 @@ def scene_state(when, config=None):
             },
         },
         'lighting': {'daylight': round(daylight(sun_alt), 4)},
+        'sky_events': {'meteor_shower': meteor_shower_for(local.date(), cfg)},
         'seed': seed,
         'seed_int': seed_int,
         'renderer_version': cfg['renderer_version'],
     }
+
+
+def meteor_shower_for(d, cfg=None):
+    """Name of the meteor shower whose approximate peak lies within the configured window of date ``d``, else None."""
+    showers = (cfg or load_config()).get('meteor_showers')
+    if not showers:
+        return None
+    for shower in showers['peaks']:
+        month, day = (int(v) for v in shower['peak'].split('-'))
+        for year in (d.year-1, d.year, d.year+1):
+            if abs((date(year, month, day)-d).days) <= showers['window_days']:
+                return shower['name']
+    return None
 
 
 def main():

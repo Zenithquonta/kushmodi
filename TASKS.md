@@ -497,3 +497,19 @@ Advisor review (after first push): CI confirmed green for Phases 4 and 5; July 1
   change to Phase 3/3b output.
 Decision: approve
 ```
+
+### LO-P6 — Daily seed variation (2026-10-01)
+
+```text
+Requested by: user ("yes start phase 6 yourself, don't wait")
+Implemented and reviewed by: supervisor agent (user-selected "Opus 5.5"); approach reviewed by the advisor before coding
+Files: scripts/build_animation.py (seeded plans, routes_for, satellite paths, daily_variation, layer_seed, meteor
+  placement fixes), scripts/scene_state.py (sky_events.meteor_shower), config/observatory.json (approximate shower
+  peaks), scripts/test_daily.py (10 tests), scripts/test_scene_state.py (shape), docs
+Findings during the phase: tail segment unchecked in meteor placement; meteor gaps could exceed 6 s; two guessed
+  airliner variants clipped a fighter (replaced by sweep-checked variants).
+Commands and outcomes: 102 tests pass; quality gate passes; default scene byte-identical to published assets;
+  Chromium vs librsvg on the Geminids night at 7 times: worst cell 0 to 9 px.
+Visual evidence: 10 and 11 Feb 2027 at 23:00, four loop times each.
+Decision: approve
+```

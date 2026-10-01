@@ -179,7 +179,7 @@ class TimeAndSeedTests(unittest.TestCase):
     def test_output_shape(self):
         s = ss.scene_state(datetime(2026, 12, 14, 21, 37, tzinfo=IST), CFG)
         self.assertEqual(set(s), {'date', 'time', 'timezone', 'timestamp_local', 'timestamp_utc', 'season', 'environment',
-                                  'astronomy', 'lighting', 'seed', 'seed_int', 'renderer_version'})
+                                  'astronomy', 'lighting', 'sky_events', 'seed', 'seed_int', 'renderer_version'})
         self.assertEqual(s['renderer_version'], CFG['renderer_version'])
 
 

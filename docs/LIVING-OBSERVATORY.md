@@ -84,7 +84,8 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 3b Day and golden-hour foreground art | done: `scripts/build_day_art.py`, `assets/observatory-day.png` and `-golden.png`, 6 tests |
 | 4 Six-season visuals | done: dry vegetation plate, pixel clouds, monsoon overcast and seeded showers, wet ground and puddles, horizon haze, night visibility; 9 tests |
 | 5 Mumbai skyline, haze and urban glow | done: fixed pixel skyline on both shores, sea link, night windows and blinking aviation lights, sodium glow on the low sky and cloud undersides; 6 tests |
-| 6–14 | pending |
+| 6 Daily seed variation | done: seeded twinkles, meteors, sky crosses, clouds; 4 checked airliner timings and 4 satellite passes; more meteors on approximate shower peaks; 10 tests |
+| 7–14 | pending |
 
 ## Phase 2 implementation notes
 
@@ -174,3 +175,26 @@ amendments that follow from measured facts, open decisions, and phase status.
 - **Sky-mask fix:** the telescope's counterweight arm pokes above SKYLINE and was painted over by the day sky. Its box
   is now measured like the band below; the day, golden and dry plates were rebuilt against the corrected mask.
 - Browser parity (winter night 23:00 and December 17:50, t = 0, 3 and 12 s): worst cell 0 to 10 px (limit 150).
+
+## Phase 6 notes — daily variation
+
+- `daily_variation(state)` derives everything from the daily seed (`kushmodi-YYYY-MM-DD`), never the hour, with an
+  independent seed per layer (`sha256(seed-<layer>)`), so twinkles, meteors, clouds and traffic do not move in lockstep.
+- **Varies:** star twinkle rhythm, phase and sparkle size (the stars themselves are the painted ones); shooting-star
+  times, angles and lengths; the small sky crosses; cloud layout; which of 4 satellite passes; which of 4 airliner
+  timings.
+- **Checked variants, not free randomness:** a sweep of airliner altitude x phase against the traffic tests found only
+  512-518 px safe between the fighters and the skyline while any phase works, so days differ mainly in when the
+  airliner crosses. The explorer and fighters with their warp choreography stay the same every day.
+- **Meteor showers:** `config/observatory.json` lists approximate peaks (Quadrantids 01-03, Perseids 08-12, Geminids
+  12-14) with a +/-1 day window; on those nights 12 meteors run in 2 s slots instead of 6 in 4 s slots.
+  `scene_state` reports it as `sky_events.meteor_shower`.
+- **Fixes found by the seed sweep:** the meteor placement checked the head path and the tail's start, not the tail
+  segment between, so some seeds let a tail cross the name or the lock-on readout; now the whole streak is sampled.
+  The <= 6 s gap between meteors is enforced during placement; the loop is bounded and fails loudly. The published
+  seed passes both, so the default output is unchanged.
+- **Tests (`scripts/test_daily.py`):** every airliner variant reruns the five traffic tests; every satellite pass reruns
+  its test; 40 seeds x {6, 12} meteors rerun the open-sky/reset test; two seeded days rerun the generic SMIL-vs-raster
+  and loop tests; consecutive days differ; defs follow the seeded meteors.
+- Browser parity on the Geminids night (12 meteors) at t = 0, 3, 6, 12, 14.7, 18, 23.9 s: worst cell 0 to 9 px.
+- Cloud layout changed from Phase 4 because clouds now use their own layer seed.

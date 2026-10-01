@@ -8,6 +8,15 @@
   },
   "year_window": {"start": "2026-10-01", "end": "2027-10-01"},
   "renderer_version": "1.0.0",
+  "meteor_showers": {
+    "note": "Approximate annual peak dates; a shower counts as active one day either side of its peak.",
+    "window_days": 1,
+    "peaks": [
+      {"name": "Quadrantids", "peak": "01-03"},
+      {"name": "Perseids", "peak": "08-12"},
+      {"name": "Geminids", "peak": "12-14"}
+    ]
+  },
   "seasons": [
     {"id": "vasanta", "name": "Vasanta", "start": "02-19",
      "target": {"greenery": 0.45, "ground_wetness": 0.15, "haze": 0.45, "cloud_density": 0.15, "night_visibility": 0.65, "urban_glow": 0.60}},

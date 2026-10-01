@@ -353,6 +353,23 @@ ROUTES = [
     # Airliner stays in open sky and dissolves before the workshop roof and right-hand trees.
     _route('airplane', 'airplane', 142, [(-200, 518)], [(1180, 1), (1330, 0)], -200, 1830, 24, .23),
 ]
+# Daily variants of the airliner (altitude, phase); index 0 is the published route. Every variant passes the same
+# traffic tests as ROUTES (open sky, clear of the name, the finder and the other craft). A sweep found only 512-518 px
+# safe between the fighters and the skyline, while any phase works, so the days differ mainly in when it crosses.
+# The warp ships stay fixed: their choreography is tuned against each other.
+AIRLINER_VARIANTS = [(518, .23), (512, .53), (518, .71), (512, .89)]
+
+
+def routes_for(variant):
+    """ROUTES with the airliner on one of its checked daily variants (0 is ROUTES itself)."""
+    return ROUTES if variant == 0 else _airliner_routes(variant)
+
+
+@functools.lru_cache(maxsize=None)
+def _airliner_routes(variant):
+    y, phase = AIRLINER_VARIANTS[variant]
+    plane = _route('airplane', 'airplane', 142, [(-200, y)], [(1180, 1), (1330, 0)], -200, 1830, 24, phase)
+    return [plane if route['id'] == 'airplane' else route for route in ROUTES]
 
 
 def _stretch_box(box, nose, sx):
@@ -372,10 +389,10 @@ def _unshift(box, x, y):
     return _shift(box, -x, -y)
 
 
-def traffic_state(t):
-    """Pure description of every traffic object at time t (seconds)."""
+def traffic_state(t, routes=None):
+    """Pure description of every traffic object at time t (seconds); ``routes`` defaults to ROUTES."""
     states = []
-    for route in ROUTES:
+    for route in routes or ROUTES:
         u = (t/route['period']+route['phase']) % 1
         x = route['start']+(route['end']-route['start'])*u
         y = _interp(route['y_keys'], u)
@@ -515,9 +532,10 @@ def _ship_markup(route, t, animated):
     return f'<g opacity="{ship.value_text(t)}">{ship.smil("opacity") if animated else ""}{body}</g>'
 
 
-def traffic(t, animated, night=None):
+def traffic(t, animated, night=None, routes=None):
     parts = []
-    for route, state in zip(ROUTES, traffic_state(t)):
+    routes = routes or ROUTES
+    for route, state in zip(routes, traffic_state(t, routes)):
         motion = fade = ''
         if animated:
             # Position breakpoints are the y_keys; x is linear in u so it needs no extra keys.
@@ -755,8 +773,8 @@ def lock_on(t, animated):
     return ''.join(parts)
 
 
-def sky_details(t, animated):
-    rng=random.Random(29)
+def sky_details(t, animated, seed=29):
+    rng=random.Random(seed)
     parts=[]
     for i in range(32):
         x,y=rng.randint(20,1650),rng.randint(18,500)
@@ -839,10 +857,12 @@ def _wave(u, phase2):
     return .75*math.sin(a)+.25*math.sin(2*a+2*math.pi*phase2)
 
 
-@functools.lru_cache(maxsize=1)
-def twinkle_plan():
-    """Per star: position, colours, sparkle size and its dim/flare opacity tracks (12 keyframes per period)."""
-    rng = random.Random(41)
+@functools.lru_cache(maxsize=4)
+def twinkle_plan(seed=41):
+    """Per star: position, colours, sparkle size and its dim/flare opacity tracks (12 keyframes per period).
+
+    The stars are always the painted ones; the seed only changes their rhythm, phase and sparkle size."""
+    rng = random.Random(seed)
     plan = []
     for x, y, big, tint, sky in bright_stars():
         period = rng.choice([3, 4, 6] if big else [1.5, 2, 3])
@@ -857,17 +877,17 @@ def twinkle_plan():
     return plan
 
 
-def twinkle_defs():
+def twinkle_defs(seed=41):
     return ''.join(f'<radialGradient id="tw{k}"><stop offset="0" stop-color="{sky}"/><stop offset=".55" stop-color="{sky}" stop-opacity=".95"/>'
                    f'<stop offset="1" stop-color="{sky}" stop-opacity="0"/></radialGradient>'
-                   for k, (*_, sky, _arm, _dim, _flare) in enumerate(twinkle_plan()))
+                   for k, (*_, sky, _arm, _dim, _flare) in enumerate(twinkle_plan(seed)))
 
 
-def twinkles(t, animated):
+def twinkles(t, animated, seed=41):
     """Each painted star alternately fades toward the surrounding sky and flares into a small pixel sparkle."""
     anim = lambda track: track.smil('opacity') if animated else ''
     dims, flares = [], []
-    for k, (x, y, big, tint, sky, arm, dim, flare) in enumerate(twinkle_plan()):
+    for k, (x, y, big, tint, sky, arm, dim, flare) in enumerate(twinkle_plan(seed)):
         r = 7 if big else 4.5
         diag = arm*.45
         dims.append(f'<g opacity="{dim.value_text(t)}">{anim(dim)}<circle cx="{x}" cy="{y}" r="{r}" fill="url(#tw{k})"/></g>')
@@ -882,14 +902,23 @@ METEOR_COUNT = 6  # one per four-second slot, so something streaks by about ever
 METEOR_BRIGHT = 3  # slot index of the one big, bright shooting star
 
 
-@functools.lru_cache(maxsize=1)
-def meteor_plan():
-    """Shooting stars at irregular times, angles and lengths whose whole path and tail stay in open sky."""
-    rng = random.Random(7)
+METEOR_SHOWER_COUNT = 12  # on a meteor shower's peak nights: one per two-second slot
+METEOR_ATTEMPTS = 500
+METEOR_GAP = 6  # seconds
+
+
+@functools.lru_cache(maxsize=4)
+def meteor_plan(seed=7, count=METEOR_COUNT):
+    """Shooting stars at irregular times, angles and lengths whose whole path and tail stay in open sky.
+
+    The loop is cut into ``count`` equal slots with one meteor each, finished (and reset) inside the cycle."""
+    rng = random.Random(seed)
+    slot_length = PERIOD/count
+    latest = min(.65*slot_length, slot_length-1.25)
     plan = []
-    for slot in range(METEOR_COUNT):
-        while True:
-            start = slot*4+rng.uniform(0, 2.6)
+    for slot in range(count):
+        for _ in range(METEOR_ATTEMPTS):
+            start = slot*slot_length+rng.uniform(0, latest)
             duration = rng.uniform(.7, 1.15)
             x0, y0 = rng.uniform(60, 1640), rng.uniform(15, 330)
             side, heading = rng.choice([1, -1]), math.radians(rng.uniform(18, 42))
@@ -897,10 +926,18 @@ def meteor_plan():
             dx, dy = side*math.cos(heading)*travel, math.sin(heading)*travel
             tail = rng.uniform(110, 190) if slot != METEOR_BRIGHT else 240
             ux, uy = dx/travel, dy/travel
-            points = [(x0+dx*i/20, y0+dy*i/20) for i in range(21)]+[(x0-ux*tail, y0-uy*tail)]
-            if all(0 < px < W and py < 540 and not quiet(px, py, 18) for px, py in points):
+            # Every point the head or tail ever covers lies on one segment: from the tail behind the start to the end.
+            reach = tail+travel
+            points = [(x0-ux*tail+ux*reach*i/40, y0-uy*tail+uy*reach*i/40) for i in range(41)]
+            # never more than METEOR_GAP seconds without a meteor, including across the loop's wrap
+            gap = start-(plan[-1][0] if plan else start)
+            wrap = plan[0][0]+PERIOD-start if plan and slot == count-1 else 0
+            if gap <= METEOR_GAP and wrap <= METEOR_GAP and \
+                    all(0 < px < W and py < 540 and not quiet(px, py, 18) for px, py in points):
                 plan.append((start, duration, x0, y0, dx, dy, tail, slot == METEOR_BRIGHT))
                 break
+        else:
+            raise RuntimeError(f'no open-sky path for meteor slot {slot} with seed {seed}')
     return plan
 
 
@@ -916,9 +953,9 @@ def meteor_tracks(start, duration, x0, y0, dx, dy):
     return fade, move
 
 
-def meteor_defs():
+def meteor_defs(seed=7, count=METEOR_COUNT):
     parts = []
-    for k, (_, _, _, _, dx, dy, tail, _) in enumerate(meteor_plan()):
+    for k, (_, _, _, _, dx, dy, tail, _) in enumerate(meteor_plan(seed, count)):
         length = math.hypot(dx, dy)
         ux, uy = dx/length, dy/length
         parts.append(f'<linearGradient id="mt{k}" gradientUnits="userSpaceOnUse" x1="{-ux*tail:.1f}" y1="{-uy*tail:.1f}" x2="0" y2="0">'
@@ -927,9 +964,9 @@ def meteor_defs():
     return ''.join(parts)
 
 
-def meteors(t, animated):
+def meteors(t, animated, seed=7, count=METEOR_COUNT):
     parts = []
-    for k, (start, duration, x0, y0, dx, dy, tail, bright) in enumerate(meteor_plan()):
+    for k, (start, duration, x0, y0, dx, dy, tail, bright) in enumerate(meteor_plan(seed, count)):
         length = math.hypot(dx, dy)
         ux, uy = dx/length, dy/length
         width = 4 if bright else 3
@@ -945,19 +982,21 @@ def meteors(t, animated):
 
 
 SATELLITE = ((-20, 34), (1700, 104))  # enters and leaves off canvas
+# Daily variants (index 0 is the published pass); all cross left to right above y 120, clear of the name.
+SATELLITE_PATHS = [SATELLITE, ((-20, 96), (1700, 26)), ((-20, 58), (1700, 114)), ((-20, 112), (1700, 44))]
 
 
-def satellite_tracks():
-    (x0, y0), (x1, y1) = SATELLITE
+def satellite_tracks(path=SATELLITE):
+    (x0, y0), (x1, y1) = path
     at = lambda s: (x0+(x1-x0)*s/23.8, y0+(y1-y0)*s/23.8)
     move = Track.timeline([(0, at(0)), (23.8, at(23.8)), (PERIOD, at(0))], at(0), digits=2)
     fade = Track.timeline([(0, 0), (.6, 1), (23.2, 1), (23.8, 0)], 0)
     return fade, move
 
 
-def satellite(t, animated):
+def satellite(t, animated, path=SATELLITE):
     """A slow satellite gliding across the top of the sky once per loop; it returns while invisible."""
-    fade, move = satellite_tracks()
+    fade, move = satellite_tracks(path)
     return (f'<g data-sky="satellite" opacity="{fade.value_text(t)}">{fade.smil("opacity") if animated else ""}'
             f'<g transform="translate({move.value_text(t)})">{move.smil("transform", "translate") if animated else ""}'
             '<circle r="4" fill="#d9f4ff" opacity=".2"/><rect x="-1.5" y="-1.5" width="3" height="3" fill="#e9f8ff"/></g></g>')
@@ -971,14 +1010,19 @@ def night_group(name, markup, night):
 def layers(t, animated, light=None):
     """All animated layers.  ``light`` (see ``lighting``) adds the sky overlay and fades the celestial ones."""
     night = None if light is None else light['night']
+    day = DEFAULT_DAY if light is None else light['day']
     overlay = '' if light is None else light['markup']
     weather = '' if light is None else light['weather']
     showers = '' if light is None else rain(t, animated, light)
     city = '' if light is None else light['city']+city_beacons(t, animated, light)
-    return (night_group('twinkles', twinkles(t, animated), night)+overlay
-            +night_group('celestial', celestial(t, animated), night)+night_group('satellite', satellite(t, animated), night)
-            +weather+city+('' if light is None else light['title'])+traffic(t, animated, night)+night_group('sky-details', sky_details(t, animated), night)
-            +night_group('meteors', meteors(t, animated), night)+showers+workshop(t, animated))
+    return (night_group('twinkles', twinkles(t, animated, day['twinkles']), night)+overlay
+            +night_group('celestial', celestial(t, animated), night)
+            +night_group('satellite', satellite(t, animated, SATELLITE_PATHS[day['satellite']]), night)
+            +weather+city+('' if light is None else light['title'])
+            +traffic(t, animated, night, routes_for(day['airliner']))
+            +night_group('sky-details', sky_details(t, animated, day['crosses']), night)
+            +night_group('meteors', meteors(t, animated, day['meteors'], day['meteor_count']), night)
+            +showers+workshop(t, animated))
 
 
 # ---------------------------------------------------------------------------
@@ -1232,6 +1276,7 @@ def season(light, state):
     env = state['environment']
     light['env'] = env
     light['seed'] = state['seed_int']
+    light['day'] = daily_variation(state)
     visibility = VISIBILITY_FLOOR+(1-VISIBILITY_FLOOR)*env['night_visibility']
     light['night'] = round(light['night']*visibility, 4)
     light['overcast'] = OVERCAST[2]*_smooth((env['cloud_density']-OVERCAST[0])/(OVERCAST[1]-OVERCAST[0]))
@@ -1244,6 +1289,26 @@ def season(light, state):
     light['city'] = city_markup(light)+city_glow(light)
     light['weather'] = season_markup(light)
     return light
+
+
+DEFAULT_DAY = dict(twinkles=41, meteors=7, crosses=29, satellite=0, airliner=0, meteor_count=METEOR_COUNT)
+
+
+def layer_seed(seed, name):
+    """An independent seed per layer, so twinkles, meteors, clouds and traffic do not move in lockstep."""
+    import hashlib
+    return int(hashlib.sha256(f'{seed}-{name}'.encode()).hexdigest()[:12], 16)
+
+
+def daily_variation(state):
+    """Phase 6: what changes from one day to the next, all from the daily seed (the hour plays no part)."""
+    seed = state['seed']
+    shower = (state.get('sky_events') or {}).get('meteor_shower')
+    return dict(twinkles=layer_seed(seed, 'twinkles'), meteors=layer_seed(seed, 'meteors'),
+                crosses=layer_seed(seed, 'crosses'),
+                satellite=layer_seed(seed, 'satellite') % len(SATELLITE_PATHS),
+                airliner=layer_seed(seed, 'airliner') % len(AIRLINER_VARIANTS),
+                meteor_count=METEOR_SHOWER_COUNT if shower else METEOR_COUNT, shower=shower)
 
 
 def shower(state, env):
@@ -1358,7 +1423,7 @@ def season_markup(light):
              _colour_for(light, night_tones[2], _mix((184, 194, 210), (90, 98, 112), grey), (150, 96, 124)))
     # One path per tone, so neighbouring cells merge without anti-aliased seams; later clouds cover earlier ones.
     clouds = ''
-    for box, puffs in cloud_shapes(light['seed'], density):
+    for box, puffs in cloud_shapes(layer_seed(light['seed'], 'clouds'), density):
         paths = ['', '', '']
         for gy, runs in cloud_cells(box, puffs):
             for x0, x1, tone in runs:
@@ -1562,7 +1627,8 @@ def scene(t=0, animated=False, embedded=True, state=None):
            '<defs>',
            f'<image id="atlas" width="1536" height="1024" href="{ATLAS}" xlink:href="{ATLAS}"/>']
     light=None if state is None else lighting(state)
-    parts+=[feather_defs(),twinkle_defs(),meteor_defs()]+([] if light is None else [lighting_defs(light)])
+    day=DEFAULT_DAY if light is None else light['day']
+    parts+=[feather_defs(),twinkle_defs(day['twinkles']),meteor_defs(day['meteors'],day['meteor_count'])]+([] if light is None else [lighting_defs(light)])
     parts+=['</defs>',
             f'<image id="plate" width="{W}" height="{H}" href="{BACKGROUND}" xlink:href="{BACKGROUND}"/>']
     if animated:
