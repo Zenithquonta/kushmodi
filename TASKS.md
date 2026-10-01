@@ -14,7 +14,7 @@ States: `pending → assigned → implementing → ready_for_review → done`. A
 | T05 | Verify actual GitHub README interactions | done | Render on GitHub after push, verify picture fallback, image links, section anchors and details. GitHub README must not depend on JavaScript, image maps or iframe controls. |
 | T06 | Browser-test and refine the local interactive preview | done | At desktop and mobile widths, check inline SVG playback, pause/resume, keyboard focus, clickable scene areas, mission panels, reduced-motion behavior and no horizontal overflow. Save screenshots/evidence. |
 | T07 | Align SVG and GIF animation timings | done | The same scene functions render both versions, but some workshop SMIL motion interpolates linearly while raster frames use sine. Review resulting differences and make them intentional or identical. Compare selected times and the wrap at 24 seconds. |
-| T08 | Optimize size without damaging the approved look | pending | Current GIF: 1000×563, 240 frames at 10fps, 24s, 11,744,470 bytes. Review 840/1000px and 8/10/12fps tradeoffs if needed. Prefer one accepted version, no noisy blur or flickering palettes. Document final output dimensions, bytes, duration and tool versions. |
+| T08 | Optimize size without damaging the approved look | done | Current GIF: 1000×563, 240 frames at 10fps, 24s, 11,744,470 bytes. Review 840/1000px and 8/10/12fps tradeoffs if needed. Prefer one accepted version, no noisy blur or flickering palettes. Document final output dimensions, bytes, duration and tool versions. |
 | T02-R1 | Fix traffic clip, overlap and foreground crossings found in T02 | done |  Explorer hard-clipped at x=574 (t≈14.7); fighters overlap explorer and trees (t≈0/23.9); airplane crosses right trees/workshop roof (t≈15.6). Route geometry/fades only. |
 | T02-R2 | Register the CAD cube to the painted cube; moons pass behind the planet | done | Found in T01 (double cube in every frame) and the known moon-occlusion item. |
 | T13 | Animated mission cards + fourth Rover Bay card (user-approved addition) | done | Subtle SMIL card motion with static <picture> fallbacks; 2x2 card grid. |
@@ -296,4 +296,22 @@ Visual evidence: supervisor inspected the 2x2 animated sheet, 390px table and re
 Decision: approve
 Remaining caveats: GitHub's handling of <source media> inside the card table follows the hero's (verified in T05)
   but the new table itself is verified after publication.
+```
+
+### T08 — GIF size (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: delegated coder agent (user-selected "Sonnet 5.5")
+Attempt: 1
+Files changed: scripts/build_animation.py (GIF_WIDTH=840 default for --width/rasterize; bayer_scale 3->5; comment)
+Commands and outcomes: 16 encoder variants measured from shared frames (scratchpad/t08/metrics.csv).
+  A 1000px/10fps/bayer3 11,336,782 B (reproduces published); 840px/10fps/bayer5 8,075,059 B (-28.8%);
+  8fps only -18%; sierra2_4a +109% and flickers; stats_mode=diff +8% and worse error; diff_mode=rectangle,
+  new=0 byte-identical (muxer already emits sub-rectangles); gifsicle -O3 -0.13%.
+  Static-region inter-frame MAD 0.000 for all Bayer variants; 23 tests pass.
+Visual evidence: supervisor inspected 1000px vs 840px vs source resampled to GitHub's ~830px display width:
+  lettering and telescope indistinguishable; 840px is ~1:1 at display size.
+Decision: approve
+Remaining caveats: fewer source pixels for high-DPI zoom; assets regenerated after T14 scene additions.
 ```

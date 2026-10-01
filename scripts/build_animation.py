@@ -17,6 +17,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / 'assets'
 W, H, PERIOD = 1672, 941, 24
+GIF_WIDTH = 840  # GitHub shows the hero at about 830px, so 1000px frames only add bytes
 RECTS = {
     'galaxy': ((0, 45, 510, 545), (300, 328)),
     'planet': ((512, 190, 522, 315), (784, 346)),
@@ -451,7 +452,7 @@ def scene(t=0, animated=False, embedded=True):
     return result
 
 
-def rasterize(svg_path,png_path,width=1000):
+def rasterize(svg_path,png_path,width=GIF_WIDTH):
     subprocess.run(['ffmpeg','-v','error','-threads','1','-width',str(width),'-i',str(svg_path),
                     '-frames:v','1','-threads','1','-y',str(png_path)],check=True)
 
@@ -472,10 +473,20 @@ def export_gif(fps,width):
                 if i%fps==0:
                     print(f'Rendered {i}/{count} frames',flush=True)
         # A single fixed palette avoids flickering colors across this pixel scene.
+        # Settings chosen from measured T08 experiments (same rendered frames, only the encoder varied):
+        # - stats_mode=full beats diff: diff weights only moving pixels, so the static background is
+        #   quantised worse (about 1.4x the error against the source frames) and the file grows ~8%.
+        # - Ordered Bayer dither is position-locked, so static areas never crawl between frames; error
+        #   diffusion (sierra2_4a) added flicker and doubled the file. bayer_scale=5 keeps the finer,
+        #   less visible texture and a slightly smaller file than scale 3; dither=none was rejected
+        #   because it risks banding in the sky gradients for almost no extra saving.
+        # - FFmpeg's GIF muxer already writes changed-rectangle frames, so diff_mode=rectangle and
+        #   gifsicle -O3 gain nothing. The real size lever is resolution: 840px (about the 830px
+        #   GitHub shows it at) is ~28% smaller than 1000px with no visible loss at display size.
         subprocess.run(['ffmpeg','-v','error','-framerate',str(fps),'-i',str(temp/'frame-%04d.png'),
                         '-vf','palettegen=max_colors=256:stats_mode=full','-frames:v','1','-threads','1','-y',str(temp/'palette.png')],check=True)
         subprocess.run(['ffmpeg','-v','error','-framerate',str(fps),'-i',str(temp/'frame-%04d.png'),
-                        '-i',str(temp/'palette.png'),'-lavfi','paletteuse=dither=bayer:bayer_scale=3',
+                        '-i',str(temp/'palette.png'),'-lavfi','paletteuse=dither=bayer:bayer_scale=5',
                         '-loop','0','-threads','1','-y',str(ASSETS/'observatory.gif')],check=True)
         shutil.copyfile(temp/'frame-0000.png',ASSETS/'observatory-poster.png')
     print(f'GIF exported: {(ASSETS/"observatory.gif").stat().st_size:,} bytes',flush=True)
@@ -485,7 +496,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--gif',action='store_true')
     parser.add_argument('--fps',type=int,default=10)
-    parser.add_argument('--width',type=int,default=1000)
+    parser.add_argument('--width',type=int,default=GIF_WIDTH)
     args=parser.parse_args()
     (ASSETS/'observatory.svg').write_text(scene(animated=True))
     (ASSETS/'poster.svg').write_text(scene(0,False))
