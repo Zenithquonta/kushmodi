@@ -8,6 +8,10 @@
   },
   "year_window": {"start": "2026-10-01", "end": "2027-10-01"},
   "renderer_version": "1.0.0",
+  "live": {
+    "note": "Public host of the VPS live view (deploy/install.sh). null keeps the README on the repo-hosted animation.",
+    "host": null
+  },
   "archive": {
     "note": "Daily frames: day at local solar noon, night at a fixed local time; WebP in archive/YYYY/.",
     "day_time": "solar_noon",

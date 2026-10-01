@@ -1,9 +1,11 @@
 <div align="center">
 
+<!-- hero:start -->
 <picture>
   <source media="(prefers-reduced-motion: reduce)" srcset="./assets/observatory-poster.png" />
   <img src="./assets/observatory.gif" width="100%" alt="Kush Modi's pixel observatory: telescope under a galaxy, orbiting moons, passing spacecraft, and an illuminated maker workshop" />
 </picture>
+<!-- hero:end -->
 
 **Astronomy first. Building toward the unexplored.**
 

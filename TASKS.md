@@ -587,3 +587,17 @@ Commands and outcomes: 147 tests pass; quality gate passes; shellcheck clean; sy
 Not verified: GitHub host-key fetch (api.github.com/meta is blocked from this session); a real run on the VPS.
 Decision: approve
 ```
+
+### LO-P12 — README live switch (2026-10-01, prepared, not switched)
+
+```text
+Requested by: user ("yes start phase 12 yourself, don't wait")
+Implemented and reviewed by: supervisor agent (user-selected "Opus 5.5"); approach reviewed by the advisor before coding
+Files: README.md (hero markers only), config/observatory.json (live.host = null), scripts/readme_live.py,
+  scripts/probe_live.py, scripts/quality_gate.py (live mode), scripts/test_readme_live.py (8 tests),
+  docs/LIVE-SWITCH.md, docs
+Commands and outcomes: 155 tests pass; quality gate passes in both modes; live -> repo round trip byte-exact.
+Not done (blocked on the user): the switch itself needs the VPS host, a passing check.sh, burn-in, the branch test on
+  github.com and the user's fallback choice. Probing the host from this session is blocked by its network proxy.
+Decision: approve (preparation)
+```

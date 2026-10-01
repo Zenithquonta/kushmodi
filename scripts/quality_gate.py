@@ -22,9 +22,23 @@ def check(label,fn):
   checks.append({'name':label,'passed':False,'details':str(exc)})
 
 
-def readme():
- text=(ROOT/'README.md').read_text()
+LIVE_HOST=re.compile(r'^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+
+
+def readme(text=None,config=None):
+ text=(ROOT/'README.md').read_text() if text is None else text
+ config=json.loads((ROOT/'config/observatory.json').read_text()) if config is None else config
  decoded=unquote_plus(text)
+ host=(config.get('live') or {}).get('host')
+ external=re.findall(r'(?:src|srcset)="(https?://[^"]+)"',text)
+ if external:
+  assert host and LIVE_HOST.match(host),'README uses an external image but config live.host is not set'
+  allowed={f'https://{host}/live.svg',f'https://{host}/live.png'}
+  assert set(external)<=allowed,f'Unexpected external README image: {sorted(set(external)-allowed)}'
+  for fallback in ('assets/observatory.gif','assets/observatory-poster.png'):
+   assert (ROOT/fallback).is_file(),f'Live mode still needs the repo fallback {fallback}'
+  assert 'href="./assets/observatory.gif"' in text,'Live mode must link the repo animation'
+ assert text.count('<!-- hero:start -->')==text.count('<!-- hero:end -->')==1,'README hero markers missing' 
  assert not re.search(r'clerical|GR\s*Modi|CA Tech Builder|Automation Developer',decoded,re.I),'Removed work references remain'
  for name in re.findall(r'(?:src|srcset)="\./([^"]+)"',text):
   assert (ROOT/name).is_file(),f'Missing README image {name}'

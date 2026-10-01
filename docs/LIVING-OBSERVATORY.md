@@ -90,7 +90,8 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 9 Daily day/night generator | done: `scripts/render_daily.py` (--date/--range), WebP frames at solar noon and 21:00, atomic + locked + idempotent, `archive/index.json`; 7 tests; no frames committed yet |
 | 10 VPS deployment | done in the repo, not yet run on the VPS: compact live SVG (1.7-2.3 MB), `deploy/` (install, update, check, sandboxed systemd timer, Caddy template); 9 tests; Caddy rules verified locally |
 | 11 Daily git sync | done in the repo, not yet run on the VPS: offline archive render at 21:10 IST, separate `obsync` user with a deploy key created on the server, archive-only clone, validated copy + index union, one commit a day; 13 tests incl. a bare-repo end-to-end |
-| 12–14 | pending |
+| 12 README live switch | prepared, not switched: `scripts/readme_live.py` (live/repo/status, byte-exact revert), hero markers in README, gate accepts live mode for the configured host only, `scripts/probe_live.py`, `docs/LIVE-SWITCH.md`; 8 tests. Waiting on the host, check.sh, burn-in, the branch test on github.com, and the user's fallback choice |
+| 13–14 | pending |
 
 ## Phase 2 implementation notes
 
@@ -316,3 +317,19 @@ amendments that follow from measured facts, open decisions, and phase status.
   no code. Unit/config tests, shellcheck and `systemd-analyze verify` pass.
 - Not run on a server yet. Agents working in this repository must fetch and merge before pushing once it is (noted in
   AGENTS.md and HANDOFF.md).
+
+## Phase 12 notes — README live switch (prepared)
+
+- README.md now wraps the hero in `<!-- hero:start -->` / `<!-- hero:end -->` (invisible on GitHub); nothing else in
+  the published README changed. `scripts/readme_live.py live --host H` swaps in the live view (`live.svg`, with
+  `live.png` for reduced motion, and a visible link to the repo animation) and records `live.host` in the config;
+  `repo` restores the current hero byte for byte (tested); hosts must match the install.sh rule.
+- `scripts/quality_gate.py` accepts external hero images only from `https://<live.host>/live.(svg|png)` and, in live
+  mode, still requires the repo animation and poster and the link to them.
+- There is no automatic fallback on GitHub (no `onerror`; `<picture>` picks by media query, not by load success).
+  The choice between "live view as hero with a link back" and "repo animation as hero, live view below it" is the
+  user's; the documented default is a few days of burn-in before switching.
+- `docs/LIVE-SWITCH.md` holds the procedure: check.sh, burn-in, `scripts/probe_live.py HOST` (run from the user's
+  machine or the server; this session's proxy cannot reach arbitrary hosts), then a test on the development branch
+  on github.com: camo serves the SVG and accepts ~2 MB, SMIL runs in `<img>`, reduced motion selects the PNG, and
+  freshness after the 240 s max-age is measured. If the SVG fails, use `live.png` as the image.
