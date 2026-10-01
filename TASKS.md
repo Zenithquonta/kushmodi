@@ -421,3 +421,22 @@ Open: CV contacts (kushsmodi@gmail.com, linkedin.com/in/kushsmodi) differ from R
 User instruction: "use kushmodi@gmail.com". README footer mailto changed from kushmodi13@gmail.com to
 kushmodi@gmail.com. LinkedIn link unchanged (linkedin.com/in/kushmodi) pending user confirmation.
 ```
+
+### LO-P3 — Living Observatory day/night lighting (2026-10-01)
+
+```text
+Reviewed by: supervisor agent (user-selected "Opus 5.5")
+Coder: delegated coder agent (user-selected "Sonnet 5.5") until a usage limit stopped it; at the user's instruction
+  ("do the two fixes yourself") the supervisor agent implemented the remaining fixes and tests.
+Attempt: 1 coder (partial) + supervisor completion
+Files changed: scripts/build_animation.py (lighting, plate_masks, night_factor), scripts/render_live.py,
+  scripts/test_lighting.py (11 tests), docs/LIVING-OBSERVATORY.md
+Review findings on coder partial: dark night box around the title at noon; stair-step night sky above the horizon
+  from the conservative SKYLINE clip; galaxies visible over sunrise/civil-dusk sky.
+Fixes: plate-derived sky/ground/glyph/outline masks; title redrawn with outline; separate celestial fade (-14..-4 deg).
+Commands and outcomes: 70 tests pass; quality gate passes; default scene byte-identical to published SVG/poster;
+  Chromium vs librsvg on a 08:33 day state: worst cell 4 px.
+Visual evidence: supervisor inspected contact sheets for 2026-12-14 and 2027-07-15 (8 times each) and fixed-frame
+  re-renders at 07:08 and 18:14.
+Decision: approve (interim tint; day art still required for a convincing daytime foreground)
+```

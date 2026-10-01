@@ -79,7 +79,7 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 0 Repository audit | done (this file) |
 | 1 Baseline | done: live hero at `569b58b` (GIF/poster/SVG), 34 tests, CI green |
 | 2 SceneState (time, season, astronomy, seed) | done: `scripts/scene_state.py`, `config/observatory.json`, 22 tests; supervisor-verified sunset 14 Dec 2026 18:02 IST independently |
-| 3 Day/night lighting on existing art | in progress |
+| 3 Day/night lighting on existing art | done: optional `state` path in the renderer, pixel-exact plate masks, `scripts/render_live.py`, 11 tests |
 | 4–14 | pending |
 
 ## Phase 2 implementation notes
@@ -98,3 +98,21 @@ amendments that follow from measured facts, open decisions, and phase status.
   `kushmodi-YYYY-MM-DD` (local date); astronomy never reads it.
 - CLI: `python scripts/scene_state.py --at 2026-12-14T21:37:00+05:30` or `--date 2026-12-14` (21:00 local).
 - No visual output changes in this phase.
+
+## Phase 3 notes
+
+- `scene(t, animated, state=...)`: without a state the output is byte-identical to the published assets (tested).
+- Sky overlay (gradient, warm horizon glow, pixel sun) is masked by a **sky mask measured from the plate**: everything
+  above SKYLINE, plus band pixels brighter than 0.55× their column's sky, flood-filled from the top and stopped at the
+  horizon. Trees, telescope, van, roof and mountains occlude the sky pixel for pixel (no stair steps).
+- The painted name is re-drawn above the sky through a **glyph mask** (three text lines detected from cyan pixels)
+  with a dark pixel outline; noon contrast is tested at >= 3:1 on a real rasterized frame.
+- Faint sky art (stars, galaxies, planet, lock-on, meteors, satellite) fades with its own curve: full at <= -14 deg,
+  gone at >= -4 deg sun altitude. Ships stay; airliner nav lights fade by day.
+- Interim look: the foreground is the night plate with a light lift by day. Deliberate day/golden-hour art is still
+  needed for a convincing daytime foreground.
+- `scripts/render_live.py --at ISO --out DIR` writes live.svg/live.png/live.json, validated in a temp dir and moved
+  into place only when all three are valid; a failed render leaves the previous files untouched (tested).
+- Browser parity on a daytime live SVG: worst 167x94 cell 4 px (limit 150).
+- Implementation: coder agent (stopped by a usage limit partway); the two review fixes (title box, stair-step sky
+  clip), the celestial fade curve and the tests were written by the supervisor agent at the user's request.

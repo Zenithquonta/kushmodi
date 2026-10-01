@@ -989,8 +989,8 @@ SUN_RADIUS = 22
 SUN_VISIBLE_ALT = -2       # degrees; below this the disc is never drawn
 SUN_PIXEL = 4              # sun centre and rings snap to this grid for a pixel-art look
 FOREGROUND_LIFT = (.34, (170, 190, 225))   # opacity at full daylight, colour
-TITLE_CARVE_PAD, TITLE_CARVE_BLUR = 24, 16
-SKY_TITLE_KEEP = .22       # fraction of the sky overlay left over the name block so the lettering stays readable
+SKY_THRESHOLD = .55        # a band pixel joins the sky when brighter than this share of its column's sky above
+TITLE_OUTLINE = '#050c1c'  # dark pixel outline that keeps the painted name legible on a bright sky
 # (sun altitude, top rgb, top opacity, horizon rgb, horizon opacity), interpolated linearly in between.  Both
 # opacities never decrease as the sun climbs.  Nautical dusk lifts only the low sky; civil twilight deepens the blue
 # above; by +12 degrees the overlay is opaque, which hides the painted stars and Milky Way.
@@ -1001,6 +1001,7 @@ SKY_KEYS = [(-18, (8, 14, 40), 0, (12, 30, 70), 0),
             (4, (68, 124, 210), .92, (238, 208, 178), .98),
             (12, (66, 138, 226), 1, (166, 208, 246), 1),
             (30, (52, 124, 220), 1, (150, 200, 245), 1)]
+CELESTIAL_FADE = (-14, -4)  # sun altitudes (degrees) where faint sky art starts and finishes fading out
 GLOW_CENTRE_ALT, GLOW_SPREAD, GLOW_PEAK = -1.0, 5.5, .85   # warm band: strongest at sunrise/sunset
 GLOW_RADII = (860, 300)
 
@@ -1026,6 +1027,11 @@ def sky_colours(altitude):
     return keys[-1][1:]
 
 
+def night_factor(altitude):
+    """Opacity of stars, galaxies and other faint sky art: full below -14 degrees, gone by -4 (before civil dusk)."""
+    return 1-_smooth((altitude-CELESTIAL_FADE[0])/(CELESTIAL_FADE[1]-CELESTIAL_FADE[0]))
+
+
 def sun_screen(altitude, azimuth):
     """Scene position of the sun: the view faces due south, east on the left, 60 degrees up reaches y=40."""
     x = W/2+(((azimuth-180+180) % 360)-180)/90*(W/2)
@@ -1041,7 +1047,7 @@ def lighting(state):
     x, y = sun_screen(altitude, azimuth)
     visible = altitude > SUN_VISIBLE_ALT and -60 <= x <= W+60 and y >= -60
     glow = GLOW_PEAK*math.exp(-((altitude-GLOW_CENTRE_ALT)/GLOW_SPREAD)**2)
-    light = dict(daylight=daylight, night=round(1-daylight, 4), altitude=altitude, azimuth=azimuth,
+    light = dict(daylight=daylight, night=round(night_factor(altitude), 4), altitude=altitude, azimuth=azimuth,
                  top=top, top_opacity=top_a, horizon=horizon, horizon_opacity=horizon_a,
                  glow=glow, glow_x=min(max(x, -400), W+400), sun=(x, y) if visible else None,
                  foreground=FOREGROUND_LIFT[0]*daylight)
@@ -1053,8 +1059,66 @@ def _rgb(c):
     return 'rgb(%d,%d,%d)' % tuple(round(v) for v in c)
 
 
-def _sky_polygon():
-    return 'M'+'L'.join(f'{x} {y}' for x, y in [(0, 0), (W, 0)]+SKYLINE[::-1])+'Z'
+def _png_uri(image):
+    import io
+    buffer = io.BytesIO()
+    image.save(buffer, 'PNG', optimize=True)
+    return 'data:image/png;base64,'+base64.b64encode(buffer.getvalue()).decode()
+
+
+@functools.lru_cache(maxsize=1)
+def plate_masks():
+    """Pixel-exact masks measured from the plate: sky, ground (its inverse), name glyphs and their outline.
+
+    Everything above SKYLINE is sky. Below it, sky continues only through pixels brighter than SKY_THRESHOLD times
+    that column's sky just above SKYLINE, flood-filled from the top and stopped at the horizon, so trees, the
+    telescope, the van, the roof and the darker mountains stay out. Returns PNG data URIs (white = selected).
+    """
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter
+    plate = Image.open(ASSETS/'observatory-background.png').convert('RGB')
+    lum = plate.convert('L')
+    px = lum.load()
+    threshold = Image.new('L', (W, H), 0)
+    draw = ImageDraw.Draw(threshold)
+    for x in range(W):
+        top = int(_interp_pts(SKYLINE, x))
+        above = sorted(px[x, y] for y in range(max(0, top-40), max(1, top-4)))
+        draw.line([(x, 0), (x, H)], fill=max(12, round(SKY_THRESHOLD*above[len(above)//2])))
+    passable = ImageChops.subtract(lum, threshold).point(lambda v: 255 if v > 0 else 0)
+    fill = ImageDraw.Draw(passable)
+    fill.polygon([(0, 0), (W, 0)]+[(x, y) for x, y in SKYLINE[::-1]], fill=255)
+    fill.rectangle([0, HORIZON_Y+10, W, H], fill=0)
+    ImageDraw.floodfill(passable, (W//2, 2), 128)
+    sky = passable.point(lambda v: 255 if v == 128 else 0).convert('1')
+    # Name glyphs: the three painted text lines are found from their cyan pixels (rows with several of them, grouped
+    # into lines, x-extent trimmed of stray stars); every bright pixel inside a line box belongs to the lettering,
+    # including the white letter cores. The outline is the glyphs grown by two pixels.
+    x0, y0, x1, y1 = TEXT_RECT
+    rgb = plate.load()
+    cyan = {(x, y) for x in range(x0, x1) for y in range(y0, y1)
+            if px[x, y] > 110 and (rgb[x, y][1]+rgb[x, y][2])/2 > rgb[x, y][0]+20}
+    rows = sorted({y for _, y in cyan if sum(1 for x in range(x0, x1) if (x, y) in cyan) >= 6})
+    lines, start = [], None
+    for prev, y in zip([None]+rows, rows):
+        if prev is None or y-prev > 3:
+            if start is not None:
+                lines.append((start, prev))
+            start = y
+    if start is not None:
+        lines.append((start, rows[-1]))
+    lines = [(top, bottom) for top, bottom in lines if bottom-top >= 4]   # a lone row of bright stars is not text
+    glyphs = Image.new('L', (W, H), 0)
+    out = glyphs.load()
+    for top, bottom in lines:
+        xs = sorted(x for x, y in cyan if top <= y <= bottom)
+        left, right = xs[len(xs)//100], xs[-1-len(xs)//100]
+        for x in range(left-2, right+3):
+            for y in range(top-2, bottom+3):
+                if px[x, y] > 90:
+                    out[x, y] = 255
+    outline = glyphs.filter(ImageFilter.MaxFilter(5))
+    return dict(sky=_png_uri(sky), ground=_png_uri(ImageChops.invert(sky.convert('L')).convert('1')),
+                glyphs=_png_uri(glyphs.convert('1')), outline=_png_uri(outline.convert('1')))
 
 
 def lighting_defs(light):
@@ -1064,20 +1128,13 @@ def lighting_defs(light):
                     f'stop-opacity="{_num(_mix(light["top_opacity"], light["horizon_opacity"], o**2.2), 3)}"/>'
                     for o in (0, .35, .65, .85, 1))
     warm = _rgb(_mix((255, 112, 118), (255, 196, 122), _smooth((light['altitude']+3)/8)))
-    x0, y0, x1, y1 = TEXT_RECT
-    carve = (x0-TITLE_CARVE_PAD, y0-TITLE_CARVE_PAD, x1-x0+2*TITLE_CARVE_PAD, y1-y0+2*TITLE_CARVE_PAD)
-    pad = 3*TITLE_CARVE_BLUR
-    masks = ''.join(
-        f'<mask id="{name}" maskUnits="userSpaceOnUse" x="0" y="0" width="{W}" height="{H}">'
-        f'<rect width="{W}" height="{H}" fill="#fff"/><rect x="{carve[0]}" y="{carve[1]}" width="{carve[2]}" height="{carve[3]}" '
-        f'fill="#000" opacity="{1-keep}" filter="url(#title-blur)"/></mask>'
-        for name, keep in (('title-carve-sky', SKY_TITLE_KEEP), ('title-carve-sun', 0)))
+    masks = ''.join(f'<mask id="{name}-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="{W}" height="{H}">'
+                    f'<image width="{W}" height="{H}" href="{uri}" xlink:href="{uri}"/></mask>'
+                    for name, uri in plate_masks().items())
     return (f'<linearGradient id="sky-grad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="{HORIZON_Y}">{stops}</linearGradient>'
             f'<radialGradient id="sky-glow"><stop offset="0" stop-color="{warm}" stop-opacity="1"/>'
             f'<stop offset=".4" stop-color="{warm}" stop-opacity=".55"/><stop offset="1" stop-color="{warm}" stop-opacity="0"/></radialGradient>'
-            f'<clipPath id="sky-clip"><path d="{_sky_polygon()}"/></clipPath>'
-            f'<filter id="title-blur" filterUnits="userSpaceOnUse" x="{carve[0]-pad}" y="{carve[1]-pad}" width="{carve[2]+2*pad}" height="{carve[3]+2*pad}">'
-            f'<feGaussianBlur stdDeviation="{TITLE_CARVE_BLUR}"/></filter>{masks}')
+            f'{masks}')
 
 
 def sun_markup(light):
@@ -1085,7 +1142,7 @@ def sun_markup(light):
     colour = _rgb(_mix((255, 150, 70), (255, 246, 206), _smooth((light['altitude']-2)/22)))
     halo = ''.join(f'<circle cx="{x}" cy="{y}" r="{r}" fill="{colour}" opacity="{o}"/>'
                    for r, o in ((92, .10), (68, .14), (48, .2), (34, .32)))
-    return (f'<g data-sun="disc" mask="url(#title-carve-sun)">{halo}'
+    return (f'<g data-sun="disc">{halo}'
             f'<circle cx="{x}" cy="{y}" r="{SUN_RADIUS}" fill="{colour}"/>'
             f'<circle cx="{x}" cy="{y}" r="{SUN_RADIUS-8}" fill="#fffbe6" opacity=".7"/></g>')
 
@@ -1095,17 +1152,24 @@ def lighting_markup(light):
     gx, gr = light['glow_x'], GLOW_RADII
     sky = ''
     if light['top_opacity'] > 0 or light['horizon_opacity'] > 0:
-        sky += f'<g data-light="sky" mask="url(#title-carve-sky)"><rect width="{W}" height="{HORIZON_Y+8}" fill="url(#sky-grad)"/></g>'
+        sky += f'<rect data-light="sky" width="{W}" height="{HORIZON_Y+10}" fill="url(#sky-grad)"/>'
     if light['glow'] > .005:
-        sky += (f'<g mask="url(#title-carve-sky)"><ellipse data-light="glow" cx="{_num(gx, 1)}" cy="{HORIZON_Y+30}" rx="{gr[0]}" ry="{gr[1]}" '
-                f'fill="url(#sky-glow)" opacity="{_num(light["glow"], 4)}"/></g>')
+        sky += (f'<ellipse data-light="glow" cx="{_num(gx, 1)}" cy="{HORIZON_Y+30}" rx="{gr[0]}" ry="{gr[1]}" '
+                f'fill="url(#sky-glow)" opacity="{_num(light["glow"], 4)}"/>')
     if light['sun']:
         sky += sun_markup(light)
-    out = f'<g data-light="sky-group" clip-path="url(#sky-clip)">{sky}</g>' if sky else ''
+    out = ''
+    if sky:
+        # The plate's own silhouettes occlude the sky pixel for pixel; the painted name is redrawn on top with a
+        # dark pixel outline whose strength follows how much sky now sits behind it.
+        outline = max(light['top_opacity'], light['glow'])
+        out = (f'<g data-light="sky-group" mask="url(#sky-mask)">{sky}</g>'
+               f'<g data-light="title"><rect width="{W}" height="{H}" fill="{TITLE_OUTLINE}" '
+               f'opacity="{_num(min(.9, outline), 4)}" mask="url(#outline-mask)"/>'
+               f'<use href="#plate" xlink:href="#plate" mask="url(#glyphs-mask)"/></g>')
     if light['foreground'] > .001:
-        edge = 'M'+'L'.join(f'{x} {y}' for x, y in SKYLINE+[(W, H), (0, H)])+'Z'
-        out += (f'<path data-light="foreground" d="{edge}" fill="{_rgb(FOREGROUND_LIFT[1])}" '
-                f'opacity="{_num(light["foreground"], 4)}"/>')
+        out += (f'<rect data-light="foreground" width="{W}" height="{H}" fill="{_rgb(FOREGROUND_LIFT[1])}" '
+                f'opacity="{_num(light["foreground"], 4)}" mask="url(#ground-mask)"/>')
     return out
 
 
