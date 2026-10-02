@@ -713,3 +713,15 @@ Supervisor review: diff read; full suite rerun independently -> exit 0, Ran 226 
   Sputnik on-this-day beat, edge-on Saturn eyepiece, reticle positions 23:30-04:00). Animated SVG 1.84 MB.
 Decision: approve
 ```
+
+### Queue (2026-10-02)
+
+```text
+LO-P15e  Artificial satellites: ISS (25544), Hubble (20580), Tiangong (48274). Server fetches TLEs (CelesTrak,
+         every 12 h, validated like weather.py); renderer computes real passes over Mumbai (sgp4/skyfield, no network
+         at render time); SAT TRACK screen page, log beats, animated real pass track when one is due. Coder subagent.
+LO-P16   3D explorable portfolio website on the VPS (see AGENTS.md "Living Observatory website"). Design doc first,
+         then milestones: M1 walkable observatory reading live.json; M2 project stations from README; M3 shared story
+         beats in live.json. Coder subagent; supervisor verifies in headless Chromium.
+```
+

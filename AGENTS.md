@@ -52,3 +52,24 @@ No unrequested email, Slack, comments to third parties, site deployment, or publ
 Once the VPS archive sync is installed, `main` receives one commit a day ("Archive YYYY-MM-DD", author
 "Observatory archive", only files under `archive/`). Always fetch and merge `origin/main` before pushing; never
 force-push or rewrite those commits. Do not edit `archive/` by hand: the VPS is its only writer.
+
+## Living Observatory website (Phase 16, authorized 2026-10-02)
+
+The user asked for "a website for the same UI but better storytelling ... like a creative portfolio", where "the UI
+will be 3D where I can move in the website like a browser-based game", hosted on their VPS (answer: "Your VPS"),
+with content: "Everything that I have told you previously like my CV, excluding the GR Modi part, my hobbies like
+astronomy, innovation, technology, all my projects that I have developed with you". This supersedes the earlier
+"no site deployment" scope for this one site only:
+
+- Location: `site/` in this repository, served as static files by Caddy at https://observatorysky.duckdns.org/
+  (the existing live.svg/png/json stay as they are). Static files only; no server code, uploads or user input.
+- Content source of truth: the approved README.md sections plus this Living Observatory project itself. The T15
+  exclusions still apply (employer/clerical work, Modi Fintelli pending the user's decision, Apps Script/VBA/
+  Workspace automation, web scraping, TradingView, Model UN). README contacts only. Never invent achievements.
+- Must keep a plain readable HTML fallback (no WebGL, reduced motion, screen readers) and touch controls.
+
+## Delegation (user instruction 2026-10-02)
+
+"Use the delegation method to execute all tasks: Sonnet 5.5 codes and Opus tests / advisor Opus." The supervisor
+delegates implementation to a coder subagent requested with the runtime's `sonnet` model option (the exact model
+version cannot be confirmed from inside the session) and reviews, tests and approves; the advisor reviews plans.
