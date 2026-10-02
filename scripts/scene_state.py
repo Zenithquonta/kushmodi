@@ -6,6 +6,7 @@ astronomy never reads it. Sun and moon come from astronomy-engine for the config
 """
 import argparse
 from datetime import date, datetime, time, timedelta, timezone
+import functools
 import hashlib
 import json
 import math
@@ -111,6 +112,8 @@ def scene_state(when, config=None, weather=None):
     midnight = _ae_time(datetime.combine(local.date(), time(0), tz).astimezone(timezone.utc))
     sun = ae.Body.Sun
     seed, seed_int = seed_for(local.date())
+    night = (local-timedelta(hours=NIGHT_TURNOVER_HOURS)).date()   # 'tonight': from 06:00 on, the coming night
+    loc_key = (loc['latitude'], loc['longitude'], loc['elevation_m'], loc['timezone'])
 
     return {
         'date': local.date().isoformat(),
@@ -126,9 +129,12 @@ def scene_state(when, config=None, weather=None):
                      'phase_angle_deg': round(illum.phase_angle, 3),  # 0 = full, 180 = new
                      'illuminated_fraction': round(illum.phase_fraction, 4),
                      'waxing': ae.MoonPhase(t) < 180},
-            'planets': {body.name: {'altitude_deg': alt, 'azimuth_deg': az,
-                                    'magnitude': round(ae.Illumination(body, t).mag, 2)}
+            'planets': {body.name: dict({'altitude_deg': alt, 'azimuth_deg': az,
+                                         'magnitude': round(ae.Illumination(body, t).mag, 2)},
+                                        **planet_facts(body, t, observer), **night_events(body.name, night, loc_key))
                         for body in PLANETS for alt, az in [_horizon(body, t, observer)]},
+            'moon_times': night_events('Moon', night, loc_key),
+            'jupiter_moons': jupiter_moons(t),
             'local_sidereal_time_hours': round((ae.SiderealTime(t) + loc['longitude'] / 15) % 24, 4),
             'altitude_by_hour': altitude_by_hour(local.date(), tz, observer),   # for the shed's tracking screen
             'twilight': twilight_label(sun_alt),
@@ -156,7 +162,54 @@ def altitude_by_hour(local_date, tz, observer):
             for name, body in (('sun', ae.Body.Sun), ('moon', ae.Body.Moon))}
 
 
-PLANETS = (ae.Body.Mercury, ae.Body.Venus, ae.Body.Mars, ae.Body.Jupiter, ae.Body.Saturn)
+def planet_facts(body, t, observer):
+    """Where a planet is among the constellations (IAU boundaries) and how far away it is, right now."""
+    eq = ae.Equator(body, t, observer, False, True)   # J2000, as the constellation boundaries need
+    where = ae.Constellation(eq.ra, eq.dec)
+    return {'constellation': where.name, 'constellation_symbol': where.symbol,
+            'distance_au': round(ae.GeoVector(body, t, True).Length(), 3)}
+
+
+def jupiter_moons(t):
+    """Io, Europa, Ganymede and Callisto as seen from Earth: offsets from Jupiter in arcseconds (east, north)."""
+    jupiter = ae.GeoVector(ae.Body.Jupiter, t, True)
+    seen_at = t.AddDays(-jupiter.Length()*AU_LIGHT_SECONDS/86400)   # the moons as they were when the light left
+    centre = ae.EquatorFromVector(jupiter)
+    moons = ae.JupiterMoons(seen_at)
+    out = {}
+    for name in ('io', 'europa', 'ganymede', 'callisto'):
+        m = getattr(moons, name)
+        eq = ae.EquatorFromVector(ae.Vector(jupiter.x+m.x, jupiter.y+m.y, jupiter.z+m.z, t))
+        east = (eq.ra-centre.ra)*15*math.cos(math.radians(centre.dec))*3600
+        out[name.capitalize()] = [round(east, 1), round((eq.dec-centre.dec)*3600, 1)]
+    return out
+
+
+AU_LIGHT_SECONDS = 499.005
+NIGHT_TURNOVER_HOURS = 6
+OPPOSITION_LOOKBACK_DAYS = 30
+
+
+@functools.lru_cache(maxsize=64)
+def night_events(name, night, loc_key):
+    """Rise and set after local noon on ``night`` (the coming night from 06:00 on; local ISO times or None), and
+    for the outer planets the nearest opposition (the last 30 days, else the next one). Cached per night: the
+    values only change from one night to the next."""
+    lat, lon, elevation, zone = loc_key
+    tz = ZoneInfo(zone)
+    observer = ae.Observer(lat, lon, elevation)
+    body = getattr(ae.Body, name)
+    noon = _ae_time(datetime.combine(night, time(12), tz).astimezone(timezone.utc))
+    out = {'rise': _local(ae.SearchRiseSet(body, observer, ae.Direction.Rise, noon, 1), tz),
+           'set': _local(ae.SearchRiseSet(body, observer, ae.Direction.Set, noon, 1), tz)}
+    if name in OUTER_PLANETS:
+        out['opposition'] = _local(ae.SearchRelativeLongitude(body, 0, noon.AddDays(-OPPOSITION_LOOKBACK_DAYS)), tz)
+    return out
+
+
+OUTER_PLANETS = ('Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune')
+PLANETS = (ae.Body.Mercury, ae.Body.Venus, ae.Body.Mars, ae.Body.Jupiter, ae.Body.Saturn, ae.Body.Uranus,
+           ae.Body.Neptune)
 
 
 def meteor_shower_for(d, cfg=None):

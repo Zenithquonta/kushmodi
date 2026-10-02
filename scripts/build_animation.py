@@ -1113,7 +1113,7 @@ def layers(t, animated, light=None):
             +night_group('satellite', satellite(t, animated, SATELLITE_PATHS[day['satellite']]), night)
             +('' if light is None else light['bodies'])+weather
             +('' if light is None else lightning(t, animated, light))+city+('' if light is None else light['title'])
-            +('' if light is None else advisory(t, animated, light))
+            +('' if light is None else advisory(t, animated, light)+story_panel(t, animated, light))
             +traffic(t, animated, night, flying_routes(day['airliner'], light))
             +night_group('sky-details', sky_details(t, animated, day['crosses']), night)
             +night_group('meteors', meteors(t, animated, day['meteors'], day['meteor_count']), night)
@@ -1441,6 +1441,7 @@ def season(light, state):
     light['city'] = city_markup(light)+city_glow(light)
     light['weather'] = season_markup(light)
     light['bodies'] = sky_bodies(light, state)
+    light['story'] = story_beats(state, light)
     return light
 
 
@@ -1926,7 +1927,8 @@ MOON_CELL = 2
 MOONLIGHT = (.2, (150, 172, 214))         # night ground lift at a full moon overhead, colour
 DAY_MOON = .55                            # opacity of the pale daytime moon
 PLANET_COLOURS = dict(Mercury=(232, 222, 210), Venus=(255, 250, 232), Mars=(255, 156, 112),
-                      Jupiter=(255, 238, 208), Saturn=(240, 222, 172))
+                      Jupiter=(255, 238, 208), Saturn=(240, 222, 172), Uranus=(190, 236, 240), Neptune=(150, 180, 255))
+NAKED_EYE_LIMIT = 5.0   # fainter planets (Uranus, Neptune) are tracked on the screen but not drawn in the sky
 
 
 def _vector(alt, az):
@@ -2008,17 +2010,29 @@ def planet_visibility(magnitude, sun_altitude):
     return _smooth((limit-sun_altitude)/3)
 
 
-def planets_markup(light, state):
-    sun_alt = state['astronomy']['sun']['altitude_deg']
+def planet_place(light, astronomy, name):
+    """(x, y, visibility) where a planet is drawn in the sky, or None when it is not drawn."""
+    body = astronomy.get('planets', {}).get(name)
+    if body is None:
+        return None
     visibility = VISIBILITY_FLOOR+(1-VISIBILITY_FLOOR)*light['env']['night_visibility']
+    seen = planet_visibility(body['magnitude'], astronomy['sun']['altitude_deg'])*visibility
+    if body['magnitude'] > NAKED_EYE_LIMIT or body['altitude_deg'] <= 0 or seen < .02 or \
+            not in_view(body['altitude_deg'], body['azimuth_deg']):
+        return None
+    x, y = (round(v) for v in sun_screen(body['altitude_deg'], body['azimuth_deg']))
+    if not (0 < x < W and y > 0):
+        return None
+    return x, y, seen
+
+
+def planets_markup(light, state):
     out = ''
     for name, body in state['astronomy'].get('planets', {}).items():
-        seen = planet_visibility(body['magnitude'], sun_alt)*visibility
-        if body['altitude_deg'] <= 0 or seen < .02 or not in_view(body['altitude_deg'], body['azimuth_deg']):
+        place = planet_place(light, state['astronomy'], name)
+        if place is None:
             continue
-        x, y = (round(v) for v in sun_screen(body['altitude_deg'], body['azimuth_deg']))
-        if not (0 < x < W and y > 0):
-            continue
+        x, y, seen = place
         size = 8 if body['magnitude'] < -3 else 6 if body['magnitude'] < -1 else 4   # readable at 840 px
         colour = _rgb(PLANET_COLOURS[name])
         out += (f'<g data-planet="{name.lower()}" opacity="{_num(seen, 4)}">'
@@ -2247,7 +2261,7 @@ STORM_SURGE = 1.0                  # a thunderstorm's surge: every light dips to
 
 # The wall screen (painted blueprint) cycles: sun tracking, moon tracking, then the painted blueprint again.
 SCREEN = (1506, 641, 1633, 728)
-SCREEN_PAGES = (('sun', 0.0, 8.0), ('moon', 8.0, 16.0))   # the blueprint shows 16..24
+SCREEN_PAGES = (('sun', 0.0, 6.0), ('moon', 6.0, 12.0), ('planets', 12.0, 18.0))   # the blueprint shows 18..24
 SCREEN_FADE = .25
 SCREEN_COLOURS = dict(back='#03101a', text='#a8f8ff', title='#ffc44d', dim='#2a6a7a', sun='#ffd75e', moon='#e8eefc')
 
@@ -2355,8 +2369,28 @@ def _clock(stamp):
     return stamp[11:16] if stamp else '--:--'
 
 
+PLANET_SHORT = dict(Mercury='MER', Venus='VEN', Mars='MAR', Jupiter='JUP', Saturn='SAT', Uranus='URA', Neptune='NEP')
+SCREEN_PLANET_ROWS = 6
+
+
+def planet_rows(astronomy):
+    """One line per planet for the screen: those up first (highest first), then by rise time."""
+    rows = []
+    for name, body in astronomy.get('planets', {}).items():
+        short = PLANET_SHORT.get(name, name[:3].upper())
+        if body['altitude_deg'] > 0:
+            where = body.get('constellation_symbol', '').upper()
+            rows.append(((0, -body['altitude_deg']), f"{short} {round(body['altitude_deg']):>2}\u00b0 {where}".rstrip()))
+        else:
+            rise = body.get('rise')
+            rows.append(((1, rise or '~'), f'{short} RISE {_clock(rise)}'))
+    return [text for _, text in sorted(rows)][:SCREEN_PLANET_ROWS]
+
+
 def screen_lines(page, astronomy):
     """The text of one screen page, built only from computed numbers."""
+    if page == 'planets':
+        return ['PLANET TRACK']+planet_rows(astronomy)
     body = astronomy[page]
     alt, az = round(body['altitude_deg']), round(body['azimuth_deg']) % 360
     lines = [f'{page.upper()} TRACK', f'ALT {alt}° AZ {az}°']
@@ -2418,8 +2452,15 @@ def screen(t, animated, light, astronomy):
             fade = Track.timeline([(end-SCREEN_FADE, 1), (end, 0), (PERIOD-SCREEN_FADE, 0)], 1, digits=3)
         else:
             fade = Track.timeline([(start-SCREEN_FADE, 0), (start, 1), (end-SCREEN_FADE, 1), (end, 0)], 0, digits=3)
-        body = astronomy[page]
         parts = [f'<rect x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" fill="{c["back"]}" opacity=".94"/>']
+        if page == 'planets':
+            for i, text in enumerate(screen_lines(page, astronomy)):
+                d, _, _ = pixel_text(text, x0+5, y0+5+i*12, cell=2)
+                parts.append(f'<path d="{d}" fill="{c["title"] if i == 0 else c["text"]}"/>')
+            out += (f'<g data-screen="{page}" opacity="{fade.value_text(t)}">{fade.smil("opacity") if animated else ""}'
+                    +''.join(parts)+'</g>')
+            continue
+        body = astronomy[page]
         for i, text in enumerate(screen_lines(page, astronomy)):
             y = y0+5 if i == 0 else y1-30+(i-1)*13
             d, _, _ = pixel_text(text, x0+5, y, cell=2)
@@ -2569,6 +2610,134 @@ def robot(t, animated, light):
                f'opacity="{_num(.45*dark, 3)}"/></g>')
     return ''.join(out)
 
+
+# ---------------------------------------------------------------------------
+# Phase 15d: the observatory log. Two story beats per loop (0-12 s and 12-24 s) in the hologram panel under the
+# name, chosen by scripts/story.py from the real sky, weather and season; severe weather's advisory takes the panel
+# instead. A beat about a planet that is drawn in the sky also puts a tracking reticle on it.
+# ---------------------------------------------------------------------------
+STORY_BOX = ADVISORY_BOX
+STORY_SWAP = 12.0
+STORY_FADE = .4
+STORY_COLOURS = dict(frame='#5ef2ff', head='#4fb3c4', title='#ffc44d', text='#a8f8ff', back='#04141f')
+INSET = (STORY_BOX[2]-50, STORY_BOX[1]+80, 34)   # eyepiece centre x, y and radius
+INSET_TEXT_LIMIT = STORY_BOX[2]-96               # text must end left of the eyepiece
+RETICLE = (12, 5)                                # half size and arm length of the planet reticle
+LOCK_TARGET_BOX = (LOCK_CORE[0]-LOCK_HALF-LOCK_ARM, LOCK_CORE[1]-LOCK_HALF-LOCK_ARM, LOCK_CORE[0]+LOCK_HALF+LOCK_ARM,
+                   LOCK_CORE[1]+LOCK_HALF+LOCK_ARM)   # the galaxy's own lock-on reticle
+RETICLE_AVOID = ('TEXT_RECT', 'LOCK_READOUT_BOX', 'LOCK_BOX', 'LOCK_TARGET_BOX', 'STORY_BOX')
+
+
+def story_beats(state, light):
+    import story
+    extras = dict(mood=mood(light), flicker=bool(light_events(light)), grounded=bool(grounded(light)))
+    context = story.context(state, dict(light, **extras))
+    return story.choose(context, layer_seed(light['seed'], f'story-{light.get("slot", 0)}'))
+
+
+def story_fades():
+    """Opacity tracks of the first and second beat: the first shows at t=0 (the still frame)."""
+    first = Track.timeline([(STORY_SWAP-STORY_FADE, 1), (STORY_SWAP, 0), (PERIOD-STORY_FADE, 0)], 1, digits=3)
+    second = Track.timeline([(STORY_SWAP-STORY_FADE, 0), (STORY_SWAP, 1), (PERIOD-STORY_FADE, 1)], 0, digits=3)
+    return first, second
+
+
+def _eyepiece(kind, name, astronomy):
+    cx, cy, r = INSET
+    c = STORY_COLOURS
+    out = (f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#01070c" opacity=".9"/>'
+           f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{c["frame"]}" stroke-width="2" opacity=".7"/>')
+    if kind == 'moon':
+        moon = astronomy['moon']
+        return out+_moon_disc(cx-1, cy-1, moon['illuminated_fraction'], moon['waxing'], r=8, cell=3)
+    colour = _rgb(PLANET_COLOURS.get(name, (220, 220, 220)))
+    if kind == 'saturn':   # the rings are close to edge-on in 2025-2027: a thin bright line across the globe
+        globe = [(cx-9+dx, cy-8+dy, 2, 2) for dx in range(0, 18, 2) for dy in range(0, 16, 2)
+                 if (dx-8)**2/81+(dy-7)**2/64 <= 1]
+        return (out+f'<path d="{_boxes(globe)}" fill="{colour}"/>'
+                f'<path d="{_boxes([(cx-9, cy-3, 18, 2)])}" fill="#b89a62" opacity=".7"/>'
+                f'<path d="{_boxes([(cx-25, cy-1, 50, 2)])}" fill="#f4e6c0"/>')
+    if kind == 'jupiter':
+        globe = [(cx-7+dx, cy-7+dy, 2, 2) for dx in range(0, 14, 2) for dy in range(0, 14, 2)
+                 if (dx-6)**2+(dy-6)**2 <= 42]
+        out += (f'<path d="{_boxes(globe)}" fill="{colour}"/>'
+                f'<path d="{_boxes([(cx-7, cy-3, 14, 2), (cx-7, cy+1, 14, 2)])}" fill="#c8946a" opacity=".8"/>')
+        moons = astronomy.get('jupiter_moons') or {}
+        reach = max([abs(e) for e, _ in moons.values()]+[1])
+        scale = min(.05, (r-6)/reach)
+        for east, north in moons.values():   # north up, east to the left, as the sky looks
+            mx, my = cx-east*scale, cy-north*scale
+            out += f'<rect x="{_num(mx-1, 1)}" y="{_num(my-1, 1)}" width="2" height="2" fill="#e8eefc"/>'
+        return out
+    return (out+f'<circle cx="{cx}" cy="{cy}" r="9" fill="{colour}" opacity=".25"/>'
+            f'<rect x="{cx-3}" y="{cy-3}" width="6" height="6" fill="{colour}"/>')
+
+
+def _story_page(beat, astronomy):
+    x0, y0, x1, y1 = STORY_BOX
+    c = STORY_COLOURS
+    out = ''
+    for i, text in enumerate(beat['lines']):
+        d, _, _ = pixel_text(text, x0+16, y0+38+i*24)
+        out += f'<path d="{d}" fill="{c["title"] if i == 0 else c["text"]}"/>'
+    if beat['inset']:
+        out += _eyepiece(beat['inset'], beat.get('body'), astronomy)
+    return out
+
+
+def reticle_box(x, y):
+    half = RETICLE[0]
+    return (x-half-2, y-half-2, x+half+2, y+half+2)
+
+
+def reticle_place(light, name):
+    """Where the tracking reticle goes, or None: the planet must be drawn, not behind thick cloud, and the reticle
+    must stay clear of the name, the lock-on readout, its dotted line and the log panel."""
+    if light['overcast'] > .3:
+        return None
+    place = planet_place(light, light['astronomy'], name)
+    if place is None or place[2] < .3:
+        return None
+    box = reticle_box(place[0], place[1])
+    top = skyline_top(box[0], box[2])
+    if box[0] < 0 or box[2] > W or box[1] < 0 or top is None or box[3] > top or \
+            any(overlaps(box, globals()[avoid]) for avoid in RETICLE_AVOID):
+        return None
+    return place[:2]
+
+
+def overlaps(a, b):
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def _reticle(x, y, colour):
+    half, arm = RETICLE
+    d = ''.join(f'M{x+sx*half} {y+sy*(half-arm)}V{y+sy*half}H{x+sx*(half-arm)}' for sx in (-1, 1) for sy in (-1, 1))
+    return f'<path d="{d}" fill="none" stroke="{colour}" stroke-width="2"/>'
+
+
+def story_panel(t, animated, light):
+    beats = light.get('story') or []
+    if not beats or grounded(light):
+        return ''
+    anim = lambda track: track.smil('opacity') if animated else ''
+    x0, y0, x1, y1 = STORY_BOX
+    c = STORY_COLOURS
+    when = f"{int(light['hour']):02d}:{round(light['hour']%1*60):02d}"
+    head, _, _ = pixel_text(f'OBSERVATORY LOG · {when}', x0+16, y0+12)
+    out = (f'<g data-story="log"><rect x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" fill="{c["back"]}" opacity=".55"/>'
+           f'<rect x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" fill="none" stroke="{c["frame"]}" '
+           f'stroke-width="2" opacity=".5"/><path d="{head}" fill="{c["head"]}"/>')
+    pulse = Track.sine(.85, .15, 3)
+    for beat, fade in zip(beats, story_fades()):
+        out += (f'<g data-beat="{beat["id"]}" opacity="{fade.value_text(t)}">{anim(fade)}'
+                +_story_page(beat, light['astronomy']))
+        place = beat['target'] and reticle_place(light, beat['target'])
+        if place:
+            out += (f'<g data-reticle="{beat["target"].lower()}" opacity="{pulse.value_text(t)}">{anim(pulse)}'
+                    +_reticle(place[0], place[1], c['title'])+'</g>')
+        out += '</g>'
+    return out+'</g>'
 
 def feather_defs():
     x, y, w, h = PATCH_TARGET
