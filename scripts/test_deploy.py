@@ -59,7 +59,8 @@ class DeployFiles(unittest.TestCase):
     def test_service_is_sandboxed_and_cannot_reach_the_network(self):
         unit = (DEPLOY/'observatory-live.service').read_text()
         for line in ('User=observatory', 'PrivateNetwork=yes', 'ProtectSystem=strict', 'NoNewPrivileges=yes',
-                     'ReadWritePaths=/var/lib/observatory/live', 'CapabilityBoundingSet=', 'UMask=0022'):
+                     'ReadWritePaths=/var/lib/observatory/live', 'CapabilityBoundingSet=', 'UMask=0022',
+                     'CacheDirectory=observatory'):
             self.assertIn(line, unit)
         self.assertIn('OnCalendar=*:0/5', (DEPLOY/'observatory-live.timer').read_text())
 

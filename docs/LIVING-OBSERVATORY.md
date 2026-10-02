@@ -349,3 +349,13 @@ amendments that follow from measured facts, open decisions, and phase status.
 - The main README does not link the gallery yet: `archive/` does not exist until the first VPS archive commit. Add
   the link together with the Phase 12 switch.
 - Sample output from the 13 scratchpad dates (Phase 9) was reviewed as text.
+
+## Phase 14 notes — polish
+
+- **Render cache:** the input-only steps (plate masks, city mask, bright-star list, compact JPEG/WebP encodings) are
+  cached on disk when `OBSERVATORY_CACHE` or systemd's `CACHE_DIRECTORY` is set (`CacheDirectory=observatory` in the
+  live and archive units). Keys cover this renderer's bytes, the source assets, parameters and Pillow's version;
+  every value read back is validated (data URIs by pattern, the star list by shape) and anything doubtful is
+  recomputed; writes are atomic. Measured here: 18.4 s uncached, 2.4 s warm, byte-identical output; a corrupted
+  entry is recomputed. Off by default, so the default build and CI are unchanged. Tests: `scripts/test_cache.py`.
+

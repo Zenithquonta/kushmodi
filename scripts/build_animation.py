@@ -8,9 +8,12 @@ import argparse
 import base64
 from concurrent.futures import ThreadPoolExecutor
 import functools
+import json
 import math
+import os
 from pathlib import Path
 import random
+import re
 import shutil
 import subprocess
 import tempfile
@@ -819,9 +822,85 @@ def quiet(x, y, pad=0):
     return any(x0-pad <= x <= x1+pad and y0-pad <= y <= y1+pad for x0, y0, x1, y1 in QUIET)
 
 
+# ---------------------------------------------------------------------------
+# Optional disk cache for the slow, input-only steps (masks, star list, compact encodings). Off unless
+# OBSERVATORY_CACHE or systemd's CACHE_DIRECTORY is set, so the default build is untouched. The key covers this file's
+# bytes, the source assets, the parameters and Pillow's version; every value read back is validated, and anything
+# missing or doubtful is recomputed and rewritten (atomically, so concurrent renders are safe).
+# ---------------------------------------------------------------------------
+DATA_URI = re.compile(r'^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$')
+
+
+@functools.lru_cache(maxsize=1)
+def _code_hash():
+    import hashlib
+    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+
+
+def _cache_root():
+    root = os.environ.get('OBSERVATORY_CACHE') or os.environ.get('CACHE_DIRECTORY')
+    return Path(root) if root else None
+
+
+def disk_cached(label, sources, params, compute, check):
+    """compute() unless the cache holds a valid value for exactly these inputs; check() validates and normalises."""
+    root = _cache_root()
+    if root is None:
+        return compute()
+    import hashlib
+    import PIL
+    digest = hashlib.sha256()
+    for part in (label, _code_hash(), PIL.__version__, repr(params)):
+        digest.update(part.encode()+b'\0')
+    for source in sources:
+        digest.update(hashlib.sha256((ASSETS/source).read_bytes()).digest())
+    path = root/f'{label}-{digest.hexdigest()[:32]}.json'
+    try:
+        return check(json.loads(path.read_text()))
+    except (OSError, ValueError, TypeError, KeyError, IndexError):
+        pass
+    text = json.dumps(compute())
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        temp = path.with_name(f'.{path.name}.{os.getpid()}.tmp')
+        temp.write_text(text)
+        os.replace(temp, path)
+    except OSError:
+        pass
+    return check(json.loads(text))   # the same normalised value whether it came from the cache or not
+
+
+def _checked_uri(value):
+    if not (isinstance(value, str) and DATA_URI.match(value)):
+        raise ValueError('not an image data URI')
+    return value
+
+
+def _checked_masks(value):
+    if not isinstance(value, dict) or set(value) != {'sky', 'ground', 'glyphs', 'outline'}:
+        raise ValueError('unexpected mask set')
+    return {name: _checked_uri(uri) for name, uri in value.items()}
+
+
+def _checked_stars(value):
+    stars = []
+    for x, y, big, tint, sky in value:
+        colours = [tuple(int(c) for c in colour) for colour in (tint, sky)]
+        if not (isinstance(x, int) and isinstance(y, int) and isinstance(big, bool)
+                and all(len(c) == 3 and all(0 <= v <= 255 for v in c) for c in colours)):
+            raise ValueError('unexpected star')
+        stars.append((x, y, big, *colours))
+    return stars
+
+
 @functools.lru_cache(maxsize=1)
 def bright_stars():
     """The brightest painted stars of the background plate as (x, y, big, star_rgb, sky_rgb), brightest first."""
+    return disk_cached('bright-stars', ['observatory-background.png'], (TWINKLE_COUNT, TWINKLE_BIG), _bright_stars,
+                       _checked_stars)
+
+
+def _bright_stars():
     from PIL import Image, ImageFilter
     image = Image.open(ASSETS/'observatory-background.png').convert('RGB')
     lum = image.convert('L')
@@ -1150,6 +1229,11 @@ def day_plate(name):
 
 @functools.lru_cache(maxsize=1)
 def plate_masks():
+    """Sky, ground, glyph and outline masks as PNG data URIs (see _plate_masks), cached on disk when enabled."""
+    return disk_cached('plate-masks', ['observatory-background.png'], (), _plate_masks, _checked_masks)
+
+
+def _plate_masks():
     """Pixel-exact masks measured from the plate: sky, ground (its inverse), name glyphs and their outline.
 
     Everything above SKYLINE is sky. Below it, sky continues only through pixels brighter than SKY_THRESHOLD times
@@ -1495,6 +1579,11 @@ CLOUD_UNDERGLOW = .55       # share of the night cloud colour taken from the cit
 
 @functools.lru_cache(maxsize=1)
 def city_mask():
+    """The skyline occlusion mask (see _city_mask), cached on disk when enabled."""
+    return disk_cached('city-mask', ['observatory-background.png'], (), _city_mask, _checked_uri)
+
+
+def _city_mask():
     """White where the skyline may show: far-band pixels that are not near silhouettes (closed to fill highlights)."""
     from PIL import Image, ImageChops, ImageFilter
     lum = Image.open(ASSETS/'observatory-background.png').convert('L')
@@ -1956,6 +2045,10 @@ def compact_sources():
 @functools.lru_cache(maxsize=None)
 def compact_uri(name, quality=COMPACT_QUALITY):
     """A smaller data URI for an asset: JPEG 4:4:4 for opaque use, WebP with lossless alpha otherwise."""
+    return disk_cached('compact', [name], (name, quality), lambda: _compact_uri(name, quality), _checked_uri)
+
+
+def _compact_uri(name, quality):
     import io
     from PIL import Image
     buffer = io.BytesIO()
