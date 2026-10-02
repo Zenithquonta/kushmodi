@@ -59,7 +59,13 @@ if [[ -n "$HOST" ]]; then
     line="$(curl -sS -o /dev/null -w '%{http_code} %{content_type}' "https://$HOST/$name")" || line="unreachable"
     [[ "$line" == 200* ]]; report $? "/$name -> $line" "/$name -> $line"
   done
-  for path in / /index.json /.live-x/ /..%2fetc/passwd; do
+  line="$(curl -sS -o /dev/null -w '%{http_code} %{content_type}' "https://$HOST/")" || line="unreachable"
+  [[ "$line" == 200*text/html* ]]; report $? "/ (the website) -> $line" "/ -> $line (expected 200 text/html)"
+  for path in /js/main.js /vendor/three/three.module.js /data/stars.json /css/site.css; do
+    line="$(curl -sS -o /dev/null -w '%{http_code}' "https://$HOST$path")" || line="unreachable"
+    [[ "$line" == 200 ]]; report $? "$path -> 200" "$path -> $line (expected 200)"
+  done
+  for path in /index.json /.live-x/ /..%2fetc/passwd /data/SOURCES.md /docs/WEBSITE.md /README.md; do
     code="$(curl -sS -o /dev/null -w '%{http_code}' "https://$HOST$path")" || code="unreachable"
     [[ "$code" == 404 ]]; report $? "$path -> 404" "$path -> $code (expected 404)"
   done

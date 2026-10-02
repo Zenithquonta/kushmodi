@@ -9,7 +9,8 @@ serves exactly three files over HTTPS:
 | `https://<your-host>/live.png` | still image of the same moment (840 px) |
 | `https://<your-host>/live.json` | the scene state (time, season, sun, moon, planets) |
 
-Everything else on the host returns 404. The live part never touches GitHub; the README switches to these URLs in
+The same host also serves the Living Observatory website (the `site/` directory of this repository) at `/`, described in
+"The website" below. Everything else on the host returns 404. The live part never touches GitHub; the README switches to these URLs in
 Phase 12. The daily archive (below) is a separate, optional step with its own key.
 
 ## Easiest: one script in Oracle Cloud Shell
@@ -114,6 +115,22 @@ non-archive change and asks before applying it, so a bad push is never run on th
 If you later protect `main` so that changes need a pull request, the archive push will be refused; allow the deploy
 key to bypass the rule or keep `main` unprotected. After 2027-09-30 (the end of the configured year) the daily run
 renders nothing and exits cleanly.
+
+## The website (Phase 16)
+
+`https://<your-host>/` is an explorable 3D version of the observatory with the real sky for Mumbai, built from the
+static files in `site/` (no build step, no server code, no uploads). `deploy/Caddyfile.template` serves only an
+allowlist of paths (`/`, `/index.html`, `/favicon.svg`, `/css/`, `/js/`, `/vendor/`, `/data/`) from
+`/opt/observatory/repo/site` (the `__SITE_ROOT__` placeholder that `install.sh` and `update.sh` fill in), with a strict
+Content-Security-Policy (`default-src 'self'`, no inline script or style), `nosniff`, no referrer and no camera,
+microphone or location permissions. Markdown files are hidden, there is no directory listing, everything else is a 404.
+The `/live.svg`, `/live.png` and `/live.json` block is unchanged, and the page reads `/live.json` for weather and season.
+
+- `update.sh` re-renders the Caddyfile for the host already in `/etc/caddy/Caddyfile` (so servers installed before this
+  change get the website on their next update), validates it with `caddy validate` and reloads Caddy.
+- `check.sh <host>` expects `/` to return 200 `text/html`, its scripts and data 200, and `/data/SOURCES.md`,
+  `/README.md` and other paths 404.
+- The site is about 0.65 MB gzipped. Details, controls and the sky model are in `docs/WEBSITE.md`.
 
 ## Satellites (Phase 15e)
 

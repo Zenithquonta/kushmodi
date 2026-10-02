@@ -82,7 +82,7 @@ say "Caddy for https://$HOST"
 if [[ -f /etc/caddy/Caddyfile && ! -f /etc/caddy/Caddyfile.orig ]] && ! grep -qF "$MARKER" /etc/caddy/Caddyfile; then
   cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.orig   # keep the stock file once
 fi
-sed -e "s|__SITE__|$HOST|" -e "s|__ROOT__|$LIVE|" "$APP/repo/deploy/Caddyfile.template" > /etc/caddy/Caddyfile.new
+sed -e "s|__SITE__|$HOST|" -e "s|__ROOT__|$LIVE|" -e "s|__SITE_ROOT__|$APP/repo/site|" "$APP/repo/deploy/Caddyfile.template" > /etc/caddy/Caddyfile.new
 caddy validate --config /etc/caddy/Caddyfile.new --adapter caddyfile >/dev/null 2>&1 || die "generated Caddyfile is invalid"
 mv /etc/caddy/Caddyfile.new /etc/caddy/Caddyfile
 systemctl enable --quiet caddy
