@@ -2264,7 +2264,9 @@ LIGHT_SHAPES = dict(lamp=('flicker', 'sputter', 'brownout'), tube=('flicker', 's
 STORM_SURGE = 1.0                  # a thunderstorm's surge: every light dips together this long after each strike
 
 # The wall screen (painted blueprint) cycles: sun tracking, moon tracking, then the painted blueprint again.
-SCREEN = (1506, 641, 1633, 728)
+SCREEN_BEZEL = ((1507, 643), (1633, 630), (1633, 730), (1507, 729))   # inside the painted frame (it is in perspective)
+SCREEN = (1510, 646, 1629, 726)    # the content box, inside the bezel's shortest sides
+SCREEN_MARGIN = 3                  # text starts this far in from the content box's left edge
 SCREEN_PAGES = (('sun', 0.0, 5.0), ('moon', 5.0, 10.0), ('planets', 10.0, 15.0), ('sats', 15.0, 20.0))   # the blueprint shows 20..24
 TEXT_PAGES = ('planets', 'sats')   # pages that are lines of text only (no sky plot)
 SCREEN_FADE = .25
@@ -2375,7 +2377,8 @@ def _clock(stamp):
 
 
 PLANET_SHORT = dict(Mercury='MER', Venus='VEN', Mars='MAR', Jupiter='JUP', Saturn='SAT', Uranus='URA', Neptune='NEP')
-SCREEN_PLANET_ROWS = 6
+SCREEN_PLANET_ROWS = 5
+SCREEN_ROW_PITCH = 13   # px between planet rows (10 px glyphs)
 
 
 def planet_rows(astronomy):
@@ -2397,8 +2400,8 @@ SAT_SHORT = dict(ISS='ISS', HUBBLE='HST', TIANGONG='CSS')   # the satellites' na
 
 def screen_fits(text):
     """Whether a line of the wall screen (2-px cells, from its left margin) ends inside the screen."""
-    _, width, _ = pixel_text(text, SCREEN[0]+5, 0, cell=2)
-    return width <= SCREEN[2]-SCREEN[0]-8
+    _, width, _ = pixel_text(text, SCREEN[0]+SCREEN_MARGIN, 0, cell=2)
+    return SCREEN[0]+SCREEN_MARGIN+width <= SCREEN[2]-1
 
 
 def sat_rows(satellites):
@@ -2426,7 +2429,7 @@ def screen_lines(page, astronomy, satellites=None):
         return ['SAT TRACK']+sat_rows(satellites)
     body = astronomy[page]
     alt, az = round(body['altitude_deg']), round(body['azimuth_deg']) % 360
-    lines = [f'{page.upper()} TRACK', f'ALT {alt}° AZ {az}°']
+    lines = [f'{page.upper()} TRACK', f'AZ {az:03d} EL {alt:+d}\u00b0']   # tracking-display style: azimuth, elevation
     if page == 'sun':
         times = astronomy.get('sun_times', {})
         lines.append(f"SETS {_clock(times.get('sunset'))}" if alt > 0 else f"RISES {_clock(times.get('sunrise'))}")
@@ -2485,10 +2488,11 @@ def screen(t, animated, light, astronomy):
             fade = Track.timeline([(end-SCREEN_FADE, 1), (end, 0), (PERIOD-SCREEN_FADE, 0)], 1, digits=3)
         else:
             fade = Track.timeline([(start-SCREEN_FADE, 0), (start, 1), (end-SCREEN_FADE, 1), (end, 0)], 0, digits=3)
-        parts = [f'<rect x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" fill="{c["back"]}" opacity=".94"/>']
+        bezel = 'M'+'L'.join(f'{x} {y}' for x, y in SCREEN_BEZEL)+'z'
+        parts = [f'<path d="{bezel}" fill="{c["back"]}" opacity=".94"/>']
         if page in TEXT_PAGES:
             for i, text in enumerate(screen_lines(page, astronomy, light.get('satellites'))):
-                d, _, _ = pixel_text(text, x0+5, y0+5+i*12, cell=2)
+                d, _, _ = pixel_text(text, x0+SCREEN_MARGIN, y0+3+i*SCREEN_ROW_PITCH, cell=2)
                 parts.append(f'<path d="{d}" fill="{c["title"] if i == 0 else c["text"]}"/>')
             out += (f'<g data-screen="{page}" opacity="{fade.value_text(t)}">{fade.smil("opacity") if animated else ""}'
                     +''.join(parts)+'</g>')
@@ -2496,7 +2500,7 @@ def screen(t, animated, light, astronomy):
         body = astronomy[page]
         for i, text in enumerate(screen_lines(page, astronomy)):
             y = y0+5 if i == 0 else y1-30+(i-1)*13
-            d, _, _ = pixel_text(text, x0+5, y, cell=2)
+            d, _, _ = pixel_text(text, x0+SCREEN_MARGIN, y, cell=2)
             parts.append(f'<path d="{d}" fill="{c["title"] if i == 0 else c["text"]}"/>')
         parts.append(_sky_plot(page, astronomy, light['hour'], x0+6, y0+19, x1-6 if page == 'sun' else x1-30, y1-35))
         if page == 'moon':

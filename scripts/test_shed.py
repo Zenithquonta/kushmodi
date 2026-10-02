@@ -106,8 +106,8 @@ class Screen(unittest.TestCase):
                           for name in scene.SAT_SHORT for direction in ('NW',)}
             for page in ('sun', 'moon', 'planets', 'sats'):
                 for text in scene.screen_lines(page, astronomy, satellites):
-                    _, width, _ = scene.pixel_text(text, x0+5, y0, cell=2)
-                    self.assertLessEqual(x0+5+width, x1-3, text)
+                    _, width, _ = scene.pixel_text(text, x0+scene.SCREEN_MARGIN, y0, cell=2)
+                    self.assertLessEqual(x0+scene.SCREEN_MARGIN+width, x1-1, text)
 
     def test_lines_come_from_the_computed_sky(self):
         light = lit(NIGHT)
@@ -125,6 +125,18 @@ class Screen(unittest.TestCase):
         self.assertAlmostEqual(path['sun'][21], at_nine['sun']['altitude_deg'], delta=.6)
         self.assertAlmostEqual(path['moon'][21], at_nine['moon']['altitude_deg'], delta=.6)
         self.assertEqual(max(range(25), key=path['sun'].__getitem__) in (12, 13), True)   # local noon
+
+    def test_the_content_stays_inside_the_painted_bezel(self):
+        bx = [x for x, _ in scene.SCREEN_BEZEL]
+        by = [y for _, y in scene.SCREEN_BEZEL]
+        x0, y0, x1, y1 = scene.SCREEN
+        left_top, right_top = scene.SCREEN_BEZEL[0][1], scene.SCREEN_BEZEL[1][1]
+        self.assertTrue(min(bx) <= x0 and x1 <= max(bx) and max(left_top, right_top) <= y0 and y1 <= min(by[2:]))
+        astronomy = lit(NIGHT)['astronomy']
+        rows = scene.screen_lines('planets', astronomy)
+        self.assertLessEqual(y0+3+(len(rows)-1)*scene.SCREEN_ROW_PITCH+10, y1)   # 10 px glyphs, every row inside
+        markup = scene.screen(0, False, lit(NIGHT), astronomy)
+        self.assertIn('M'+'L'.join(f'{x} {y}' for x, y in scene.SCREEN_BEZEL)+'z', markup)   # the backing covers the bezel
 
     def test_the_screen_sits_on_the_painted_screen_only(self):
         self.assertFalse(overlap(scene.SCREEN, (scene.PATCH_TARGET[0], scene.PATCH_TARGET[1],

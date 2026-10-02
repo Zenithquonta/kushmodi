@@ -532,8 +532,8 @@ class ScreenPage(unittest.TestCase):
             lines = scene.screen_lines('sats', {}, satellites)
             self.assertEqual(len(lines), 4)
             for text in lines:
-                _, width, _ = scene.pixel_text(text, scene.SCREEN[0]+5, 0, cell=2)   # KeyError: a glyph is missing
-                self.assertLessEqual(scene.SCREEN[0]+5+width, scene.SCREEN[2]-3, (directions, text))
+                _, width, _ = scene.pixel_text(text, scene.SCREEN[0]+scene.SCREEN_MARGIN, 0, cell=2)   # KeyError: a glyph is missing
+                self.assertLessEqual(scene.SCREEN[0]+scene.SCREEN_MARGIN+width, scene.SCREEN[2]-1, (directions, text))
         spaced = scene.screen_lines('sats', {}, self.worst_rows()['S'])
         self.assertEqual(spaced[1], 'ISS 23:59 88° S')   # a one-letter direction keeps its space
         self.assertEqual(scene.screen_lines('sats', {}, self.worst_rows()['NW'])[1], 'ISS 23:59 88°NW')
