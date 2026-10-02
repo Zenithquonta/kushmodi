@@ -253,3 +253,43 @@ The endpoint is a verified, visually reviewed profile and complete handoff in th
 Once the VPS archive sync is installed, `main` receives one commit a day ("Archive YYYY-MM-DD", author
 "Observatory archive", only files under `archive/`). Always fetch and merge `origin/main` before pushing; never
 force-push or rewrite those commits. Do not edit `archive/` by hand: the VPS is its only writer.
+
+## Current state and resume point (updated 2026-10-02, end of session)
+
+Live: README hero is the live SVG from the user's Oracle VPS (https://observatorysky.duckdns.org/live.svg, Caddy,
+15-minute renders, real Mumbai weather from Open-Meteo every 15 min). Phases 13-15d are on `main` with CI green:
+render cache (14), telescope fix, real weather (15a), lightning / grounded-flights hologram / wind meadow (15b), shed
+light flicker, sun/moon/planet tracking screen, reactive rover robot (15c), observatory log story beats, Saturn
+opposition (4 Oct 2026 17:42 IST) eyepiece and reticle, all seven planets and Jupiter's moons in the state (15d), and
+the screen fitted to its painted bezel (fa7216d). Details and evidence: `docs/LIVING-OBSERVATORY.md`, `TASKS.md`.
+
+Delegation (AGENTS.md): a coder subagent (runtime `sonnet` option) implements in a git worktree under
+`.claude/worktrees/` (excluded locally via `.git/info/exclude`); the supervisor reviews, renders, runs Chromium
+parity and mutation checks, merges into `ccr-19e1f533-c4auq1`, pushes to the branch and `main`. Progress logs live in
+the session scratchpad (`coder-15e.log`, `coder-16.log`) and are lost with the container.
+
+Remaining, in order:
+1. **15e satellites** (ISS 25544, Hubble 20580, Tiangong 48274): implemented in worktree
+   `worktree-agent-a7719a9a49049d159` (fetcher `scripts/satellites.py`, systemd units, state key `satellites`, SAT TRACK
+   screen page, story beats, animated real pass track, `scripts/test_satellites.py`, real TLE fixture
+   `scripts/fixtures/celestrak-2026-10-02.tle` from the user's server). Being finished by a coder; then supervisor
+   review (diff, full suite, renders, Chromium parity, mutation check), merge, push, tell the user to run update.sh.
+   If the worktree is gone, redo from this description; the TLE lines are in the fixture section of TASKS.md if saved.
+2. **Real sky in the SVG (user request 2026-10-02)**: remove the rotating galaxies (`celestial` layer) and the ringed
+   planet with moons at top right in live mode; face NORTH (west on the left, east on the right: change
+   `sun_screen`/`in_view` for live states); replace the painted sky in live mode with a real one (Yale Bright Star
+   Catalog stars, d3-celestial Milky Way outline, optional constellation lines; data via
+   `scripts/build_site_data.py` from Phase 16) at real positions; retarget the telescope lock-on to a real object in
+   view. Keep the default fallback scene byte-identical unless the user asks otherwise.
+3. **Phase 16 website** (AGENTS.md "Living Observatory website"): worktree `worktree-agent-ae7fa91f43a57b7d5` has
+   `docs/WEBSITE.md`, `scripts/build_site_data.py` and vendored three.js 0.186.1 / astronomy-engine 2.1.19 (MIT) plus
+   star data; M1 (walkable 3D observatory, real live sky facing north, HUD, touch controls, HTML fallback, Caddy static
+   root with CSP, `scripts/test_site.py`, headless-Chromium screenshots) is not finished. Then M2 (portfolio stations
+   from README) and M3 (shared story beats in live.json).
+4. User on the server: `kill %1 %2` (two update.sh runs were suspended with Ctrl+Z), `jobs`, then
+   `sudo bash /opt/observatory/repo/deploy/update.sh` and `.../check.sh`. Optional: install-archive.sh with a deploy
+   key; regenerate the DuckDNS token; delete the unused `kushsky` domain.
+
+Decisions recorded: LinkedIn is https://www.linkedin.com/in/kush-modi-b85388311; keep Modi Fintelli out; contacts as
+in README; the user prefers terse step lists; check credit usage, the user will say when to wrap up.
+
