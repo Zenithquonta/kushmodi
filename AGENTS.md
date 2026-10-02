@@ -64,7 +64,7 @@ astronomy, innovation, technology, all my projects that I have developed with yo
 - Location: `site/` in this repository, served as static files by Caddy at https://observatorysky.duckdns.org/
   (the existing live.svg/png/json stay as they are). Static files only; no server code, uploads or user input.
 - Content source of truth: the approved README.md sections plus this Living Observatory project itself. The T15
-  exclusions still apply (employer/clerical work, Modi Fintelli pending the user's decision, Apps Script/VBA/
+  exclusions still apply (employer/clerical work, Modi Fintelli (the user said 2026-10-02: keep it out), Apps Script/VBA/
   Workspace automation, web scraping, TradingView, Model UN). README contacts only. Never invent achievements.
 - Must keep a plain readable HTML fallback (no WebGL, reduced motion, screen readers) and touch controls.
 
