@@ -105,7 +105,7 @@ I also build with AI-assisted tools: Cursor, Claude and GitHub Copilot.
 
 <div align="center">
 
-[GitHub](https://github.com/Zenithquonta) · [LinkedIn](https://linkedin.com/in/kushmodi) · [Email](mailto:kushmodi@gmail.com)
+[GitHub](https://github.com/Zenithquonta) · [LinkedIn](https://www.linkedin.com/in/kush-modi-b85388311) · [Email](mailto:kushmodi@gmail.com)
 
 <sub>Look up. Build something. Keep going.</sub>
 

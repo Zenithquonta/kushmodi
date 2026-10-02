@@ -422,6 +422,13 @@ User instruction: "use kushmodi@gmail.com". README footer mailto changed from ku
 kushmodi@gmail.com. LinkedIn link unchanged (linkedin.com/in/kushmodi) pending user confirmation.
 ```
 
+### T16 follow-up — LinkedIn link (2026-10-02)
+
+```text
+User instruction: the LinkedIn link pointed at the wrong person; use
+https://www.linkedin.com/in/kush-modi-b85388311. README footer link changed; nothing else references LinkedIn.
+```
+
 ### LO-P3 — Living Observatory day/night lighting (2026-10-01)
 
 ```text
