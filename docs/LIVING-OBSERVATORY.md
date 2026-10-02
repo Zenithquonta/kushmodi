@@ -489,3 +489,52 @@ All live only (they need a scene state); the default `scene()` stays byte-identi
   - `test_shed.py` fit test covers the planets page.
   - A temporary revert of the fit mechanism makes the fit test fail on `MAG 5.6 · TELESCOPE ONLY`.
   - Browser playback of the log, reticle and screen has not been verified by the coder; it is for the supervisor.
+
+## Phase 15e notes (ISS, Hubble and Tiangong)
+
+- **Data.** `scripts/satellites.py fetch` (the `observatory-satellites.timer`, 03:07 and 15:07 plus two minutes after
+  boot) asks CelesTrak for the two-line elements of the ISS (25544), Hubble (20580) and Tiangong (48274), one request
+  each, a second apart. Every element set is validated like the weather feed: 69-character lines, characters from the
+  TLE alphabet, mod-10 checksums, line numbers, the catalogue number on both lines, an epoch no older than 7 days and
+  no more than a day ahead. Names come from the fixed `SATELLITES` table, never from the feed. The result is
+  `/var/lib/observatory/satellites/tle.json`, written atomically; a satellite that fails keeps its previous entry
+  (dropped after 14 days) and never stops the others. The fetcher is the second and last part that goes online; it
+  runs under the same hardening as the weather fetcher (`ReadWritePaths` limited to its own directory).
+- **Computation.** The renderers stay offline. `satellites.compute()` propagates the stored elements with SGP4
+  (`sgp4` through `skyfield`'s built-in time scale, nothing downloaded; both are in `requirements.txt`), takes the sun
+  from astronomy-engine and models the Earth's shadow as a cylinder. A pass is visible while the satellite is sunlit,
+  above 10 degrees, and the sun is more than 6 degrees below the observer's horizon. The state key `satellites` holds
+  per satellite: now (altitude, azimuth, sunlit, visible, height in km), the epoch, and `next_pass` (start, top and
+  end times, maximum altitude, start and end azimuth with compass directions, and a coarse track sampled every 10 s)
+  for the first visible pass still to end within 24 hours. Missing, stale or invalid elements give `None`, and then
+  the picture, the screen and the log simply have no satellite content. An independent SGP4 + Earth-rotation check in
+  the tests agrees with the computed look angles to within 0.1 degree.
+- **Cost.** Each render is a fresh process, so passes for the two local-noon windows that cover the next 24 hours are
+  cached on disk in `OBSERVATORY_CACHE` / `CACHE_DIRECTORY` (the services' `CacheDirectory=observatory`), keyed by
+  the code and library versions, the element lines, the day and the location, and re-validated when read (the cache
+  is no more trusted than the network). Uncached, one satellite over two windows takes about 0.4 s; a cache hit costs a
+  few milliseconds. Entries older than 4 days are removed.
+- **Screen.** The wall screen cycles SUN TRACK (0-5 s), MOON TRACK (5-10 s), PLANET TRACK (10-15 s), SAT TRACK
+  (15-20 s) and the painted blueprint (20-24 s). The sats page follows the bezel rules of the screen: a title and at
+  most five rows at 13 px pitch from `SCREEN_MARGIN`, ending at or before `SCREEN[2] - 1`. Each row reads
+  `ISS 19:32 68° SW` (start time of the next visible pass, highest point, start direction), `HST --:--` when none is
+  due within a day. If a row would overrun the screen the space before the direction goes (`68°SW`), and if that
+  would still overrun the degree sign goes (`88 NW`); the choice is made once for the whole page. `NO ORBIT DATA`
+  when there are no elements. This supersedes the 6-second pages in the 15d notes.
+- **Log.** A visible pass starting within 90 minutes (or under way) is announced ahead of everything else with its real
+  numbers: `ISS PASS 19:32`, `MAX 68° · SW TO N`, `VISIBLE 4 MIN`, `LOOK UP AFTER DUSK`. It never says "now" or
+  "overhead". Otherwise the beats are an ordinary `NEXT PASS` line and one fact per satellite (the ISS crewed since
+  2000, Hubble in orbit since 1990, Tiangong's orbit height from the computed state).
+- **Pass animation.** When a visible pass overlaps the next 15 minutes, the sky shows a pale dot with a short trail
+  crossing along the real track (the part in view: the south and everything above 60 degrees; the longest run is
+  used), 7 s of each loop from 3 s, with its label (`ISS 19:32`) placed near the start clear of the skyline, the name,
+  the readouts, the log panel and the edges. Nothing is drawn under thick cloud (overcast above 0.3) or when fewer
+  than three track points are in view. The default scene (`observatory.svg`, `poster.svg`) has no state and is
+  byte-identical to before.
+- **Tests.** `scripts/test_satellites.py` (48 tests): element validation (checksums, lengths, epochs, tampering,
+  the 14-day staleness, previous elements kept after a failed download), SGP4 against an independent calculation, the
+  shadow model, pass geometry on a real CelesTrak fixture (`scripts/fixtures/celestrak-2026-10-02.tle`), the screen
+  page fit for every direction, story beats with real times, pass animation against the raster, the label search
+  and the offline `render_live` behaviour. `test_deploy.py` checks the units' sandboxing and wiring.
+- **Not verified by the coder.** Browser playback of the pass dot and the sats page, and a live fetch from
+  CelesTrak on the server (the sandbox only fetched the fixture). The supervisor verifies both.

@@ -65,7 +65,8 @@ def epoch_of(line1):
     if not 1 <= day < 367:
         raise Invalid('epoch day out of range')
     year += 2000 if year < 57 else 1900
-    return datetime(year, 1, 1, tzinfo=timezone.utc)+timedelta(days=day-1)
+    # the 8 decimals of a day are good to a millisecond; whole seconds are plenty and keep the epochs readable
+    return (datetime(year, 1, 1, tzinfo=timezone.utc)+timedelta(days=day-1, milliseconds=500)).replace(microsecond=0)
 
 
 def check_lines(line1, line2, catnr):

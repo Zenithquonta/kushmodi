@@ -275,7 +275,7 @@ class Files(unittest.TestCase):
         self.assertEqual(kept[25544]['line1'], newer[0])
         self.assertEqual(kept[20580]['line1'], HUBBLE[0])
         self.assertEqual(sorted(sat.load(self.out/'tle.json', EPOCH+timedelta(hours=13))), [20580, 25544, 48274])
-        later = sat.store({}, self.out, FETCHED+timedelta(days=16))   # everything older than 14 days drops out
+        later = sat.store({}, self.out, FETCHED+timedelta(days=14))   # what is older than 14 days drops out; the 12 h newer ISS set stays
         self.assertEqual(list(later), [25544])
 
 
@@ -313,6 +313,27 @@ def separation(alt1, az1, alt2, az2):
     return math.degrees(math.acos(min(1.0, float(unit(alt1, az1) @ unit(alt2, az2)))))
 
 
+class RealFixture(unittest.TestCase):
+    """Three element sets downloaded from CelesTrak on 2 Oct 2026 (scripts/fixtures): the real feed's format passes
+    the validation and gives plausible, consistent orbits and passes."""
+    NOW = datetime(2026, 10, 2, 8, 0, tzinfo=UTC)
+
+    def real(self):
+        lines = (Path(__file__).parent/'fixtures'/'celestrak-2026-10-02.tle').read_text().splitlines()
+        return {catnr: sat.parse(('\r\n'.join(lines[i:i+3])+'\r\n').encode(), catnr, self.NOW)
+                for catnr, i in ((25544, 0), (20580, 3), (48274, 6))}
+
+    def test_the_real_feed_is_accepted_and_gives_plausible_orbits(self):
+        found = self.real()
+        self.assertEqual(sorted(found), [20580, 25544, 48274])
+        state = scene_state.scene_state(datetime(2026, 10, 2, 13, 0, tzinfo=UTC), CONFIG, None, found)['satellites']
+        for name, low, high in (('ISS', 380, 450), ('HUBBLE', 450, 560), ('TIANGONG', 370, 420)):
+            self.assertTrue(low <= state[name]['height_km'] <= high, (name, state[name]['height_km']))
+        iss = state['ISS']['next_pass']
+        self.assertEqual(iss['start'][:16], '2026-10-02T18:49')   # a real visible pass, found from the real elements
+        self.assertTrue(10 < iss['max_altitude_deg'] < 90)
+
+
 class Geometry(unittest.TestCase):
     def test_skyfield_agrees_with_an_independent_sgp4_and_earth_rotation(self):
         worst = 0
@@ -329,7 +350,7 @@ class Geometry(unittest.TestCase):
     def test_the_shadow_model(self):
         sun = [1.5e8, 0, 0]
         self.assertFalse(sat.in_sunlight([-7000, 0, 0], sun))        # straight behind the Earth
-        self.assertFalse(sat.in_sunlight([-7000, 6000, 3000], sun))   # behind it, inside the cylinder (off axis 6708)
+        self.assertFalse(sat.in_sunlight([-7000, 5000, 3000], sun))   # behind it, inside the cylinder (off axis 5831)
         self.assertTrue(sat.in_sunlight([-7000, 6400, 0], sun))       # behind it but outside the cylinder (6400 km)
         self.assertTrue(sat.in_sunlight([7000, 0, 0], sun))           # high above the day side
         self.assertTrue(sat.in_sunlight([0, 6900, 0], sun))           # over the terminator, outside the cylinder
@@ -536,7 +557,7 @@ class ScreenPage(unittest.TestCase):
                 self.assertLessEqual(scene.SCREEN[0]+scene.SCREEN_MARGIN+width, scene.SCREEN[2]-1, (directions, text))
         spaced = scene.screen_lines('sats', {}, self.worst_rows()['S'])
         self.assertEqual(spaced[1], 'ISS 23:59 88° S')   # a one-letter direction keeps its space
-        self.assertEqual(scene.screen_lines('sats', {}, self.worst_rows()['NW'])[1], 'ISS 23:59 88°NW')
+        self.assertEqual(scene.screen_lines('sats', {}, self.worst_rows()['NW'])[1], 'ISS 23:59 88 NW')   # no degree sign when it would overrun
 
     def test_the_page_is_in_the_picture_and_off_at_t0(self):
         state = state_at(BEFORE)
@@ -544,7 +565,7 @@ class ScreenPage(unittest.TestCase):
         self.assertIn('data-screen="sats" opacity="0"', markup)
         self.assertEqual(markup.count('data-screen="'), 5)   # the wrapper and four pages
         animated = scene.screen(0, True, scene.lighting(state), state['astronomy'])
-        self.assertIn('values="0;1;1;0;0"', animated.split('data-screen="sats"')[1].split('<rect')[0])
+        self.assertIn('values="0;0;1;1;0;0"', animated.split('data-screen="sats"')[1].split('<path')[0])
         none = scene.screen(0, False, scene.lighting(state_at(BEFORE, {})), state['astronomy'])
         self.assertIn('data-screen="sats"', none)   # without elements the page says so instead of vanishing
 
@@ -570,7 +591,7 @@ class Beats(unittest.TestCase):
         self.assertNotIn('sat-pass-hubble', beats)
         for when in (BEFORE, DURING):   # still announced while it is under way
             self.assertIn('sat-pass-iss', {b['id'] for b in self.sat_beats(when)}, when)
-        self.assertNotIn('sat-pass-iss', {b['id'] for b in self.sat_beats(HOUR_BEFORE-timedelta(minutes=20))})
+        self.assertNotIn('sat-pass-iss', {b['id'] for b in self.sat_beats(HOUR_BEFORE-timedelta(minutes=40))})
         self.assertNotIn('sat-pass-iss', {b['id'] for b in self.sat_beats(AFTER)})
 
     def test_otherwise_the_beats_are_ordinary_and_factual(self):
@@ -672,7 +693,7 @@ class PassAnimation(unittest.TestCase):
         head, tail, fade, label = scene.pass_tracks(plan)
         for point in run:
             self.assertIn(point, set(head.values))
-        self.assertEqual(scene.pass_view([(0, 30, 10), (10, 20, 20), (20, 15, 100)]), [])   # all north and low: nothing
+        self.assertEqual(scene.pass_view([(0, 30, 10), (10, 20, 20), (20, 15, 350)]), [])   # all north and low: nothing
 
     def test_nothing_is_drawn_unless_a_pass_overlaps_the_next_fifteen_minutes(self):
         for when, drawn in ((BEFORE-timedelta(minutes=3), False), (BEFORE-timedelta(minutes=2), True), (BEFORE, True),
@@ -738,7 +759,7 @@ class PassAnimation(unittest.TestCase):
         self.assertGreater(found, 0)
 
     def test_the_label_search_gives_up_cleanly(self):
-        self.assertIsNone(scene.pass_label_place('ISS 19:32', [(5, 5)]))   # a corner under the name: nowhere to stand
+        self.assertIsNone(scene.pass_label_place('ISS 19:32', [(5, 600)]))   # a point behind the skyline: nowhere to stand
         self.assertIsNone(scene.pass_label_place('ISS 19:32', []))
 
     def test_render_live_reads_fresh_elements_and_ignores_stale_ones(self):

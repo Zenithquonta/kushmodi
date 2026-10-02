@@ -2407,7 +2407,8 @@ def screen_fits(text):
 def sat_rows(satellites):
     """One line per satellite: ISS 19:42 67° NW is the start time, highest point and start direction of its next
     visible pass, ISS --:-- none within a day. The degree sign is set against the direction (67°NW) when the
-    spaced form would overrun the screen for any row."""
+    spaced form would overrun the screen for any row,
+    and the degree sign is dropped when even that would."""
     if not satellites:
         return ['NO ORBIT DATA']
     rows = []
@@ -2415,10 +2416,14 @@ def sat_rows(satellites):
         if name in satellites:
             p = satellites[name].get('next_pass')
             rows.append((short, p and (p['start'][11:16], round(p['max_altitude_deg']), p['start_direction'])))
-    text = lambda row, gap: (f'{row[0]} --:--' if not row[1]
-                             else f'{row[0]} {row[1][0]} {row[1][1]}\u00b0{gap}{row[1][2]}')
-    gap = ' ' if all(screen_fits(text(row, ' ')) for row in rows) else ''
-    return [text(row, gap) for row in rows] or ['NO ORBIT DATA']
+    def text(row, form):
+        if not row[1]:
+            return f'{row[0]} --:--'
+        return f'{row[0]} {row[1][0]} {row[1][1]}{form[0]}{form[1]}{row[1][2]}'
+    for form in (('\u00b0', ' '), ('\u00b0', ''), ('', ' ')):   # the last drops the degree sign: 88 NW always fits
+        if all(screen_fits(text(row, form)) for row in rows):
+            break
+    return [text(row, form) for row in rows] or ['NO ORBIT DATA']
 
 
 def screen_lines(page, astronomy, satellites=None):

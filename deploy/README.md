@@ -115,6 +115,17 @@ If you later protect `main` so that changes need a pull request, the archive pus
 key to bypass the rule or keep `main` unprotected. After 2027-09-30 (the end of the configured year) the daily run
 renders nothing and exits cleanly.
 
+## Satellites (Phase 15e)
+
+`observatory-satellites.timer` runs `scripts/satellites.py fetch` at 03:07 and 15:07 (and two minutes after boot) and
+writes the validated orbital elements of the ISS, Hubble and Tiangong to `/var/lib/observatory/satellites/tle.json`.
+Like the weather fetcher it is allowed to use the network but only writes that directory. The live and archive
+renderers stay offline (`PrivateNetwork=yes`) and read the file through `--satellites`; missing or older-than-14-day
+elements just mean no satellites are drawn. `install.sh` and `update.sh` install the units and run a first fetch;
+`check.sh` reports the timer and the age of `tle.json`. The renderers also need the `sgp4` and `skyfield` packages
+from `requirements.txt` (`update.sh` reinstalls them). Check by hand with
+`sudo systemctl start observatory-satellites.service; journalctl -u observatory-satellites.service`.
+
 ## Remove
 
 ```bash

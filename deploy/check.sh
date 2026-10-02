@@ -31,6 +31,15 @@ else
   report 1 "" "no weather yet (journalctl -u observatory-weather.service)"
 fi
 
+echo "satellites"
+systemctl is-active --quiet observatory-satellites.timer; report $? "satellite timer active" "satellite timer not active"
+if [[ -f /var/lib/observatory/satellites/tle.json ]]; then
+  age=$(( $(date +%s) - $(stat -c %Y /var/lib/observatory/satellites/tle.json) ))
+  (( age < 172800 )); report $? "orbital elements fetched ${age}s ago" "orbital elements are ${age}s old (journalctl -u observatory-satellites.service)"
+else
+  report 1 "" "no orbital elements yet (journalctl -u observatory-satellites.service)"
+fi
+
 if id obsync >/dev/null 2>&1; then
   echo "archive"
   systemctl is-active --quiet observatory-archive.timer; report $? "archive timer active" "archive timer not active"
