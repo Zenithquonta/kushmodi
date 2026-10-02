@@ -685,3 +685,31 @@ Decision: approve
 Next: 15d story beats (Saturn opposition 4 Oct).
 ```
 
+
+### LO-P15d — Story beats, planet tracking reticle and planets screen page (2026-10-02)
+
+```text
+Requested by: user (Phase 15d; Saturn opposition 4 Oct)
+Implemented by: supervisor (story library, state facts, panel, reticle, screen page) and coder subagent (fit rule,
+  test_story.py, docs); reviewed by: supervisor
+Changed: scripts/story.py (fit-aware templates: context(fits=), pick(), outer-planet-only oppositions),
+  scripts/build_animation.py (story_fits() measured with the real pixel font, passed to story.context),
+  scripts/test_story.py (new), scripts/test_shed.py (planets page in the fit test and markup check),
+  docs/LIVING-OBSERVATORY.md (Phase 15d notes), TASKS.md.
+Fixed: 11 overflowing lines (NEARS/PAST OPPOSITION titles, IN <CONSTELLATION> · ALT lines, UP IN <CONSTELLATION>
+  titles, MAG n · TELESCOPE ONLY) by ordered alternatives chosen from real glyph widths.
+Evidence: see commands below. Not browser-verified by the coder (pending supervisor).
+Commands and outcomes:
+  python scripts/quality_gate.py -> exit 0 (README, 10 SVGs, GIF 240 frames, atlas all pass).
+  python -m unittest discover -s scripts -p 'test_*.py' -> exit 0, Ran 226 tests in 227.6 s, OK
+    (21 new in test_story.py; test_shed fit test extended to the planets page).
+  default scene check (scene(animated=True) == observatory.svg, scene(0, False) == poster.svg) -> True True.
+  Temporary revert of the fit mechanism made test_story fail (MAG 5.6 · TELESCOPE ONLY, 2 px over).
+Supervisor review: diff read; full suite rerun independently -> exit 0, Ran 226 tests in 252 s (parallel renders
+  running); after two supervisor corrections ('HOT NIGHT' wording in the dark, log panel background .55 -> .72)
+  test_story/test_storm/test_shed rerun -> OK, gate exit 0, default scene identical. Mutations caught: story panel
+  timing shifted 0.15 s, beat fades swapped. Chromium vs librsvg on 5 Oct 00:00 at 0, 11.8, 12.5, 13, 18.1 s: worst
+  cell 7.7/150. Renders of 4 Oct 21:00, 5 Oct 00:30 and 05:15 and 4 Oct 11:00 inspected (Saturn opposition beat,
+  Sputnik on-this-day beat, edge-on Saturn eyepiece, reticle positions 23:30-04:00). Animated SVG 1.84 MB.
+Decision: approve
+```

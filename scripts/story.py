@@ -18,6 +18,8 @@ import random
 LINE_LIMIT = 4                      # title + three detail lines
 SHORT = dict(Mercury='MER', Venus='VEN', Mars='MAR', Jupiter='JUP', Saturn='SAT', Uranus='URA', Neptune='NEP')
 NAKED_EYE = ('Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn')
+OUTER = ('Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune')   # the planets that have an opposition
+APPROX_CHARS = dict(plain=29, inset=22)   # the line lengths the default fit rule allows (12 px per character)
 OPPOSITION_WINDOW_DAYS = 7
 SEASON_NOTES = dict(vasanta='SPRING', grishma='SUMMER HEAT', varsha='MONSOON', sharad='AUTUMN · SKIES CLEARING',
                     hemanta='EARLY WINTER', shishira='WINTER NIGHTS')
@@ -67,8 +69,13 @@ def _num(value, digits=1):
     return text.rstrip('0').rstrip('.') if '.' in text else text
 
 
-def context(state, light):
-    """Everything the templates may read, gathered once."""
+def _approx_fits(text, inset):
+    return len(text) <= APPROX_CHARS['inset' if inset else 'plain']
+
+
+def context(state, light, fits=None):
+    """Everything the templates may read, gathered once. ``fits(text, inset)`` says whether a line of text fits the
+    log panel (beside the eyepiece when ``inset`` is set); the renderer passes one measured with its real font."""
     astronomy = state['astronomy']
     now = datetime.fromisoformat(state['timestamp_local'])
     night_start = datetime.combine((now-timedelta(hours=6)).date(), datetime.min.time(), now.tzinfo)+timedelta(hours=12)
@@ -78,12 +85,32 @@ def context(state, light):
                 dark=1-light['daylight'], observation=light.get('observation'), season=state['season'],
                 shower=state.get('sky_events', {}).get('meteor_shower'), mood=light.get('mood', 'calm'),
                 flicker=light.get('flicker', False), grounded=light.get('grounded', False),
-                lst=astronomy.get('local_sidereal_time_hours'))
+                lst=astronomy.get('local_sidereal_time_hours'), fits=fits or _approx_fits)
 
 
 def beat(id, lines, inset=None, target=None, priority=None, weight=1.0, body=None):
     return dict(id=id, lines=[line for line in lines if line][:LINE_LIMIT], inset=inset, target=target,
                 priority=priority, weight=weight, body=body or target)
+
+
+def pick(c, inset, *options):
+    """The first option that fits the panel: a line of text, or a list of lines that must all fit. Options run from
+    the most to the least descriptive; when none fits the last (the shortest) is used."""
+    for option in options:
+        lines = [option] if isinstance(option, str) else option
+        if all(c['fits'](line, inset) for line in lines):
+            return option
+    return options[-1]
+
+
+def _symbol(body):
+    """The three-letter constellation abbreviation, upper case."""
+    return (body.get('constellation_symbol') or body['constellation'][:3]).upper()
+
+
+def _in(c, inset, body):
+    """'IN SAGITTARIUS' or, when that is too long for the panel, 'IN SGR'."""
+    return pick(c, inset, f"IN {body['constellation'].upper()}", f"IN {_symbol(body)}")
 
 
 def _inset_for(name):
@@ -95,25 +122,31 @@ def oppositions(c):
     out = []
     for name, body in c['planets'].items():
         when = _time(body.get('opposition'))
-        if when is None:
+        if name not in OUTER or when is None:
             continue
         days = (when-c['now']).total_seconds()/86400
         if abs(days) > OPPOSITION_WINDOW_DAYS:
             continue
+        inset, label = _inset_for(name), name.upper()
         tonight = c['night'][0] <= when < c['night'][1]
         if tonight or when.date() == c['now'].date():
-            title, timing = f'{name.upper()} AT OPPOSITION', f"{when:%d %b %H:%M}".upper()+' IST'
+            title = pick(c, inset, f'{label} AT OPPOSITION', f'{label} · OPPOSITION')
+            timing = f"{when:%d %b %H:%M}".upper()+' IST'
         elif days > 0:
             n = max(1, round(days))
-            title, timing = f'{name.upper()} NEARS OPPOSITION', f"IN {n} DAY{'S' if n > 1 else ''} · {when:%d %b}".upper()
+            title = pick(c, inset, f'{label} NEARS OPPOSITION', f'{label} · OPPOSITION')
+            timing = f"IN {n} DAY{'S' if n > 1 else ''} · {when:%d %b}".upper()
         else:
             n = max(1, round(-days))
-            title, timing = f'{name.upper()} PAST OPPOSITION', f"{n} DAY{'S' if n > 1 else ''} AGO · {when:%d %b}".upper()
-        where = (f"IN {body['constellation'].upper()} · ALT {round(body['altitude_deg'])}°" if body['altitude_deg'] > 0
-                 else f"RISES {_clock(body.get('rise'))}")
+            title = pick(c, inset, f'{label} PAST OPPOSITION', f'{label} · OPPOSITION')
+            timing = f"{n} DAY{'S' if n > 1 else ''} AGO · {when:%d %b}".upper()
+        up = body['altitude_deg'] > 0
+        where = (pick(c, inset, f"IN {body['constellation'].upper()} · ALT {round(body['altitude_deg'])}°",
+                      f"{_symbol(body)} · ALT {round(body['altitude_deg'])}°", f"ALT {round(body['altitude_deg'])}°")
+                 if up else f"RISES {_clock(body.get('rise'))}")
         out.append(beat(f'opposition-{name.lower()}',
                         [title, timing, f"MAG {_num(body['magnitude'])} · {_num(body['distance_au'], 2)} AU", where],
-                        _inset_for(name), name if body['altitude_deg'] > 0 else None, priority=0, body=name))
+                        inset, name if up else None, priority=0, body=name))
     return out
 
 
@@ -148,10 +181,12 @@ def planets_up(c):
     for name in NAKED_EYE:
         body = c['planets'].get(name)
         if body and body['altitude_deg'] > 10:
+            inset = _inset_for(name)
+            title = pick(c, inset, f"{name.upper()} UP IN {body['constellation'].upper()}",
+                         f"{name.upper()} UP IN {_symbol(body)}", f"{name.upper()} UP")
             out.append(beat(f'planet-up-{name.lower()}',
-                            [f"{name.upper()} UP IN {body['constellation'].upper()}",
-                             f"MAG {_num(body['magnitude'])} · ALT {round(body['altitude_deg'])}°",
-                             f"{_num(body['distance_au'], 2)} AU AWAY"], _inset_for(name), name, weight=3))
+                            [title, f"MAG {_num(body['magnitude'])} · ALT {round(body['altitude_deg'])}°",
+                             f"{_num(body['distance_au'], 2)} AU AWAY"], inset, name, weight=3))
     return out
 
 
@@ -161,10 +196,10 @@ def planets_rising(c):
         body = c['planets'].get(name)
         rise = _time(body.get('rise')) if body else None
         if body and body['altitude_deg'] <= 0 and rise and c['now'] < rise <= c['now']+timedelta(hours=10):
+            inset = _inset_for(name)
             out.append(beat(f'planet-rising-{name.lower()}',
-                            [f'{name.upper()} RISES {rise:%H:%M}',
-                             f"IN {body['constellation'].upper()}", f"MAG {_num(body['magnitude'])}"],
-                            _inset_for(name), weight=2, body=name))
+                            [f'{name.upper()} RISES {rise:%H:%M}', _in(c, inset, body),
+                             f"MAG {_num(body['magnitude'])}"], inset, weight=2, body=name))
     return out
 
 
@@ -183,10 +218,12 @@ def outer_planets(c):
     up = [name for name in ('Uranus', 'Neptune') if c['planets'].get(name, {}).get('altitude_deg', -1) > 15]
     if not up:
         return []
-    body = c['planets'][up[0]]
-    return [beat(f'ice-giant-{up[0].lower()}', [f'{up[0].upper()} IN {body["constellation"].upper()}',
-                                                f"MAG {_num(body['magnitude'])} · TELESCOPE ONLY",
-                                                f"{_num(body['distance_au'], 1)} AU AWAY"], 'planet', weight=1, body=up[0])]
+    body, label = c['planets'][up[0]], up[0].upper()
+    title = pick(c, 'planet', f'{label} IN {body["constellation"].upper()}', f'{label} IN {_symbol(body)}', label)
+    mag = f"MAG {_num(body['magnitude'])}"
+    return [beat(f'ice-giant-{up[0].lower()}', [title, pick(c, 'planet', f'{mag} · TELESCOPE ONLY', f'{mag} · SCOPE ONLY', mag),
+                                                f"{_num(body['distance_au'], 1)} AU AWAY"], 'planet', weight=1,
+                 body=up[0])]
 
 
 MOON_PHASES = ((.03, 'NEW MOON'), (.35, 'CRESCENT'), (.65, 'QUARTER'), (.97, 'GIBBOUS'), (1.01, 'FULL MOON'))
@@ -240,7 +277,7 @@ def weather(c):
         out.append(beat('rain', ['RAIN OVER MUMBAI', f"{_num(o['precipitation_mm'])} MM IN 15 MIN", 'ROOF CLOSED'],
                         weight=4))
     if o['temperature_c'] >= 33:
-        out.append(beat('hot', ['HOT DAY IN MUMBAI', f"{_num(o['temperature_c'])}°C · HUMIDITY {round(o['humidity_pct'])}%"],
+        out.append(beat('hot', ['HOT NIGHT IN MUMBAI' if c['dark'] >= .5 else 'HOT DAY IN MUMBAI', f"{_num(o['temperature_c'])}°C · HUMIDITY {round(o['humidity_pct'])}%"],
                         weight=2))
     if o['humidity_pct'] >= 80 and c['dark'] >= .5:
         out.append(beat('humid', ['HUMID NIGHT', f"HUMIDITY {round(o['humidity_pct'])}%", 'WATCHING FOR DEW'], weight=2))

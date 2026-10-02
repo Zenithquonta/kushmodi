@@ -98,8 +98,10 @@ class Screen(unittest.TestCase):
         for alt, az, fraction in ((-90, 359.9, 1.0), (90, 0, 0.0), (-5, 180, .5)):
             astronomy = dict(sun=dict(altitude_deg=alt, azimuth_deg=az),
                              moon=dict(altitude_deg=alt, azimuth_deg=az, illuminated_fraction=fraction, waxing=True),
-                             sun_times={})
-            for page in ('sun', 'moon'):
+                             sun_times={},
+                             planets={name: dict(altitude_deg=alt, azimuth_deg=az, constellation_symbol='Sgr', rise=None)
+                                      for name in scene.PLANET_SHORT})
+            for page in ('sun', 'moon', 'planets'):
                 for text in scene.screen_lines(page, astronomy):
                     _, width, _ = scene.pixel_text(text, x0+5, y0, cell=2)
                     self.assertLessEqual(x0+5+width, x1-3, text)
@@ -130,6 +132,7 @@ class Screen(unittest.TestCase):
         markup = scene.screen(0, False, lit(NIGHT), lit(NIGHT)['astronomy'])
         self.assertIn('data-screen="sun" opacity="1"', markup)
         self.assertIn('data-screen="moon" opacity="0"', markup)
+        self.assertIn('data-screen="planets" opacity="0"', markup)
 
 
 class Robot(unittest.TestCase):

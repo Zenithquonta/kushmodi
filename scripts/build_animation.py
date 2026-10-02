@@ -2628,10 +2628,16 @@ LOCK_TARGET_BOX = (LOCK_CORE[0]-LOCK_HALF-LOCK_ARM, LOCK_CORE[1]-LOCK_HALF-LOCK_
 RETICLE_AVOID = ('TEXT_RECT', 'LOCK_READOUT_BOX', 'LOCK_BOX', 'LOCK_TARGET_BOX', 'STORY_BOX')
 
 
+def story_fits(text, inset):
+    """Whether a line of the log, drawn from the panel's left margin, ends inside the panel (or left of the eyepiece)."""
+    _, width, _ = pixel_text(text, STORY_BOX[0]+16, 0)
+    return STORY_BOX[0]+16+width <= (INSET_TEXT_LIMIT if inset else STORY_BOX[2]-12)
+
+
 def story_beats(state, light):
     import story
     extras = dict(mood=mood(light), flicker=bool(light_events(light)), grounded=bool(grounded(light)))
-    context = story.context(state, dict(light, **extras))
+    context = story.context(state, dict(light, **extras), fits=story_fits)
     return story.choose(context, layer_seed(light['seed'], f'story-{light.get("slot", 0)}'))
 
 
@@ -2725,7 +2731,7 @@ def story_panel(t, animated, light):
     c = STORY_COLOURS
     when = f"{int(light['hour']):02d}:{round(light['hour']%1*60):02d}"
     head, _, _ = pixel_text(f'OBSERVATORY LOG · {when}', x0+16, y0+12)
-    out = (f'<g data-story="log"><rect x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" fill="{c["back"]}" opacity=".55"/>'
+    out = (f'<g data-story="log"><rect x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" fill="{c["back"]}" opacity=".72"/>'
            f'<rect x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" fill="none" stroke="{c["frame"]}" '
            f'stroke-width="2" opacity=".5"/><path d="{head}" fill="{c["head"]}"/>')
     pulse = Track.sine(.85, .15, 3)

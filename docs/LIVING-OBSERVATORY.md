@@ -447,3 +447,45 @@ All live only; the default `scene()` stays byte-identical.
   - SVG size is 1.8 MB (night) to 2.4 MB (day).
   - CI timeout raised from 5 to 8 minutes (the suite is now 179 s locally).
 
+
+## Phase 15d notes — the observatory log, planet tracking and the planets page
+
+All live only (they need a scene state); the default `scene()` stays byte-identical.
+
+- **Log.** `scripts/story.py` holds a library of story-beat templates: oppositions, on this day, meteor shower, moon,
+  planets up or rising, Jupiter's moons, Uranus and Neptune, sun events, weather, season, night sky, workshop. A beat
+  is a title plus up to three detail lines, an optional eyepiece inset and an optional target planet. Each beat is
+  built only from the scene state (computed astronomy, a validated weather observation, the season) and fixed
+  strings; nothing is invented. `choose()` takes every eligible must-show beat first (oppositions, then on this day,
+  meteor shower, full or new moon), then weighted picks, seeded per quarter hour. Two beats per loop show in the log
+  panel under the name: 0-12 s and 12-24 s, crossfading over 0.4 s. The still frame shows the first.
+- **Fit rule.** Every line is drawn with the 3-px pixel font from the panel's left margin and must end at or before
+  `INSET_TEXT_LIMIT` when the beat has an eyepiece, else 12 px inside the panel. `story.context()` takes a `fits(text,
+  inset)` callable (the renderer passes one measured with the real glyph widths) and templates give ordered options
+  to `story.pick()`, which returns the first that fits and otherwise the shortest. Examples: `SATURN AT OPPOSITION`
+  then `SATURN · OPPOSITION` (the timing goes on the next line); `JUPITER UP IN SAGITTARIUS`, `JUPITER UP IN SGR`,
+  `JUPITER UP`; `IN SAGITTARIUS · ALT 88°`, `SGR · ALT 88°`, `ALT 88°`; `MAG 7.8 · TELESCOPE ONLY`, then `MAG 7.8 ·
+  SCOPE ONLY`. Only the outer planets (Mars to Neptune) have an opposition beat.
+- **Weather.** In a grounding storm the advisory hologram keeps the panel and the log does not draw.
+- **Reticle.** A beat about a planet that is drawn in the sky puts a pulsing amber reticle on it. It is skipped under
+  thick cloud (overcast above 0.3), when the planet is faint in the sky, and wherever it would touch the name, the
+  lock-on readout, the dotted line, the galaxy's own reticle, the log panel, the canvas edge or the skyline.
+- **Screen.** The wall screen now cycles SUN TRACK (0-6 s), MOON TRACK (6-12 s), PLANET TRACK (12-18 s) and the
+  painted blueprint (18-24 s). The planets page lists up to six planets, those above the horizon first (highest
+  first, with the constellation abbreviation), then the rest by rise time. This supersedes the 8-second pages in the
+  15c notes.
+- **State.** Each planet now carries its constellation (IAU boundaries) and abbreviation, distance in AU, rise and
+  set for the coming night ("tonight" turns over at 06:00), and for the outer planets the nearest opposition (the
+  last 30 days, else the next). Uranus and Neptune and Jupiter's four moons (arcsecond offsets) are in the state.
+  Saturn's opposition is 04 Oct 2026 at 17:42 IST (8.434 AU, magnitude 0.2, in Cetus).
+- **Verified.**
+  - `scripts/test_story.py`: every eligible beat over a year (every 9th day at 00, 05, 11, 18 and 21 h) with no
+    weather, the drizzle fixture and clear, hot, humid, windy, cloudy and thunderstorm observations, plus a
+    synthetic worst case (all planets at 88 degrees, magnitude -4.7 and 7.9, 30.07 AU, the longest constellation
+    names, oppositions 3 days either side); glyphs, line count and widths; `choose()` determinism, priority and
+    variety; the Saturn opposition night facts; story and advisory exclusivity; reticle clearances and cloud
+    behaviour; the planets page fit; the SMIL-vs-raster and loop checks on 5 Oct 00:00 IST sampled at the story swap
+    and fade and the screen page changes, with the same 1e-3 and 0.05 px tolerances as 15c.
+  - `test_shed.py` fit test covers the planets page.
+  - A temporary revert of the fit mechanism makes the fit test fail on `MAG 5.6 · TELESCOPE ONLY`.
+  - Browser playback of the log, reticle and screen has not been verified by the coder; it is for the supervisor.
