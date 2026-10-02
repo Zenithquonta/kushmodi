@@ -90,7 +90,7 @@ amendments that follow from measured facts, open decisions, and phase status.
 | 9 Daily day/night generator | done: `scripts/render_daily.py` (--date/--range), WebP frames at solar noon and 21:00, atomic + locked + idempotent, `archive/index.json`; 7 tests; no frames committed yet |
 | 10 VPS deployment | done in the repo, not yet run on the VPS: compact live SVG (1.7-2.3 MB), `deploy/` (install, update, check, sandboxed systemd timer, Caddy template); 9 tests; Caddy rules verified locally |
 | 11 Daily git sync | done in the repo, not yet run on the VPS: offline archive render at 21:10 IST, separate `obsync` user with a deploy key created on the server, archive-only clone, validated copy + index union, one commit a day; 13 tests incl. a bare-repo end-to-end |
-| 12 README live switch | prepared, not switched: `scripts/readme_live.py` (live/repo/status, byte-exact revert), hero markers in README, gate accepts live mode for the configured host only, `scripts/probe_live.py`, `docs/LIVE-SWITCH.md`; 8 tests. Waiting on the host, check.sh, burn-in, the branch test on github.com, and the user's fallback choice |
+| 12 README live switch | done 2026-10-02: README hero is the live view at https://observatorysky.duckdns.org (E2.1.Micro, 15-minute renders); branch test passed (camo serves the 2.3 MB SVG, animates, reduced motion gets the PNG, refreshes within ~2 min); revert with `python scripts/readme_live.py repo` |
 | 13 Archive gallery | done in the repo: `deploy/archive_gallery.py` builds `archive/README.md` and one page per month in the daily sync commit; validated fields only; deterministic; 4 tests. Pages appear with the first VPS archive commit |
 | 14 | pending |
 

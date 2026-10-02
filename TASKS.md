@@ -615,3 +615,18 @@ Also recorded: the user will create a dedicated instance for the observatory (VP
   A1.Flex 1 OCPU / 6 GB, Ubuntu 24.04 (one render: ~160 MB peak memory, ~26 s here).
 Decision: approve
 ```
+
+### LO-P12b — README switched to the live view (2026-10-02)
+
+```text
+Requested by: user (chose option A: live view as the hero, link to the repo animation underneath)
+Server: dedicated Oracle E2.1.Micro, Ubuntu 24.04, kushmodi deploy/install.sh; deploy/check.sh "all good"
+Host: observatorysky.duckdns.org (renders every 15 minutes on this <2 GB server)
+Branch test first (development branch): GitHub camo serves live.svg (2,277,083 bytes, image/svg+xml) and live.png,
+  passes Cache-Control max-age=240; Chromium via camo: the SVG animates, reduced motion selects the PNG; freshness:
+  the 09:45 UTC render finished 09:46:03 and camo served it at 09:47:53.
+Also on main with this switch: one-shot Oracle Cloud Shell setup (deploy/oci-cloudshell.sh, untested against OCI),
+  install.sh waits for the first-boot package lock, README-mode tests check the README matches live.host.
+Revert at any time: python scripts/readme_live.py repo, commit, push.
+Decision: approve
+```
