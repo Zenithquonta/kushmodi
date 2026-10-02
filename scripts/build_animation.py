@@ -660,6 +660,20 @@ FONT = {
     '+': ('...', '.#.', '###', '.#.', '...'), '\u00b0': ('.#.', '#.#', '.#.', '...', '...'),
     "'": ('#', '#', '.', '.', '.'), '\u00b7': ('.', '.', '#', '.', '.'), ' ': ('..', '..', '..', '..', '..'),
 }
+FONT.update({   # Phase 15b: the rest of the alphabet and a few symbols for the weather advisory
+    'B': ('##.', '#.#', '##.', '#.#', '##.'), 'F': ('###', '#..', '##.', '#..', '#..'),
+    'H': ('#.#', '#.#', '###', '#.#', '#.#'), 'I': ('###', '.#.', '.#.', '.#.', '###'),
+    'J': ('..#', '..#', '..#', '#.#', '.#.'), 'N': ('#..#', '##.#', '#.##', '#..#', '#..#'),
+    'P': ('##.', '#.#', '##.', '#..', '#..'), 'Q': ('.#.', '#.#', '#.#', '##.', '.##'),
+    'S': ('.##', '#..', '.#.', '..#', '##.'), 'U': ('#.#', '#.#', '#.#', '#.#', '###'),
+    'V': ('#.#', '#.#', '#.#', '#.#', '.#.'), 'W': ('#...#', '#...#', '#.#.#', '##.##', '#...#'),
+    'X': ('#.#', '#.#', '.#.', '#.#', '#.#'), 'Y': ('#.#', '#.#', '.#.', '.#.', '.#.'),
+    'Z': ('###', '..#', '.#.', '#..', '###'), '0': ('.#.', '#.#', '#.#', '#.#', '.#.'),
+    '6': ('.##', '#..', '###', '#.#', '###'), '8': ('###', '#.#', '###', '#.#', '###'),
+    '/': ('..#', '..#', '.#.', '#..', '#..'), ':': ('.', '#', '.', '#', '.'), '-': ('...', '...', '###', '...', '...'),
+    '%': ('#.#', '..#', '.#.', '#..', '#.#'), '>': ('#..', '.#.', '..#', '.#.', '#..'), '!': ('#', '#', '#', '.', '#'),
+    '.': ('.', '.', '.', '.', '#'),
+})
 CELL = 3  # scene px per font cell (1.5 px in the 840 px GIF)
 
 
@@ -1097,11 +1111,13 @@ def layers(t, animated, light=None):
     return (night_group('twinkles', twinkles(t, animated, day['twinkles']), night)+overlay
             +night_group('celestial', celestial(t, animated), night)
             +night_group('satellite', satellite(t, animated, SATELLITE_PATHS[day['satellite']]), night)
-            +('' if light is None else light['bodies'])+weather+city+('' if light is None else light['title'])
-            +traffic(t, animated, night, routes_for(day['airliner']))
+            +('' if light is None else light['bodies'])+weather
+            +('' if light is None else lightning(t, animated, light))+city+('' if light is None else light['title'])
+            +('' if light is None else advisory(t, animated, light))
+            +traffic(t, animated, night, flying_routes(day['airliner'], light))
             +night_group('sky-details', sky_details(t, animated, day['crosses']), night)
             +night_group('meteors', meteors(t, animated, day['meteors'], day['meteor_count']), night)
-            +('' if light is None else portfolio(t, animated, light))+showers+workshop(t, animated))
+            +('' if light is None else portfolio(t, animated, light)+meadow(t, animated, light))+showers+workshop(t, animated))
 
 
 # ---------------------------------------------------------------------------
@@ -2010,6 +2026,182 @@ def sky_bodies(light, state):
     inner = planets_markup(light, state)+moon_markup(light, state)
     sky = f'<g data-sky="bodies" mask="url(#sky-mask)">{inner}</g>' if inner else ''
     return sky+moonlight(light, state)
+
+
+# ---------------------------------------------------------------------------
+# Weather drama (Phase 15b), from real observations only: lightning in thunderstorms, the airliner grounded with an
+# advisory hologram in severe weather, and grass that sways with the wind (a seasonal breeze without observations).
+# Flashes stay at two per strike and strikes several seconds apart (at most 2 flashes in any second), never at t=0,
+# so the still PNG and the reduced-motion copy show no flash.
+# ---------------------------------------------------------------------------
+STRIKE_SLOTS = ((1.5, 7.0), (9.0, 15.0), (17.0, 22.5))
+STRIKE_SHAPE = ((0, 0), (.02, 1), (.08, .12), (.13, .9), (.24, 0))   # (seconds after the strike, opacity)
+SKY_FLASH = .3                     # peak opacity of the sky's flash: bright, never full white
+BOLT_ZONE = (620, 1560, 110, 640)  # x0, x1, top, bottom
+ADVISORY_BOX = (40, 404, 420, 556)  # x0, y0, x1, y1 of the hologram panel
+ADVISORY_COLOURS = dict(frame='#5ef2ff', text='#a8f8ff', warn='#ffc44d', back='#04141f')
+GROUNDING = (('thunderstorm', 'THUNDERSTORM OVER MUMBAI'), ('heavy-rain', 'SEVERE WEATHER OVER MUMBAI'),
+             ('fog', 'LOW VISIBILITY OVER MUMBAI'))
+GALE_GUST_KMH = 60
+MEADOW_BAND = (12, 870, 908, 941)  # x0, x1, top, bottom of the foreground where grass tufts grow
+SWAY_PERIOD = 4
+
+
+def grounded(light):
+    """The advisory's reason when real weather grounds the airliner, else None."""
+    observation = light.get('observation')
+    if not observation:
+        return None
+    for condition, reason in GROUNDING:
+        if observation['condition'] == condition:
+            return reason
+    return 'GALE WINDS OVER MUMBAI' if observation['gust_kmh'] >= GALE_GUST_KMH else None
+
+
+def flying_routes(variant, light):
+    routes = routes_for(variant)
+    if light is None or not grounded(light):
+        return routes
+    return [route for route in routes if route['sprite'] != 'airplane']
+
+
+@functools.lru_cache(maxsize=16)
+def strikes(seed):
+    """(time, bolt path) per strike: a jagged main channel from the cloud base with one or two branches."""
+    rng = random.Random(seed ^ 0xB017)
+    out = []
+    x0, x1, top, bottom = BOLT_ZONE
+    for lo, hi in STRIKE_SLOTS:
+        when = round(rng.uniform(lo, hi), 2)
+        x, y = rng.uniform(x0+80, x1-80), top+rng.uniform(0, 80)
+        points, branches = [(x, y)], []
+        while y < bottom:
+            y += rng.uniform(18, 34)
+            x += rng.uniform(-26, 26)
+            points.append((x, min(y, bottom)))
+            if len(branches) < 2 and rng.random() < .18:
+                bx, by = x, y
+                branch = [(bx, by)]
+                for _ in range(rng.randint(2, 4)):
+                    bx += rng.choice((-1, 1))*rng.uniform(12, 26)
+                    by += rng.uniform(14, 26)
+                    branch.append((bx, by))
+                branches.append(branch)
+        d = ''.join(('M' if i == 0 else 'L')+f'{_num(px, 1)} {_num(py, 1)}' for i, (px, py) in enumerate(points))
+        for branch in branches:
+            d += ''.join(('M' if i == 0 else 'L')+f'{_num(px, 1)} {_num(py, 1)}' for i, (px, py) in enumerate(branch))
+        out.append((when, d))
+    return out
+
+
+def strike_track(when, peak=1.0):
+    return Track.timeline([(when+s, v*peak) for s, v in STRIKE_SHAPE], 0, digits=3)
+
+
+def lightning(t, animated, light):
+    observation = light.get('observation')
+    if not observation or observation['condition'] != 'thunderstorm':
+        return ''
+    anim = lambda track: track.smil('opacity') if animated else ''
+    parts = []
+    for when, d in strikes(light['seed']):
+        flash, bolt = strike_track(when, SKY_FLASH), strike_track(when)
+        parts.append(f'<rect data-storm="flash" width="{W}" height="{HORIZON_Y+10}" fill="#dfe8ff" '
+                     f'opacity="{flash.value_text(t)}" mask="url(#sky-mask)">{anim(flash)}</rect>'
+                     f'<g data-storm="bolt" opacity="{bolt.value_text(t)}" mask="url(#sky-mask)">{anim(bolt)}'
+                     f'<path d="{d}" fill="none" stroke="#9fc4ff" stroke-width="9" opacity=".3"/>'
+                     f'<path d="{d}" fill="none" stroke="#f4f8ff" stroke-width="3"/></g>')
+    return '<g data-storm="lightning">'+''.join(parts)+'</g>'
+
+
+def advisory_lines(light):
+    observation = light['observation']
+    wind = f"WIND {round(observation['wind_kmh'])} KM/H · GUSTS {round(observation['gust_kmh'])} KM/H"
+    return ('! AIRSPACE ADVISORY', 'FLIGHTS SUSPENDED', grounded(light), wind, 'STAND BY >>')
+
+
+def advisory(t, animated, light):
+    """A cyberpunk hologram projected from the ground station: the airliner is grounded by real weather."""
+    reason = grounded(light)
+    if not reason:
+        return ''
+    anim = lambda track, name='opacity': track.smil(name) if animated else ''
+    c = ADVISORY_COLOURS
+    x0, y0, x1, y1 = ADVISORY_BOX
+    shimmer = Track([.92, .8, .95, .88, .55, .93, .92], [0, .2, .4, .6, .62, .64, 1], 6)
+    blink = Track([1, 1, .15, .15, 1], [0, .5, .5, .99, 1], 1.5)
+    sx, sy = STATION
+    beam = f'M{sx+6} {sy-2}L{x0+40} {y1}L{x1-60} {y1}L{sx+22} {sy-2}z'
+    out = (f'<g data-advisory="hologram" opacity="{shimmer.value_text(t)}">{anim(shimmer)}'
+           f'<path d="{beam}" fill="{c["frame"]}" opacity=".07"/>'
+           f'<rect x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" fill="{c["back"]}" opacity=".62"/>'
+           f'<path d="{"".join(f"M{x0} {y}h{x1-x0}" for y in range(y0+3, y1, 4))}" stroke="{c["frame"]}" '
+           f'stroke-width="1" opacity=".08"/>'
+           f'<rect x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" fill="none" stroke="{c["frame"]}" '
+           f'stroke-width="2" opacity=".75"/>'
+           f'<path d="M{x0-4} {y0+16}V{y0-4}H{x0+16}M{x1-16} {y0-4}H{x1+4}V{y0+16}M{x1+4} {y1-16}V{y1+4}H{x1-16}'
+           f'M{x0+16} {y1+4}H{x0-4}V{y1-16}" fill="none" stroke="{c["warn"]}" stroke-width="2"/>')
+    for i, text in enumerate(advisory_lines(light)):
+        d, _, _ = pixel_text(text, x0+16, y0+14+i*24)
+        colour = c['warn'] if i in (0, 2) else c['text']
+        if i == 4:
+            out += (f'<path d="{d}" fill="{colour}" opacity="{blink.value_text(t)}">{anim(blink)}</path>')
+        else:
+            out += f'<path d="{d}" fill="{colour}"/>'
+    return out+'</g>'
+
+
+def wind_of(light):
+    """(wind, gust) in km/h: observed when available, otherwise a seasonal breeze."""
+    observation = light.get('observation')
+    if observation:
+        return observation['wind_kmh'], observation['gust_kmh']
+    env = light['env']
+    breeze = 6+16*env['cloud_density']+10*env['ground_wetness']
+    return round(breeze, 1), round(breeze*1.8, 1)
+
+
+def sway_amplitude(wind, gust):
+    """Degrees of sway for the tallest blades."""
+    return round(min(22.0, 1.5+.42*wind+.12*gust), 2)
+
+
+@functools.lru_cache(maxsize=1)
+def meadow_tufts():
+    """(x, y, blades) for each grass tuft along the foreground, only where the plate is ground."""
+    import base64
+    import io
+    from PIL import Image
+    ground = Image.open(io.BytesIO(base64.b64decode(plate_masks()['ground'].split(',', 1)[1]))).convert('L')
+    rng = random.Random(1857)
+    x0, x1, top, bottom = MEADOW_BAND
+    tufts, x = [], x0
+    while x < x1:
+        y = rng.randint(top, bottom)
+        if ground.getpixel((min(W-1, int(x)), min(H-1, y))):
+            blades = tuple((rng.uniform(-7, 7), rng.uniform(10, 22)) for _ in range(rng.randint(3, 5)))
+            tufts.append((round(x), y, blades))
+        x += rng.uniform(10, 18)
+    return tufts
+
+
+def meadow(t, animated, light):
+    wind, gust = wind_of(light)
+    amp = sway_amplitude(wind, gust)
+    colour = _outdoor(light, (16, 30, 22), _mix((92, 150, 64), (178, 160, 86), light['dry']/DRY[2] if DRY[2] else 0))
+    tip = _mix(colour, (255, 255, 230), .25)
+    parts = []
+    for x, y, blades in meadow_tufts():
+        phase = (x/W*1.6) % 1   # the gust wave runs across the field
+        values = [amp*(.8*math.sin(2*math.pi*i/24)+.2*math.sin(4*math.pi*i/24+1.3)) for i in range(24)]
+        sway = Track(values+[values[0]], None, SWAY_PERIOD, -phase*SWAY_PERIOD, digits=2)
+        d = ''.join(f'M0 0Q{_num(dx*.3, 1)} {_num(-h*.55, 1)} {_num(dx, 1)} {_num(-h, 1)}' for dx, h in blades)
+        tips = ''.join(f'M{_num(dx-1, 1)} {_num(-h, 1)}h2v2h-2z' for dx, h in blades)
+        parts.append(f'<g transform="translate({x} {y})"><g transform="rotate({sway.value_text(t)})">'
+                     f'{sway.smil("transform", "rotate") if animated else ""}'
+                     f'<path d="{d}" fill="none" stroke="{_rgb(colour)}" stroke-width="2"/>'
+                     f'<path d="{tips}" fill="{_rgb(tip)}"/></g></g>')
+    return f'<g data-weather="meadow">{"".join(parts)}</g>'
 
 
 def feather_defs():
