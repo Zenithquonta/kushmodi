@@ -403,3 +403,47 @@ default `scene()` stays byte-identical.
   worst 167×94 cell is 19 (limit 150) at five times including two strikes. The animated SVG is 1.8 MB (stormy
   night) to 2.4 MB (day).
 
+## Phase 15c notes — flickering shed lights, the tracking screen and the reactive robot
+
+All live only; the default `scene()` stays byte-identical.
+
+- **Lights.** Four lights flicker, each dimmed through its own mask built from the plate's own glow and cached:
+  - the pendant lamp's warm wood and bulb;
+  - the cyan tube's white core and halo;
+  - the left and right magenta neons.
+
+  The lantern never flickers. Shapes are flicker, sputter, blink (neon) and brownout (lamp only). Two to four
+  events per loop sit in separate slots, re-seeded every quarter hour, so each redraw tells a slightly different
+  story. In a thunderstorm every light dips together 1 s after each strike, like a power surge. Depth is 0.55
+  (lamp) and 0.8 (tubes) at night, and 40 % of that by day. Combined with the lightning there are never more than
+  three dips in any second, and nothing at t = 0.
+- **Wall screen.** It cycles SUN TRACK (0–8 s), MOON TRACK (8–16 s) and the painted blueprint (16–24 s), with a
+  refresh line at each change. Each page shows:
+  - the body's real altitude through the local day (`astronomy.altitude_by_hour`, 25 hourly values now in the
+    state and `live.json`);
+  - a cursor at the current time and the body on it (an outline when below the horizon);
+  - ALT/AZ;
+  - for the sun, the next sunrise or sunset; for the moon, the illuminated percentage and WAXING/WANING, plus a
+    pixel phase disc.
+
+  The text is built only from computed numbers.
+- **Robot.** Its mood colours its eyes, ping rings and lidar: calm (cyan), rain (amber, dimmer eyes, lidar off,
+  "sheltering"), alert (red; thunderstorm or grounded flights). It reacts to real scene events:
+  - perks its head up 2 px (a copy of the painted head lifting on its neck) and turns its eye toward the
+    telescope's lock-on, toward each lightning strike, and toward whichever light flickers;
+  - idle glances fill the gaps;
+  - the antenna pings at the lock-on (and after each strike in a storm), and the mast beacon blinks (faster on
+    alert).
+
+  The lidar fan sweeps the field, the tail light breathes, the cyan panel scrolls telemetry, the headlight glows
+  after dark, and the eye glow flares when lightning strikes.
+- **Verified.**
+  - 17 new tests in `test_shed.py`.
+  - The generic SMIL-vs-raster and loop checks run on a calm night, a storm night and a clear day, sampled inside
+    every flicker, glance, ping and page change. Their tolerances are 1e-3 and 0.05 px, because the older starship
+    warp-flash scale keyframes differ by 0.04 px between keyframes at those times.
+  - Deliberately broken lights, robot and screen timing are all caught.
+  - Chromium vs librsvg worst cell is 8.5 out of 150, at six times.
+  - SVG size is 1.8 MB (night) to 2.4 MB (day).
+  - CI timeout raised from 5 to 8 minutes (the suite is now 179 s locally).
+

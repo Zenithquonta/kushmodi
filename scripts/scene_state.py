@@ -130,6 +130,7 @@ def scene_state(when, config=None, weather=None):
                                     'magnitude': round(ae.Illumination(body, t).mag, 2)}
                         for body in PLANETS for alt, az in [_horizon(body, t, observer)]},
             'local_sidereal_time_hours': round((ae.SiderealTime(t) + loc['longitude'] / 15) % 24, 4),
+            'altitude_by_hour': altitude_by_hour(local.date(), tz, observer),   # for the shed's tracking screen
             'twilight': twilight_label(sun_alt),
             'sun_times': {  # local ISO timestamps for the local calendar date
                 'civil_dawn': _local(ae.SearchAltitude(sun, observer, ae.Direction.Rise, midnight, 1, -6), tz),
@@ -145,6 +146,14 @@ def scene_state(when, config=None, weather=None):
         'seed_int': seed_int,
         'renderer_version': cfg['renderer_version'],
     }
+
+
+def altitude_by_hour(local_date, tz, observer):
+    """Sun and moon altitude (degrees, whole) at every local hour 00:00..24:00 of the date: their day's path."""
+    start = datetime.combine(local_date, time(0), tz).astimezone(timezone.utc)
+    times = [_ae_time(start + timedelta(hours=h)) for h in range(25)]
+    return {name: [round(_horizon(body, t, observer)[0]) for t in times]
+            for name, body in (('sun', ae.Body.Sun), ('moon', ae.Body.Moon))}
 
 
 PLANETS = (ae.Body.Mercury, ae.Body.Venus, ae.Body.Mars, ae.Body.Jupiter, ae.Body.Saturn)

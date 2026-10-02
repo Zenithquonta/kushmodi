@@ -668,3 +668,20 @@ Commands and outcomes: 188 tests pass (137 s); gate passes; default scene byte-i
 Decision: approve
 Next: 15c shed lamp flicker and reactive rover; 15d story beats (incl. Saturn opposition 4 Oct).
 ```
+
+### LO-P15c — Shed light flicker, sun/moon tracking screen, reactive rover robot (2026-10-02)
+
+```text
+Requested by: user ("start phase 15c yourself"; then "add some light flicker to these lights ... sun tracking and
+  moon tracking on the display ... make this rover add some animation")
+Implemented and reviewed by: supervisor agent; plan reviewed by the advisor before coding
+Changed: build_animation.py (light masks and flicker, tracking screen, robot), scene_state.py (altitude_by_hour),
+  test_shed.py (new), validate-profile.yml (timeout 8 min), docs/LIVING-OBSERVATORY.md.
+Evidence: renders of calm, storm, rain nights and a clear day inspected at full size and 840 px (flicker dips, storm
+  surge, screen pages, robot head lift and ping); the first plot was nearly empty, so real day paths were added.
+  Chromium parity worst cell 8.5/150; mutation of lights/robot/screen timing caught.
+Commands and outcomes: 205 tests pass (179 s); gate passes; default scene byte-identical.
+Decision: approve
+Next: 15d story beats (Saturn opposition 4 Oct).
+```
+
