@@ -287,6 +287,22 @@ Remaining, in order:
    `sudo bash /opt/observatory/repo/deploy/update.sh` and `.../check.sh`. Optional: install-archive.sh with a deploy
    key; regenerate the DuckDNS token; delete the unused `kushsky` domain.
 
+### In flight at session end (2026-10-02)
+
+- **Phase 17 polish (README sky)**: worktree `.claude/worktrees/agent-a0318701401430528`, branch
+  `worktree-agent-a0318701401430528`. First pass committed (9b82f6b: north-facing real sky, Yale BSC5 stars,
+  d3-celestial Milky Way and lines, real lock-on target, planet/Moon fading trails; 313 tests OK). Polish requested:
+  rectangular panorama projection (no empty top corners), deeper/brighter stars, visible Milky Way. Next: review its
+  renders (p17-*.png), rerun the full suite, merge into `ccr-19e1f533-c4auq1`, push to the branch and `main`.
+- **Website walkable world (Phase 16 M2)**: worktree `.claude/worktrees/agent-abef7f029a44d6be5`. Authority: `docs/PORTFOLIO_3D_WORLD_SPEC.md` (Kush's spec)
+  and `docs/IMPLEMENTATION_GAP_ANALYSIS.md` (Kush's gap analysis; strict order in its §31; P0/P1 definitions of
+  done §34-35). The coder builds P0/P1 on top of M1. Next: review against §34/§35, walk the main path in headless
+  Chromium (`scripts/site_browser_check.mjs`), merge, push.
+- **Agent briefing**: `docs/AGENT-BRIEFING.md` is the prompt for any new agent.
+- **Waiting on Kush**: 2-3 lines each for AeroLink, the enclosure/chamber project and dengue forecasting (shown as
+  "PROJECT INFORMATION COMING SOON" until then); running `kill %1 %2`, `jobs`, `update.sh`, `check.sh` on the VPS.
+- If a worktree is missing after a restart, redo its task from this description and the coder logs' intent.
+
 Sky decisions (user, 2026-10-02): the README image faces NORTH (west left, east right, Polaris centre); the website
 sky is a full 360°. Planets and the Moon carry a trail: "not a complete arc, a continuous line that gets dimmer
 following the celestial object" (past ~3 h, fading with age). Galaxies and the ringed planet are removed in live.
