@@ -28,3 +28,14 @@ alternative is to keep the repo animation as the hero and add the live view belo
    Do not rely on remembered limits for camo; measure them.
 5. If the SVG is refused or does not refresh: use `live.png` as the image instead (about 440 KB) and say so.
 6. Only then merge to `main`. To go back at any time: `python scripts/readme_live.py repo`, commit, push.
+
+## Result of the branch test (2 Oct 2026, host observatorysky.duckdns.org, E2.1.Micro, 15-minute renders)
+
+- `deploy/check.sh` on the server: all good (three files 200 with the right types; 404 elsewhere).
+- GitHub keeps the `<picture>` and rewrites both images to camo URLs.
+- camo serves `live.svg` (2,277,083 bytes) as `image/svg+xml` and `live.png` (441,958 bytes) as `image/png`, passing
+  the server's `Cache-Control: public, max-age=240`.
+- Chromium loading the camo URLs: the SVG animates inside `<img>` (10,852 pixels changed in 1.3 s); with reduced
+  motion the `<source>` selects `live.png` and nothing moves.
+- Freshness: the server finished its 09:45 UTC render at 09:46:03; camo served the new file at 09:47:53.
+
