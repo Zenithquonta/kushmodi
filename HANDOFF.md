@@ -274,7 +274,7 @@ Remaining, in order:
    screen page, story beats, animated real pass track, `scripts/test_satellites.py`, real TLE fixture
    `scripts/fixtures/celestrak-2026-10-02.tle` from the user's server). Being finished by a coder; then supervisor
    review (diff, full suite, renders, Chromium parity, mutation check), merge, push, tell the user to run update.sh.
-   If the worktree is gone, redo from this description; the TLE lines are in the fixture section of TASKS.md if saved.
+   If the worktree is gone, redo from this description; the real TLEs are in scripts/fixtures/celestrak-2026-10-02.tle.
 2. **Real sky in the SVG (user request 2026-10-02)**: remove the rotating galaxies (`celestial` layer) and the ringed
    planet with moons at top right in live mode; face NORTH (west on the left, east on the right: change
    `sun_screen`/`in_view` for live states); replace the painted sky in live mode with a real one (Yale Bright Star
