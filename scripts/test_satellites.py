@@ -682,7 +682,7 @@ class PassAnimation(unittest.TestCase):
         self.assertEqual(plan['points'], run)
         in_view = [(alt, az) for _, alt, az in track if scene.in_view(alt, az)]
         self.assertTrue(3 <= len(run) <= len(in_view))
-        self.assertLess(len(run), len(track))   # the pass starts in the south-west and ends in the north: part is behind us
+        self.assertLess(len(run), len(track))   # the pass starts in the south-west (behind us) and ends in the north: part is in front
         positions = {tuple(round(v, 1) for v in scene.sun_screen(alt, az)) for alt, az in in_view}
         self.assertTrue(set(run) <= positions)
         for x, y in run:
@@ -693,7 +693,7 @@ class PassAnimation(unittest.TestCase):
         head, tail, fade, label = scene.pass_tracks(plan)
         for point in run:
             self.assertIn(point, set(head.values))
-        self.assertEqual(scene.pass_view([(0, 30, 10), (10, 20, 20), (20, 15, 350)]), [])   # all north and low: nothing
+        self.assertEqual(scene.pass_view([(0, 30, 170), (10, 20, 180), (20, 15, 200)]), [])   # all south: behind the viewer
 
     def test_nothing_is_drawn_unless_a_pass_overlaps_the_next_fifteen_minutes(self):
         for when, drawn in ((BEFORE-timedelta(minutes=3), False), (BEFORE-timedelta(minutes=2), True), (BEFORE, True),
