@@ -1821,7 +1821,9 @@ def tracker_controller(t, animated, light):
     box = _outdoor(light, (26, 30, 38), (84, 90, 100))
     edge = _mix(box, (255, 255, 255), .25)
     step = Track([1, 1, .15, .15, 1], [0, .45, .5, .95, 1], 2)
-    return (f'<g data-portfolio="tracker"><path d="{_boxes([(x, y, w, h)])}" fill="{_rgb(box)}"/>'
+    clamp = [(x+w, y+5, PROTECTED['centre_column'][0]-x-w+2, 3)]   # strap onto the tripod's centre column
+    return (f'<g data-portfolio="tracker"><path d="{_boxes(clamp)}" fill="{_rgb(_mix(box, (0, 0, 0), .3))}"/>'
+            f'<path d="{_boxes([(x, y, w, h)])}" fill="{_rgb(box)}"/>'
             f'<path d="{_boxes([(x, y, w, 2), (x+w, y+4, 2, 2)])}" fill="{_rgb(edge)}"/>'
             f'<path d="{_boxes([(x+3, y+4, 4, 4)])}" fill="#38ff7a"/>'
             f'<rect x="{x+10}" y="{y+4}" width="4" height="4" fill="#ff4a3b" opacity="{step.value_text(t)}">'

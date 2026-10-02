@@ -31,12 +31,14 @@ DISTANCE_FEATHER = 18
 
 # (hue for moonlit blues, saturation gain, saturation cap, shadow floor rgb) per region.
 MATERIALS = dict(vegetation=(86, .85, .6, (.06, .085, .045)),
-                 telescope=(40, .12, .08, (.16, .17, .18)),
+                 telescope=(215, .2, .1, (.05, .055, .065)),
                  van=(48, .45, .32, (.12, .12, .09)),
                  workshop=(30, .7, .5, (.10, .075, .05)),
                  rover=(40, .2, .15, (.14, .14, .14)),
                  rock=(34, .25, .16, (.11, .105, .095)))
 DRY_VEGETATION = (38, .9, .5, (.1, .08, .04))   # straw and dust for the dry seasons
+TELESCOPE_GAMMA = .9     # the tube is black anodised metal: kept dark by day, highlights only
+NEAR_LUMINANCE = 24      # night-plate pixels darker than this are near silhouettes (trees, rock), never distant haze
 
 # (gamma, exposure, final rgb multiplier, haze rgb, haze share in the far band)
 GRADES = dict(day=(.5, 1.0, (1.0, 1.0, .95), (.66, .74, .84), .55),
@@ -101,16 +103,22 @@ def build(grade):
     for name, (hue, gain, cap, floor) in materials.items():
         hue_map = np.where(cool, hue+(h-245)*.12, h)
         sat_map = np.where(cool, np.minimum(s*gain, cap), np.minimum(s, .75))
-        relit = _rgb(hue_map, sat_map, lifted)
+        light = np.clip(exposure*v**TELESCOPE_GAMMA, 0, 1) if name == 'telescope' else lifted
+        relit = _rgb(hue_map, np.minimum(sat_map, cap) if name == 'telescope' else sat_map, light)
         floor = np.array(floor)
         out += weights[name][..., None]*(floor+relit*(1-floor))
 
-    # The far band keeps its own blue and fades into haze; its city lights are off by day.
-    far = _weight(DISTANCE, DISTANCE_FEATHER)
+    # The far band keeps its own blue and fades into haze; its city lights are off by day. Near things inside the
+    # band (tree silhouettes, the rock, the telescope) are not distant and get no haze.
+    lum = Image.open(scene.ASSETS/'observatory-background.png').convert('L')
+    near = lum.point(lambda value: 255 if value < NEAR_LUMINANCE else 0)
+    near = near.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.MinFilter(5)).filter(ImageFilter.GaussianBlur(2))
+    near = np.maximum(np.asarray(near, float)/255, np.maximum(weights['telescope'], weights['rock']))
+    far = _weight(DISTANCE, DISTANCE_FEATHER)*(1-near)
     distant = np.array(haze)*haze_share+_rgb(h, np.minimum(s*.5, .3), lifted)*(1-haze_share)
     out = out*(1-far[..., None])+distant*far[..., None]
     out = out*np.array(multiplier)
-    keep = (emissive & (far < .5))[..., None]
+    keep = (emissive & (far < .5) & (weights['telescope'] < .5))[..., None]   # no moonlit glints on the tube by day
     out = np.where(keep, plate*.65+out*.35, out)
     ground = _ground()
     alpha = ground.astype(float)
