@@ -21,6 +21,24 @@ install -m 644 deploy/observatory-live.service deploy/observatory-live.timer \
 if [[ -f /etc/systemd/system/observatory-archive.timer ]]; then
   install -m 644 deploy/observatory-archive.service deploy/observatory-archive.timer deploy/observatory-sync.service /etc/systemd/system/
 fi
+# Re-render the Caddy site (the live files and the website in site/) for the host this server already serves.
+MARKER="# managed by kushmodi observatory"
+if grep -qF "$MARKER" /etc/caddy/Caddyfile 2>/dev/null; then
+  HOST="$(grep -m1 -E '^[a-z0-9.-]+ \{[[:space:]]*$' /etc/caddy/Caddyfile | cut -d' ' -f1)"
+  if [[ "$HOST" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]]; then
+    sed -e "s|__SITE__|$HOST|" -e "s|__ROOT__|/var/lib/observatory/live|" -e "s|__SITE_ROOT__|$APP/repo/site|" \
+      deploy/Caddyfile.template > /etc/caddy/Caddyfile.new
+    if caddy validate --config /etc/caddy/Caddyfile.new --adapter caddyfile >/dev/null 2>&1; then
+      mv /etc/caddy/Caddyfile.new /etc/caddy/Caddyfile
+      systemctl reload caddy 2>/dev/null || systemctl restart caddy
+    else
+      rm -f /etc/caddy/Caddyfile.new
+      echo "update: the generated Caddyfile is invalid; Caddy was left as it was"
+    fi
+  else
+    echo "update: could not read the host name from /etc/caddy/Caddyfile; Caddy was left as it was"
+  fi
+fi
 systemctl daemon-reload
 systemctl enable --quiet --now observatory-weather.timer observatory-satellites.timer
 systemctl start observatory-weather.service || echo "update: weather fetch failed; the seasonal model is used until it works"

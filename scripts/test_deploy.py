@@ -49,11 +49,11 @@ class Compact(unittest.TestCase):
 
 
 class DeployFiles(unittest.TestCase):
-    def test_caddy_serves_only_the_three_live_files(self):
+    def test_caddy_serves_the_three_live_files_and_the_site(self):
         text = (DEPLOY/'Caddyfile.template').read_text()
         self.assertIn('@live path /live.svg /live.png /live.json', text)
         self.assertIn('respond 404', text)
-        self.assertEqual(text.count('file_server'), 1)
+        self.assertEqual(text.count('file_server'), 2)   # the live files and the website in site/ (test_site.py)
         self.assertIn('X-Content-Type-Options "nosniff"', text)
 
     def test_service_is_sandboxed_and_cannot_reach_the_network(self):

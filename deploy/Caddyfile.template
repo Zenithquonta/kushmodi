@@ -1,5 +1,6 @@
 # managed by kushmodi observatory (deploy/install.sh) -- edit deploy/Caddyfile.template in the repo instead.
-# Serves exactly three files; every other path is a 404. HTTPS certificates are automatic.
+# Serves the three live files (/live.svg, /live.png, /live.json) and the static Living Observatory website (the
+# repository's site/ directory) at /. Everything else is a 404. HTTPS certificates are automatic.
 __SITE__ {
 	root * __ROOT__
 	encode gzip
@@ -14,6 +15,21 @@ __SITE__ {
 			-Server
 		}
 		file_server
+	}
+	@site path / /index.html /favicon.svg /css/* /js/* /vendor/* /data/*
+	handle @site {
+		root * __SITE_ROOT__
+		header {
+			Cache-Control "public, max-age=300"
+			X-Content-Type-Options "nosniff"
+			Content-Security-Policy "default-src 'self'; img-src 'self' data:; connect-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+			Referrer-Policy "no-referrer"
+			Permissions-Policy "camera=(), microphone=(), geolocation=()"
+			-Server
+		}
+		file_server {
+			hide .* *.md
+		}
 	}
 	handle {
 		respond 404
