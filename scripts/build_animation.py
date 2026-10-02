@@ -1117,7 +1117,8 @@ def layers(t, animated, light=None):
             +traffic(t, animated, night, flying_routes(day['airliner'], light))
             +night_group('sky-details', sky_details(t, animated, day['crosses']), night)
             +night_group('meteors', meteors(t, animated, day['meteors'], day['meteor_count']), night)
-            +('' if light is None else portfolio(t, animated, light)+meadow(t, animated, light))+showers+workshop(t, animated))
+            +('' if light is None else shed_flicker(t, animated, light)+portfolio(t, animated, light)+meadow(t, animated, light)
+                                    +robot(t, animated, light))+showers+workshop(t, animated))
 
 
 # ---------------------------------------------------------------------------
@@ -1316,7 +1317,7 @@ def lighting_defs(light):
                      f'xlink:href="{day_plate(name)}"/>' for name, opacity in light['plates'].items() if opacity > 0)
     masks = ''.join(f'<mask id="{name}-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="{W}" height="{H}">'
                     f'<image width="{W}" height="{H}" href="{uri}" xlink:href="{uri}"/></mask>'
-                    for name, uri in plate_masks().items())+season_defs(light)
+                    for name, uri in plate_masks().items())+season_defs(light)+shed_defs(light)
     return (f'<linearGradient id="sky-grad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="{HORIZON_Y}">{stops}</linearGradient>'
             f'<radialGradient id="sky-glow"><stop offset="0" stop-color="{warm}" stop-opacity="1"/>'
             f'<stop offset=".4" stop-color="{warm}" stop-opacity=".55"/><stop offset="1" stop-color="{warm}" stop-opacity="0"/></radialGradient>'
@@ -1418,6 +1419,8 @@ def season(light, state):
     light['observation'] = observation
     light['env'] = env
     light['seed'] = state['seed_int']
+    hours, minutes = (int(part) for part in state['time'].split(':')[:2])
+    light['slot'] = (hours*60+minutes)//15   # the quarter hour, so small story details move with every redraw
     light['day'] = daily_variation(state)
     visibility = VISIBILITY_FLOOR+(1-VISIBILITY_FLOOR)*env['night_visibility']
     light['night'] = round(light['night']*visibility, 4)
@@ -2215,6 +2218,193 @@ def meadow(t, animated, light):
                      f'<path d="{tips}" fill="{_rgb(tip)}"/></g></g>')
     return f'<g data-weather="meadow">{"".join(parts)}</g>'
 
+
+
+# ---------------------------------------------------------------------------
+# Phase 15c: the shed's lamp flickers now and then, and the rover's robot reacts to what happens around it.
+# ---------------------------------------------------------------------------
+SHED_POLYGON = [(1190, 628), (1660, 560), (1660, H), (1190, H)]   # under the roof, in front of the wall
+SHED_KEEP = (1610, 750, W, 880)    # the lantern burns its own oil and never flickers
+SHED_BULB = (1335, 657, 22, 8)     # cx, cy, rx, ry of the pendant bulb
+SHED_BOX = (1180, 540, W, H)       # extent of the lamp-lit mask (stored at half resolution)
+SHED_DIM = .55                     # darkening at the deepest dip, at full darkness
+FLICKER_SLOTS = ((2.0, 8.0), (10.0, 16.0), (18.0, 22.5))
+FLICKER_SHAPES = dict(flicker=((0, 0), (.05, 1), (.12, .3), (.2, .85), (.34, 0)),
+                      sputter=((0, 0), (.04, .8), (.1, .1), (.3, .9), (.36, .15), (.6, .7), (.7, 0)),
+                      brownout=((0, 0), (.6, .7), (1.4, .75), (2.0, 0)))
+STORM_SURGE = 1.0                  # a thunderstorm's surge: the lamp dips this long after each strike
+
+ROBOT_LENS = (1203, 812)           # top-left of the big lens's pupil (2 x 3)
+ROBOT_LENS_COVER = (1202, 811, 5, 6)   # hides the painted pupil so only the moving one shows
+ROBOT_LENS_CENTRE = (1204, 814)
+ROBOT_SMALL_LENS = (1185, 815)
+ROBOT_MAST = (1134, 766)           # beacon on top of the mast's sensor box
+ROBOT_PANEL = (1205, 857)          # the cyan panel on the body
+ROBOT_BOX = (1116, 748, 1222, 868) # every robot overlay stays inside this
+MOODS = dict(calm=(127, 246, 255), rain=(255, 179, 71), alert=(255, 90, 74))
+PING = (2, 16, 1.2)                # ring radius from, to, and seconds
+
+
+def shed_mask():
+    return disk_cached('shed-mask', ['observatory-background.png'],
+                       (SHED_POLYGON, SHED_KEEP, SHED_BULB, SHED_BOX), _shed_mask, _checked_uri)
+
+
+def _shed_mask():
+    """White where the pendant lamp lights the shed: warm, saturated, bright wood, plus the bulb itself."""
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter
+    h, s, v = Image.open(ASSETS/'observatory-background.png').convert('RGB').convert('HSV').split()
+    warm = ImageChops.multiply(h.point(lambda x: 255 if 9 <= x <= 44 else 0), s.point(lambda x: 255 if x > 89 else 0))
+    lit = ImageChops.multiply(warm, v.point(lambda x: min(255, int(x*1.6)) if x > 76 else 0))
+    region = Image.new('L', (W, H), 0)
+    draw = ImageDraw.Draw(region)
+    draw.polygon(SHED_POLYGON, fill=255)
+    draw.rectangle(SHED_KEEP, fill=0)
+    lit = ImageChops.multiply(lit, region)
+    cx, cy, rx, ry = SHED_BULB
+    ImageDraw.Draw(lit).ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=255)
+    box = lit.filter(ImageFilter.GaussianBlur(2)).crop(SHED_BOX)
+    return _png_uri(box.resize((box.width//2, box.height//2), Image.BILINEAR))
+
+
+def shed_defs(light):
+    if not shed_events(light):
+        return ''
+    x0, y0, x1, y1 = SHED_BOX
+    uri = shed_mask()
+    return (f'<mask id="shed-mask" maskUnits="userSpaceOnUse" x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}">'
+            f'<image x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" preserveAspectRatio="none" '
+            f'href="{uri}" xlink:href="{uri}"/></mask>')
+
+
+def darkness_of(light):
+    return 1-light['daylight']
+
+
+def shed_events(light):
+    """(start, shape) of each lamp dip in the loop: after every strike in a thunderstorm, otherwise seeded per
+    quarter hour (so the flickers move each time the server redraws). None by day."""
+    if darkness_of(light) < .05:
+        return []
+    observation = light.get('observation')
+    if observation and observation['condition'] == 'thunderstorm':
+        return [(round(when+STORM_SURGE, 2), 'flicker') for when, _ in strikes(light['seed'])]
+    rng = random.Random(layer_seed(light['seed'], f'flicker-{light.get("slot", 0)}'))
+    events = []
+    for lo, hi in sorted(rng.sample(FLICKER_SLOTS, rng.choice((1, 2, 2, 3)))):
+        kind = rng.choice(sorted(FLICKER_SHAPES))
+        events.append((round(rng.uniform(lo, hi-FLICKER_SHAPES[kind][-1][0]), 2), kind))
+    return events
+
+
+def shed_track(light):
+    depth = SHED_DIM*darkness_of(light)
+    points = [(start+s, v*depth) for start, kind in shed_events(light) for s, v in FLICKER_SHAPES[kind]]
+    return Track.timeline(points, 0, digits=3)
+
+
+def shed_flicker(t, animated, light):
+    if not shed_events(light):
+        return ''
+    track = shed_track(light)
+    x0, y0, x1, y1 = SHED_BOX
+    return (f'<rect data-shed="flicker" x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" fill="rgb(6,5,4)" '
+            f'mask="url(#shed-mask)" opacity="{track.value_text(t)}">{track.smil("opacity") if animated else ""}</rect>')
+
+
+def mood(light):
+    observation = light.get('observation')
+    if grounded(light) or (observation and observation['condition'] == 'thunderstorm'):
+        return 'alert'
+    return 'rain' if light['rain'] > 0 else 'calm'
+
+
+@functools.lru_cache(maxsize=1)
+def lock_moment():
+    """When the telescope's reticle locks on (the robot hears about it over the radio)."""
+    return next(i/100 for i in range(PERIOD*100) if LOCK['ret_a'].at(i/100) > .5)
+
+
+def robot_reactions(light):
+    """(time, kind, (dx, dy)) for each glance of the robot's eye: reactions first, idle glances in the gaps."""
+    observation = light.get('observation')
+    events = [(round(lock_moment()-.2, 2), 'lock', (-2, -1))]
+    if observation and observation['condition'] == 'thunderstorm':
+        events += [(round(when+.1, 2), 'strike', (0, -1)) for when, _ in strikes(light['seed'])]
+    events += [(round(start+.15, 2), 'flicker', (2, 0)) for start, _ in shed_events(light)
+               if not (observation and observation['condition'] == 'thunderstorm')]
+    rng = random.Random(layer_seed(light['seed'], f'robot-{light.get("slot", 0)}'))
+    for _ in range(6):
+        when = round(rng.uniform(1.0, PERIOD-3), 2)
+        events.append((when, 'idle', rng.choice(((-2, 0), (2, 0), (-1, 1), (1, -1), (0, 1)))))
+    chosen = []
+    for event in sorted(events, key=lambda e: (e[1] == 'idle', e[0])):
+        if all(abs(event[0]-other[0]) > 2.2 for other in chosen) and .5 <= event[0] <= PERIOD-2.2:
+            chosen.append(event)
+    return sorted(chosen)
+
+
+def robot_look(light):
+    points = []
+    for when, kind, (dx, dy) in robot_reactions(light):
+        hold = .9 if kind == 'idle' else 1.4
+        points += [(when, (0, 0)), (when+.15, (dx, dy)), (when+.15+hold, (dx, dy)), (when+.35+hold, (0, 0))]
+    return Track.timeline(points, (0, 0), digits=2)
+
+
+def robot_glow(light):
+    """Eye glow: brighter at night, dimmer when sheltering from rain, a startled flare after each strike."""
+    base = (.35+.45*darkness_of(light))*(.75 if mood(light) == 'rain' else 1)
+    points = []
+    for when, kind, _ in robot_reactions(light):
+        if kind == 'strike':
+            points += [(when-.05, base), (when, 1.0), (when+.3, 1.0), (when+.7, base)]
+    return Track.timeline(points, round(base, 3), digits=3) if points else Track([round(base, 3)]*2, None, PERIOD, digits=3)
+
+
+def robot_pings(light):
+    """(start) of each antenna ping: the telescope's lock-on, and every strike when the storm puts it on alert."""
+    pings = [round(lock_moment(), 2)]
+    observation = light.get('observation')
+    if observation and observation['condition'] == 'thunderstorm':
+        pings += [round(when+.3, 2) for when, _ in strikes(light['seed'])]
+    return sorted(p for p in pings if p+.4+PING[2]+.01 < PERIOD)
+
+
+def robot(t, animated, light):
+    anim = lambda track, name, kind=None: track.smil(name, kind) if animated and len(set(track.values)) > 1 else ''
+    colour = _rgb(MOODS[mood(light)])
+    dark = darkness_of(light)
+    look, glow = robot_look(light), robot_glow(light)
+    lx, ly = ROBOT_LENS
+    cx, cy = ROBOT_LENS_CENTRE
+    out = [f'<g data-robot="{mood(light)}">',
+           f'<rect x="{ROBOT_LENS_COVER[0]}" y="{ROBOT_LENS_COVER[1]}" width="{ROBOT_LENS_COVER[2]}" '
+           f'height="{ROBOT_LENS_COVER[3]}" fill="rgb(3,3,4)"/>',
+           f'<g opacity="{glow.value_text(t)}">{anim(glow, "opacity")}'
+           f'<circle cx="{cx}" cy="{cy}" r="6" fill="{colour}" opacity=".28"/>'
+           f'<circle cx="{ROBOT_SMALL_LENS[0]}" cy="{ROBOT_SMALL_LENS[1]}" r="4" fill="{colour}" opacity=".22"/></g>',
+           f'<g transform="translate({look.value_text(t)})">{anim(look, "transform", "translate")}'
+           f'<rect x="{lx}" y="{ly}" width="2" height="3" fill="{colour}"/></g>']
+    # Ping rings from the mast; radius and opacity share their timing.
+    for start in robot_pings(light):
+        lo, hi, span = PING
+        for delay in (0, .4):
+            s = start+delay
+            radius = Track.timeline([(s, lo), (s+span, hi), (s+span+.01, lo)], lo, digits=2)
+            fade = Track.timeline([(s, 0), (s+.05, .8), (s+span, 0)], 0, digits=3)
+            out.append(f'<circle cx="{ROBOT_MAST[0]}" cy="{ROBOT_MAST[1]}" r="{radius.value_text(t)}" fill="none" '
+                       f'stroke="{colour}" stroke-width="1.5" opacity="{fade.value_text(t)}">'
+                       f'{anim(radius, "r")}{anim(fade, "opacity")}</circle>')
+    period = 1.5 if mood(light) == 'alert' else 3
+    beacon = Track([1, 1, .15, .15], [0, .25, .25, 1], period)
+    out.append(f'<g opacity="{beacon.value_text(t)}">{anim(beacon, "opacity")}'
+               f'<circle cx="{ROBOT_MAST[0]}" cy="{ROBOT_MAST[1]}" r="4" fill="#ff4a3a" opacity="{_num(.4*dark, 3)}"/>'
+               f'<rect x="{ROBOT_MAST[0]-1}" y="{ROBOT_MAST[1]-1}" width="2" height="2" fill="#ff6a5a"/></g>')
+    px, py = ROBOT_PANEL
+    out.append(f'<ellipse data-robot="headlight" cx="{px}" cy="{py}" rx="12" ry="5" fill="#5ef2ff" '
+               f'opacity="{_num(.45*dark, 3)}"/></g>')
+    return ''.join(out)
 
 def feather_defs():
     x, y, w, h = PATCH_TARGET
