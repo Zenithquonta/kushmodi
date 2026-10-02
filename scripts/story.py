@@ -21,6 +21,12 @@ NAKED_EYE = ('Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn')
 OUTER = ('Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune')   # the planets that have an opposition
 APPROX_CHARS = dict(plain=29, inset=22)   # the line lengths the default fit rule allows (12 px per character)
 OPPOSITION_WINDOW_DAYS = 7
+PASS_LEAD = timedelta(minutes=90)   # a visible pass this close (or already under way) is announced first
+SAT_SHORT = dict(ISS='ISS', HUBBLE='HST', TIANGONG='CSS')   # the names on the wall screen and in the pass label
+# Plain, well-documented facts about each station or telescope, longest wording first.
+SAT_FACTS = dict(ISS=('ISS CREWED SINCE 2000', 'ISS · CREWED 2000'),
+                 HUBBLE=('HUBBLE IN ORBIT SINCE 1990', 'HUBBLE · SINCE 1990'),
+                 TIANGONG=('TIANGONG · FIRST MODULE 2021', 'TIANGONG · 2021'))
 SEASON_NOTES = dict(vasanta='SPRING', grishma='SUMMER HEAT', varsha='MONSOON', sharad='AUTUMN · SKIES CLEARING',
                     hemanta='EARLY WINTER', shishira='WINTER NIGHTS')
 
@@ -85,7 +91,8 @@ def context(state, light, fits=None):
                 dark=1-light['daylight'], observation=light.get('observation'), season=state['season'],
                 shower=state.get('sky_events', {}).get('meteor_shower'), mood=light.get('mood', 'calm'),
                 flicker=light.get('flicker', False), grounded=light.get('grounded', False),
-                lst=astronomy.get('local_sidereal_time_hours'), fits=fits or _approx_fits)
+                lst=astronomy.get('local_sidereal_time_hours'), satellites=state.get('satellites') or {},
+                fits=fits or _approx_fits)
 
 
 def beat(id, lines, inset=None, target=None, priority=None, weight=1.0, body=None):
@@ -101,6 +108,17 @@ def pick(c, inset, *options):
         if all(c['fits'](line, inset) for line in lines):
             return option
     return options[-1]
+
+
+def _pass_times(sat):
+    """(start, end) of a satellite's next visible pass as aware datetimes, or None."""
+    p = sat.get('next_pass')
+    return (_time(p['start']), _time(p['end'])) if p else None
+
+
+def _pass_facts(p):
+    """(highest point in whole degrees, start direction, end direction) of a pass."""
+    return round(p['max_altitude_deg']), p['start_direction'], p['end_direction']
 
 
 def _symbol(body):
@@ -147,6 +165,26 @@ def oppositions(c):
         out.append(beat(f'opposition-{name.lower()}',
                         [title, timing, f"MAG {_num(body['magnitude'])} · {_num(body['distance_au'], 2)} AU", where],
                         inset, name if up else None, priority=0, body=name))
+    return out
+
+
+def satellite_pass(c):
+    """A visible pass of the ISS, Hubble or Tiangong that starts within 90 minutes (or is under way): the real
+    start time, its highest point and its path across the sky. Never 'now' or 'overhead'."""
+    out = []
+    for name, sat in c['satellites'].items():
+        times = _pass_times(sat) if name in SAT_SHORT else None
+        if not times or not (c['now'] < times[1] and times[0]-c['now'] <= PASS_LEAD):
+            continue
+        start, end = times
+        alt, here, there = _pass_facts(sat['next_pass'])
+        when, short = f'{start:%H:%M}', SAT_SHORT[name]
+        title = pick(c, None, f'{name} PASS {when}', f'{short} PASS {when}')
+        path = pick(c, None, f'MAX {alt}° · {here} TO {there}', f'MAX {alt}° · {here}-{there}', f'MAX {alt}°')
+        minutes = max(1, round((end-start).total_seconds()/60))
+        sky = 'BEFORE DAWN' if start.hour < 12 else 'AFTER DUSK'
+        out.append(beat(f'sat-pass-{name.lower()}', [title, path, f'VISIBLE {minutes} MIN', f'LOOK UP {sky}'],
+                        priority=-1))   # ahead of everything: a pass lasts minutes, an opposition a week
     return out
 
 
@@ -289,6 +327,28 @@ def weather(c):
     return out
 
 
+def satellites(c):
+    """Ordinary beats about the three satellites: the next pass (when one is due within the day and is not already
+    announced as a priority beat) and a fact beside the real orbit height."""
+    out = []
+    for name, sat in c['satellites'].items():
+        if name not in SAT_SHORT:
+            continue
+        times = _pass_times(sat)
+        short = SAT_SHORT[name]
+        if times and times[0]-c['now'] > PASS_LEAD:
+            alt, here, there = _pass_facts(sat['next_pass'])
+            when = f'{times[0]:%H:%M}'
+            day = 'TOMORROW ' if times[0].date() > c['now'].date() else ''
+            out.append(beat(f'sat-next-{name.lower()}',
+                            [pick(c, None, f'{name} NEXT PASS', f'{short} NEXT PASS'),
+                             pick(c, None, f'{day}{when} · MAX {alt}°', f'{when} · MAX {alt}°'),
+                             pick(c, None, f'{here} TO {there}', f'{here}-{there}')], weight=2))
+        out.append(beat(f'sat-fact-{name.lower()}', [pick(c, None, *SAT_FACTS[name]),
+                                                      f"ORBIT HEIGHT {sat['height_km']} KM"], weight=1))
+    return out
+
+
 def season(c):
     s = c['season']
     return [beat('season', [f"{s['name'].upper()} SEASON", SEASON_NOTES.get(s['id'], ''),
@@ -321,8 +381,8 @@ def workshop(c):
     return out
 
 
-TEMPLATES = (oppositions, on_this_day, meteor_shower, moon_extremes, planets_up, planets_rising, jupiter_moons,
-             outer_planets, moon_phase, sun_events, weather, season, night_sky, workshop)
+TEMPLATES = (oppositions, satellite_pass, on_this_day, meteor_shower, moon_extremes, planets_up, planets_rising,
+             jupiter_moons, outer_planets, moon_phase, sun_events, weather, satellites, season, night_sky, workshop)
 
 
 def eligible(c):

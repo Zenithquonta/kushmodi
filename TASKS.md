@@ -725,3 +725,24 @@ LO-P16   3D explorable portfolio website on the VPS (see AGENTS.md "Living Obser
          beats in live.json. Coder subagent; supervisor verifies in headless Chromium.
 ```
 
+
+### LO-P15e
+
+```text
+LO-P15e  Artificial satellites: ISS (25544), Hubble (20580), Tiangong (48274).
+Status: implemented, awaiting supervisor review. Implemented by: coder subagent; reviewed by: supervisor (pending)
+Files: scripts/satellites.py (CelesTrak fetcher, TLE validation, SGP4/skyfield pass computation, disk cache),
+  scripts/scene_state.py (state key satellites), scripts/render_live.py and render_daily.py (--satellites),
+  scripts/story.py (pass, next-pass and fact beats), scripts/build_animation.py (SAT TRACK screen page, animated
+  real pass track and label), scripts/test_satellites.py (48 tests), scripts/fixtures/celestrak-2026-10-02.tle,
+  deploy/observatory-satellites.service and .timer (+ install.sh, update.sh, check.sh, live and archive services),
+  requirements.txt (skyfield, sgp4), docs/LIVING-OBSERVATORY.md (Phase 15e notes), deploy/README.md.
+Merged main (fa7216d wall-screen bezel geometry) into the branch: the sats page uses SCREEN_MARGIN, the 13 px row
+  pitch and the bezel backing; pages are 5 s each, the blueprint 20-24 s.
+Evidence (coder): python -m unittest discover -s scripts -p 'test_*.py' -> exit 0, Ran 274 tests in 281 s, OK (run
+  before the two last small tests were added: RealFixture in test_satellites and the unit wiring in test_deploy,
+  both run on their own and OK). python scripts/quality_gate.py -> exit 0. Default scene check -> True True.
+  Per-render satellite cost: about 1.4 s uncached for three satellites (two noon windows each), about 0.13 s with the
+  disk cache warm; a whole live render takes 3 s either way.
+Not browser-verified by the coder.
+```

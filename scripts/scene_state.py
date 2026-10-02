@@ -95,7 +95,7 @@ def _local(t, tz):
     return None if t is None else t.Utc().replace(tzinfo=timezone.utc).astimezone(tz).replace(microsecond=0).isoformat()
 
 
-def scene_state(when, config=None, weather=None):
+def scene_state(when, config=None, weather=None, satellites=None):
     if when.tzinfo is None or when.utcoffset() is None:
         raise ValueError('scene_state needs a timezone-aware datetime')
     cfg = config or load_config()
@@ -148,10 +148,20 @@ def scene_state(when, config=None, weather=None):
         'lighting': {'daylight': round(daylight(sun_alt), 4)},
         'sky_events': {'meteor_shower': meteor_shower_for(local.date(), cfg)},
         'weather': weather,   # a validated observation from scripts/weather.py, or None for the seasonal model
+        'satellites': _satellites(satellites, when, cfg),   # ISS, Hubble, Tiangong from scripts/satellites.py, or None
         'seed': seed,
         'seed_int': seed_int,
         'renderer_version': cfg['renderer_version'],
     }
+
+
+def _satellites(elements, when, cfg):
+    """Positions and next visible passes for the validated element sets in ``elements`` (scripts/satellites.py
+    ``load``); None without data. Imported here so a scene without satellites needs neither skyfield nor sgp4."""
+    if not elements:
+        return None
+    import satellites
+    return satellites.compute(elements, when, cfg)
 
 
 def altitude_by_hour(local_date, tz, observer):

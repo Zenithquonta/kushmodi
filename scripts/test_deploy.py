@@ -123,6 +123,23 @@ class DeployFiles(unittest.TestCase):
         for script in ('install.sh', 'update.sh'):
             self.assertIn('observatory-weather.timer', (DEPLOY/script).read_text())
 
+    def test_satellite_fetcher_is_online_and_the_renderers_stay_offline(self):
+        unit = (DEPLOY/'observatory-satellites.service').read_text()
+        for line in ('User=observatory', 'ReadWritePaths=/var/lib/observatory/satellites',
+                     'RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX', 'ProtectSystem=strict', 'CapabilityBoundingSet=',
+                     'scripts/satellites.py fetch --out /var/lib/observatory/satellites'):
+            self.assertIn(line, unit)
+        self.assertNotIn('PrivateNetwork', unit)
+        for service in ('observatory-live.service', 'observatory-archive.service'):
+            text = (DEPLOY/service).read_text()
+            self.assertIn('PrivateNetwork=yes', text)
+            self.assertIn('--satellites /var/lib/observatory/satellites/tle.json', text)
+        for script in ('install.sh', 'update.sh', 'check.sh'):
+            self.assertIn('observatory-satellites', (DEPLOY/script).read_text())
+        requirements = (ROOT/'requirements.txt').read_text()
+        self.assertIn('skyfield', requirements)
+        self.assertIn('sgp4', requirements)
+
     def test_install_validates_the_hostname_before_using_it(self):
         text = (DEPLOY/'install.sh').read_text()
         self.assertLess(text.index('[[ "$HOST" =~'), text.index('sed -e "s|__SITE__|$HOST|"'))

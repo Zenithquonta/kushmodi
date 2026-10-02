@@ -303,9 +303,9 @@ class PlanetScreen(unittest.TestCase):
         self.check(dict(planets={name: dict(body, altitude_deg=123, constellation_symbol='Cap')
                                  for name, body in planets.items()}))
 
-    def test_the_page_is_on_the_screen_between_12_and_18_seconds(self):
-        self.assertEqual([page for page, _, _ in scene.SCREEN_PAGES], ['sun', 'moon', 'planets'])
-        self.assertEqual(scene.SCREEN_PAGES[-1][1:], (12.0, 18.0))
+    def test_the_page_is_on_the_screen_between_10_and_15_seconds(self):
+        self.assertEqual([page for page, _, _ in scene.SCREEN_PAGES], ['sun', 'moon', 'planets', 'sats'])
+        self.assertEqual(scene.SCREEN_PAGES[2][1:], (10.0, 15.0))
         markup = scene.screen(0, False, scene.lighting(state_at(OPPOSITION)), state_at(OPPOSITION)['astronomy'])
         self.assertIn('data-screen="planets" opacity="0"', markup)
 
@@ -314,7 +314,7 @@ class StoryAnimations(unittest.TestCase):
     """The generic SMIL-vs-raster and loop checks on the night of Saturn's opposition, sampled at the story swap and
     fade, the screen's page changes and the reticle's pulse."""
 
-    STORY_TIMES = [11.5, 11.7, 12.0, 12.2, 23.5, 23.7, 23.95, 5.9, 6.1, 11.9, 12.1, 17.9, 18.1]
+    STORY_TIMES = [11.5, 11.7, 12.0, 12.2, 23.5, 23.7, 23.95, 4.9, 5.1, 9.9, 10.1, 11.9, 12.1, 14.9, 15.1, 19.9, 20.1]
 
     def test_opposition_night(self):
         when = datetime(2026, 10, 5, 0, 0, tzinfo=IST)

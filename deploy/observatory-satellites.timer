@@ -1,0 +1,12 @@
+# CelesTrak publishes new element sets a few times a day and asks clients not to poll more often than every
+# couple of hours; the picture only needs them to be days old at worst (older than 14 days they are ignored).
+[Unit]
+Description=Fetch the ISS, Hubble and Tiangong orbital elements every 12 hours
+
+[Timer]
+OnCalendar=*-*-* 03,15:07
+OnBootSec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

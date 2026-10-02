@@ -7,6 +7,7 @@ This script composes those layers and defines their animation timelines.
 import argparse
 import base64
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 import functools
 import json
 import math
@@ -1111,7 +1112,7 @@ def layers(t, animated, light=None):
     return (night_group('twinkles', twinkles(t, animated, day['twinkles']), night)+overlay
             +night_group('celestial', celestial(t, animated), night)
             +night_group('satellite', satellite(t, animated, SATELLITE_PATHS[day['satellite']]), night)
-            +('' if light is None else light['bodies'])+weather
+            +('' if light is None else light['bodies']+sat_pass(t, animated, light))+weather
             +('' if light is None else lightning(t, animated, light))+city+('' if light is None else light['title'])
             +('' if light is None else advisory(t, animated, light)+story_panel(t, animated, light))
             +traffic(t, animated, night, flying_routes(day['airliner'], light))
@@ -1442,6 +1443,9 @@ def season(light, state):
     light['weather'] = season_markup(light)
     light['bodies'] = sky_bodies(light, state)
     light['story'] = story_beats(state, light)
+    light['satellites'] = state.get('satellites')
+    light['now'] = state.get('timestamp_local')
+    light['pass'] = pass_plan(light)
     return light
 
 
@@ -2263,7 +2267,8 @@ STORM_SURGE = 1.0                  # a thunderstorm's surge: every light dips to
 SCREEN_BEZEL = ((1507, 643), (1633, 630), (1633, 730), (1507, 729))   # inside the painted frame (it is in perspective)
 SCREEN = (1510, 646, 1629, 726)    # the content box, inside the bezel's shortest sides
 SCREEN_MARGIN = 3                  # text starts this far in from the content box's left edge
-SCREEN_PAGES = (('sun', 0.0, 6.0), ('moon', 6.0, 12.0), ('planets', 12.0, 18.0))   # the blueprint shows 18..24
+SCREEN_PAGES = (('sun', 0.0, 5.0), ('moon', 5.0, 10.0), ('planets', 10.0, 15.0), ('sats', 15.0, 20.0))   # the blueprint shows 20..24
+TEXT_PAGES = ('planets', 'sats')   # pages that are lines of text only (no sky plot)
 SCREEN_FADE = .25
 SCREEN_COLOURS = dict(back='#03101a', text='#a8f8ff', title='#ffc44d', dim='#2a6a7a', sun='#ffd75e', moon='#e8eefc')
 
@@ -2390,10 +2395,43 @@ def planet_rows(astronomy):
     return [text for _, text in sorted(rows)][:SCREEN_PLANET_ROWS]
 
 
-def screen_lines(page, astronomy):
+SAT_SHORT = dict(ISS='ISS', HUBBLE='HST', TIANGONG='CSS')   # the satellites' names on the screen and in the pass label
+
+
+def screen_fits(text):
+    """Whether a line of the wall screen (2-px cells, from its left margin) ends inside the screen."""
+    _, width, _ = pixel_text(text, SCREEN[0]+SCREEN_MARGIN, 0, cell=2)
+    return SCREEN[0]+SCREEN_MARGIN+width <= SCREEN[2]-1
+
+
+def sat_rows(satellites):
+    """One line per satellite: ISS 19:42 67° NW is the start time, highest point and start direction of its next
+    visible pass, ISS --:-- none within a day. The degree sign is set against the direction (67°NW) when the
+    spaced form would overrun the screen for any row,
+    and the degree sign is dropped when even that would."""
+    if not satellites:
+        return ['NO ORBIT DATA']
+    rows = []
+    for name, short in SAT_SHORT.items():
+        if name in satellites:
+            p = satellites[name].get('next_pass')
+            rows.append((short, p and (p['start'][11:16], round(p['max_altitude_deg']), p['start_direction'])))
+    def text(row, form):
+        if not row[1]:
+            return f'{row[0]} --:--'
+        return f'{row[0]} {row[1][0]} {row[1][1]}{form[0]}{form[1]}{row[1][2]}'
+    for form in (('\u00b0', ' '), ('\u00b0', ''), ('', ' ')):   # the last drops the degree sign: 88 NW always fits
+        if all(screen_fits(text(row, form)) for row in rows):
+            break
+    return [text(row, form) for row in rows] or ['NO ORBIT DATA']
+
+
+def screen_lines(page, astronomy, satellites=None):
     """The text of one screen page, built only from computed numbers."""
     if page == 'planets':
         return ['PLANET TRACK']+planet_rows(astronomy)
+    if page == 'sats':
+        return ['SAT TRACK']+sat_rows(satellites)
     body = astronomy[page]
     alt, az = round(body['altitude_deg']), round(body['azimuth_deg']) % 360
     lines = [f'{page.upper()} TRACK', f'AZ {az:03d} EL {alt:+d}\u00b0']   # tracking-display style: azimuth, elevation
@@ -2457,8 +2495,8 @@ def screen(t, animated, light, astronomy):
             fade = Track.timeline([(start-SCREEN_FADE, 0), (start, 1), (end-SCREEN_FADE, 1), (end, 0)], 0, digits=3)
         bezel = 'M'+'L'.join(f'{x} {y}' for x, y in SCREEN_BEZEL)+'z'
         parts = [f'<path d="{bezel}" fill="{c["back"]}" opacity=".94"/>']
-        if page == 'planets':
-            for i, text in enumerate(screen_lines(page, astronomy)):
+        if page in TEXT_PAGES:
+            for i, text in enumerate(screen_lines(page, astronomy, light.get('satellites'))):
                 d, _, _ = pixel_text(text, x0+SCREEN_MARGIN, y0+3+i*SCREEN_ROW_PITCH, cell=2)
                 parts.append(f'<path d="{d}" fill="{c["title"] if i == 0 else c["text"]}"/>')
             out += (f'<g data-screen="{page}" opacity="{fade.value_text(t)}">{fade.smil("opacity") if animated else ""}'
@@ -2748,6 +2786,123 @@ def story_panel(t, animated, light):
                     +_reticle(place[0], place[1], c['title'])+'</g>')
         out += '</g>'
     return out+'</g>'
+
+# ---------------------------------------------------------------------------
+# Phase 15e: a real satellite pass. When the ISS, Hubble or Tiangong has a visible pass that overlaps the next 15
+# minutes, its real track (scripts/satellites.py: altitude and azimuth every 10 s) crosses the south-facing sky once
+# per loop, compressed into PASS_SPAN seconds: a small bright dot with a faint trail, masked to the sky, behind the
+# name and the log, labelled with the real pass time. It is drawn only for the part of the track that is in view,
+# never at t = 0 (the still frame shows nothing), and only fades in and out: no flash.
+# ---------------------------------------------------------------------------
+PASS_WINDOW = timedelta(minutes=15)
+PASS_AT, PASS_SPAN, PASS_FADE = 3.0, 7.0, .3   # loop second the dot appears, seconds it takes to cross, fade time
+PASS_TRAIL = 3                                   # the trail reaches back this many track samples
+PASS_MIN_POINTS = 3
+PASS_LABEL_ANCHORS = 8                           # track points tried, from the first one in the open sky
+PASS_COLOURS = dict(dot='#fff6d8', glow='#bfe4ff', trail='#d6ecff', label='#d6f4ff', back='#04141f')
+PASS_LABEL_CELL = 2
+
+
+def pass_overlapping(light):
+    """(name, pass) of the visible pass that starts soonest among those overlapping [now, now + 15 min], or None."""
+    satellites, now = light.get('satellites'), light.get('now')
+    if not satellites or not now:
+        return None
+    now = datetime.fromisoformat(now)
+    best = None
+    for name in SAT_SHORT:
+        p = (satellites.get(name) or {}).get('next_pass')
+        if not p:
+            continue
+        start, end = datetime.fromisoformat(p['start']), datetime.fromisoformat(p['end'])
+        if end > now and start < now+PASS_WINDOW and (best is None or start < best[0]):
+            best = (start, name, p)
+    return best and best[1:]
+
+
+def pass_view(track):
+    """The longest run of the track that is in view (the south and everything high overhead), as scene positions."""
+    runs, run = [], []
+    for _, alt, az in track:
+        if in_view(alt, az):
+            run.append(tuple(round(v, 1) for v in sun_screen(alt, az)))
+        elif run:
+            runs.append(run)
+            run = []
+    runs.append(run)
+    return max(runs, key=len)
+
+
+def pass_label_place(label, points):
+    """Top-left of the label near the start of the track: beside the first point that clears the skyline (a pass
+    often rises behind the trees), or the next few, clear of the name, the lock-on readout, the log panel and the
+    canvas edge. None when nowhere fits."""
+    _, width, height = pixel_text(label, 0, 0, cell=PASS_LABEL_CELL)
+    open_sky = [(x, y) for x, y in points if y < (skyline_top(x, x) or 0)-6]
+    for x, y in open_sky[:PASS_LABEL_ANCHORS]:
+        for dx, dy in ((10, -height-10), (10, 10), (-width-10, -height-10), (-width-10, 10),
+                       (-width/2, -height-12), (-width/2, 12)):
+            left, top = round(x+dx), round(y+dy)
+            box = (left-2, top-2, left+width+2, top+height+2)
+            floor = skyline_top(box[0], box[2])
+            if box[0] >= 0 and box[2] <= W and box[1] >= 0 and floor is not None and box[3] <= floor and \
+                    not any(overlaps(box, globals()[avoid]) for avoid in RETICLE_AVOID):
+                return left, top
+    return None
+
+
+def pass_plan(light):
+    """What to draw for a pass due in the next quarter hour: the satellite, its label, the in-view track and the
+    place of the label; None when no pass is due, the sky is under thick cloud or too little of the track is in view."""
+    due = pass_overlapping(light)
+    if due is None or light['overcast'] > .3:
+        return None
+    name, p = due
+    points = pass_view(p['track'])
+    if len(points) < PASS_MIN_POINTS:
+        return None
+    label = f"{SAT_SHORT[name]} {p['start'][11:16]}"
+    return dict(name=name, label=label, points=points, label_at=pass_label_place(label, points))
+
+
+def pass_tracks(plan):
+    """Position of the dot, the far end of its trail, and the dot's and the label's opacity over the loop. The dot
+    and the trail share key times (trail point i is dot point i-PASS_TRAIL), so both interpolate exactly."""
+    points = plan['points']
+    times = [PASS_AT+PASS_SPAN*i/(len(points)-1) for i in range(len(points))]
+    head = Track.timeline(list(zip(times, points)), points[0], digits=1)
+    tail = Track.timeline([(when, points[max(0, i-PASS_TRAIL)]) for i, when in enumerate(times)], points[0], digits=1)
+    start, end = times[0], times[-1]
+    fade = Track.timeline([(start, 0), (start+PASS_FADE, 1), (end-PASS_FADE, 1), (end, 0)], 0, digits=3)
+    label = Track.timeline([(start-PASS_FADE, 0), (start, 1), (end+.6, 1), (end+.6+PASS_FADE, 0)], 0, digits=3)
+    return head, tail, fade, label
+
+
+def sat_pass(t, animated, light):
+    plan = light.get('pass')
+    if not plan:
+        return ''
+    c = PASS_COLOURS
+    head, tail, fade, label = pass_tracks(plan)
+    anim = lambda track, name, kind=None: track.smil(name, kind) if animated else ''
+    scalar = lambda track, i: Track([v[i] for v in track.values], track.key_times, track.dur, track.begin, track.digits)
+    trail = (f'<line x1="{_num(tail.at(t)[0], 1)}" y1="{_num(tail.at(t)[1], 1)}" x2="{_num(head.at(t)[0], 1)}" '
+             f'y2="{_num(head.at(t)[1], 1)}" stroke="{c["trail"]}" stroke-width="1.5" opacity=".4">'
+             +''.join(anim(scalar(track, i), name) for track, names in ((tail, ('x1', 'y1')), (head, ('x2', 'y2')))
+                      for i, name in enumerate(names))+'</line>')
+    dot = (f'<g transform="translate({head.value_text(t)})">{anim(head, "transform", "translate")}'
+           f'<circle r="9" fill="{c["glow"]}" opacity=".28"/>'
+           f'<rect x="-3" y="-3" width="6" height="6" fill="{c["dot"]}"/></g>')
+    out = (f'<g data-sky="pass" data-pass="{plan["name"].lower()}" mask="url(#sky-mask)">'
+           f'<g opacity="{fade.value_text(t)}">{anim(fade, "opacity")}{trail}{dot}</g>')
+    if plan['label_at']:
+        x, y = plan['label_at']
+        d, width, height = pixel_text(plan['label'], x, y, cell=PASS_LABEL_CELL)
+        out += (f'<g data-pass-label="{plan["name"].lower()}" opacity="{label.value_text(t)}">{anim(label, "opacity")}'
+                f'<rect x="{x-2}" y="{y-2}" width="{width+4}" height="{height+4}" fill="{c["back"]}" opacity=".55"/>'
+                f'<path d="{d}" fill="{c["label"]}"/></g>')
+    return out+'</g>'
+
 
 def feather_defs():
     x, y, w, h = PATCH_TARGET

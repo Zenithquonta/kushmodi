@@ -23,6 +23,7 @@ import astronomy as ae
 
 import build_animation as scene
 import scene_state
+import satellites as satellite_data
 import weather as weather_data
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -105,12 +106,19 @@ def _render_one(state, png, webp, width, quality):
     png.unlink()
 
 
-def render_date(d, out, config, width, quality, pool=None, weather_log=None):
+def elements_for(satellites_file, when):
+    """The element sets for a frame at ``when``. Frames of the previous days are re-rendered from the latest
+    elements (up to two weeks ahead of the frame: SGP4 propagates backwards just as well)."""
+    return satellite_data.load(satellites_file, when, satellite_data.STALE_AFTER) if satellites_file else None
+
+
+def render_date(d, out, config, width, quality, pool=None, weather_log=None, satellites_file=None):
     """Render, validate and install both frames for ``d``; returns its index entry."""
     out = Path(out)
     year_dir = out/f'{d.year:04d}'
     year_dir.mkdir(parents=True, exist_ok=True)
-    states = {kind: scene_state.scene_state(when, config, weather_data.nearest(weather_log, when) if weather_log else None)
+    states = {kind: scene_state.scene_state(when, config, weather_data.nearest(weather_log, when) if weather_log else None,
+                                            elements_for(satellites_file, when))
               for kind, when in zip(KINDS, frame_times(d, config))}
     with tempfile.TemporaryDirectory(prefix='.frames-', dir=out) as directory:
         temp = Path(directory)
@@ -148,7 +156,7 @@ def write_index(out, index):
     os.replace(handle.name, out/'index.json')
 
 
-def run(dates, out, config, width=None, quality=None, force=False, log=print, weather_log=None):
+def run(dates, out, config, width=None, quality=None, force=False, log=print, weather_log=None, satellites_file=None):
     """Render every date in ``dates`` (inside the year window) under one lock; returns the dates rendered."""
     archive = config['archive']
     width, quality = width or archive['width'], quality or archive['webp_quality']
@@ -166,7 +174,7 @@ def run(dates, out, config, width=None, quality=None, force=False, log=print, we
                 if not force and is_complete(out, d, width) and d.isoformat() in index['frames']:
                     log(f'{d} already archived')
                     continue
-                index['frames'][d.isoformat()] = render_date(d, out, config, width, quality, pool, weather_log)
+                index['frames'][d.isoformat()] = render_date(d, out, config, width, quality, pool, weather_log, satellites_file)
                 write_index(out, index)   # after every date, so an interrupted range keeps what it finished
                 rendered.append(d)
                 entry = index['frames'][d.isoformat()]
@@ -185,6 +193,7 @@ def main():
     parser.add_argument('--width', type=int)
     parser.add_argument('--force', action='store_true', help='re-render dates that are already archived')
     parser.add_argument('--weather-log', help='history.json from weather.py (the reading nearest each frame is used)')
+    parser.add_argument('--satellites', help='tle.json from satellites.py (the ISS, Hubble and Tiangong in the log)')
     args = parser.parse_args()
     config = scene_state.load_config()
     if args.range:
@@ -199,7 +208,8 @@ def main():
             return
     else:
         dates = [args.date or today_local(config)]
-    run(dates, args.out, config, args.width, force=args.force, weather_log=args.weather_log)
+    run(dates, args.out, config, args.width, force=args.force, weather_log=args.weather_log,
+        satellites_file=args.satellites)
 
 
 def recent_dates(today, count, config):
