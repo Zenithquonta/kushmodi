@@ -1114,8 +1114,8 @@ def layers(t, animated, light=None):
             +night_group('satellite', satellite(t, animated, SATELLITE_PATHS[day['satellite']]), night)
             +('' if light is None else light['bodies']+sat_pass(t, animated, light))+weather
             +('' if light is None else lightning(t, animated, light))+city+('' if light is None else light['title'])
-            +('' if light is None else advisory(t, animated, light)+story_panel(t, animated, light))
-            +traffic(t, animated, night, flying_routes(day['airliner'], light))
+                        +traffic(t, animated, night, flying_routes(day['airliner'], light))
+            +('' if light is None else advisory(t, animated, light)+story_panel(t, animated, light))   # over the traffic
             +night_group('sky-details', sky_details(t, animated, day['crosses']), night)
             +night_group('meteors', meteors(t, animated, day['meteors'], day['meteor_count']), night)
             +('' if light is None else shed_flicker(t, animated, light)+screen(t, animated, light, light['astronomy'])+portfolio(t, animated, light)+meadow(t, animated, light)

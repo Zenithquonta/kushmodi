@@ -730,7 +730,7 @@ LO-P16   3D explorable portfolio website on the VPS (see AGENTS.md "Living Obser
 
 ```text
 LO-P15e  Artificial satellites: ISS (25544), Hubble (20580), Tiangong (48274).
-Status: implemented, awaiting supervisor review. Implemented by: coder subagent; reviewed by: supervisor (pending)
+Status: implemented, awaiting supervisor review. Implemented by: coder subagent; reviewed by: supervisor
 Files: scripts/satellites.py (CelesTrak fetcher, TLE validation, SGP4/skyfield pass computation, disk cache),
   scripts/scene_state.py (state key satellites), scripts/render_live.py and render_daily.py (--satellites),
   scripts/story.py (pass, next-pass and fact beats), scripts/build_animation.py (SAT TRACK screen page, animated
@@ -745,4 +745,9 @@ Evidence (coder): python -m unittest discover -s scripts -p 'test_*.py' -> exit 
   Per-render satellite cost: about 1.4 s uncached for three satellites (two noon windows each), about 0.13 s with the
   disk cache warm; a whole live render takes 3 s either way.
 Not browser-verified by the coder.
+Supervisor review: merged 712f601; full suite rerun -> exit 0, Ran 276 tests in 275 s; gate exit 0; default scene
+  identical. Render showed the X-wing route crossing the log panel; fixed by drawing the advisory/log panel above
+  the air traffic; test_story/test_storm/test_satellites rerun OK. Browser playback and a live CelesTrak fetch are
+  not yet verified (server).
+Decision: approve
 ```
