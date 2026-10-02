@@ -287,6 +287,9 @@ Remaining, in order:
    `sudo bash /opt/observatory/repo/deploy/update.sh` and `.../check.sh`. Optional: install-archive.sh with a deploy
    key; regenerate the DuckDNS token; delete the unused `kushsky` domain.
 
+Sky decisions (user, 2026-10-02): the README image faces NORTH (west left, east right, Polaris centre); the website
+sky is a full 360°. Planets and the Moon carry a trail: "not a complete arc, a continuous line that gets dimmer
+following the celestial object" (past ~3 h, fading with age). Galaxies and the ringed planet are removed in live.
 Decisions recorded: LinkedIn is https://www.linkedin.com/in/kush-modi-b85388311; keep Modi Fintelli out; contacts as
 in README; the user prefers terse step lists; check credit usage, the user will say when to wrap up.
 
