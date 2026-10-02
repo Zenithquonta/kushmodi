@@ -274,8 +274,8 @@ class PlanetScreen(unittest.TestCase):
         self.assertLessEqual(len(lines), 7)
         self.assertEqual(lines[0], 'PLANET TRACK')
         for text in lines:
-            _, width, _ = scene.pixel_text(text, scene.SCREEN[0]+5, 0, cell=2)
-            self.assertLessEqual(width, scene.SCREEN[2]-scene.SCREEN[0]-8, text)
+            _, width, _ = scene.pixel_text(text, scene.SCREEN[0]+scene.SCREEN_MARGIN, 0, cell=2)
+            self.assertLessEqual(scene.SCREEN[0]+scene.SCREEN_MARGIN+width, scene.SCREEN[2]-1, text)
         below = False
         for text in lines[1:]:
             if ' RISE ' in text:
@@ -298,7 +298,7 @@ class PlanetScreen(unittest.TestCase):
                    for alt, name in zip((123, -100, 100, -5, 88, -88, 5), BEAT_NAMES)}
         planets['Mercury']['rise'] = None
         lines = self.check(dict(planets=planets))
-        self.assertEqual(len(lines), 7)
+        self.assertEqual(len(lines), 1+scene.SCREEN_PLANET_ROWS)
         self.check(dict(planets={name: dict(body, altitude_deg=-123) for name, body in planets.items()}))
         self.check(dict(planets={name: dict(body, altitude_deg=123, constellation_symbol='Cap')
                                  for name, body in planets.items()}))
