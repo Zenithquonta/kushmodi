@@ -112,6 +112,17 @@ class DeployFiles(unittest.TestCase):
         for port in ('rule 22', 'rule 80', 'rule 443'):
             self.assertIn(port, text)
 
+    def test_weather_fetcher_is_the_only_online_part_and_feeds_the_renderers(self):
+        unit = (DEPLOY/'observatory-weather.service').read_text()
+        for line in ('User=observatory', 'ReadWritePaths=/var/lib/observatory/weather',
+                     'RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX', 'ProtectSystem=strict', 'CapabilityBoundingSet='):
+            self.assertIn(line, unit)
+        self.assertIn('PrivateNetwork=yes', (DEPLOY/'observatory-live.service').read_text())
+        self.assertIn('--weather /var/lib/observatory/weather/current.json', (DEPLOY/'observatory-live.service').read_text())
+        self.assertIn('--weather-log /var/lib/observatory/weather/history.json', (DEPLOY/'observatory-archive.service').read_text())
+        for script in ('install.sh', 'update.sh'):
+            self.assertIn('observatory-weather.timer', (DEPLOY/script).read_text())
+
     def test_install_validates_the_hostname_before_using_it(self):
         text = (DEPLOY/'install.sh').read_text()
         self.assertLess(text.index('[[ "$HOST" =~'), text.index('sed -e "s|__SITE__|$HOST|"'))

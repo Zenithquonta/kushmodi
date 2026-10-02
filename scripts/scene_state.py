@@ -94,7 +94,7 @@ def _local(t, tz):
     return None if t is None else t.Utc().replace(tzinfo=timezone.utc).astimezone(tz).replace(microsecond=0).isoformat()
 
 
-def scene_state(when, config=None):
+def scene_state(when, config=None, weather=None):
     if when.tzinfo is None or when.utcoffset() is None:
         raise ValueError('scene_state needs a timezone-aware datetime')
     cfg = config or load_config()
@@ -140,6 +140,7 @@ def scene_state(when, config=None):
         },
         'lighting': {'daylight': round(daylight(sun_alt), 4)},
         'sky_events': {'meteor_shower': meteor_shower_for(local.date(), cfg)},
+        'weather': weather,   # a validated observation from scripts/weather.py, or None for the seasonal model
         'seed': seed,
         'seed_int': seed_int,
         'renderer_version': cfg['renderer_version'],

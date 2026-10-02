@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 import build_animation as scene
 import scene_state
+import weather as weather_data
 
 MIN_SVG_BYTES = 100_000   # the embedded plate alone is several MB
 MIN_PNG_BYTES = 10_000
@@ -46,13 +47,14 @@ def validate_json(path):
             raise ValueError(f'{path.name} lacks {key}')
 
 
-def render(when, out, png_width=scene.GIF_WIDTH, config=None, compact=True):
+def render(when, out, png_width=scene.GIF_WIDTH, config=None, compact=True, weather_file=None):
     """Write live.svg/live.png/live.json for ``when`` into ``out``; returns the SceneState.
 
     ``compact`` re-encodes the embedded rasters (JPEG 4:4:4 / WebP with lossless alpha), about a quarter of the size."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    state = scene_state.scene_state(when, config)
+    observation = weather_data.load_current(weather_file, when) if weather_file else None
+    state = scene_state.scene_state(when, config, observation)
     with tempfile.TemporaryDirectory(prefix='.live-', dir=out) as directory:
         temp = Path(directory)
         (temp/'live.svg').write_text(scene.scene(animated=True, state=state, compact=compact))
@@ -75,13 +77,15 @@ def main():
     parser.add_argument('--out', default='live', help='output directory')
     parser.add_argument('--png-width', type=int, default=scene.GIF_WIDTH)
     parser.add_argument('--full', action='store_true', help='embed the original PNGs instead of the compact encodings')
+    parser.add_argument('--weather', help="current.json from weather.py; missing or stale data uses the seasonal model")
     args = parser.parse_args()
     config = scene_state.load_config()
     when = datetime.fromisoformat(args.at) if args.at else datetime.now(ZoneInfo(config['location']['timezone']))
-    state = render(when, args.out, args.png_width, config, compact=not args.full)
+    state = render(when, args.out, args.png_width, config, compact=not args.full, weather_file=args.weather)
     sun = state['astronomy']['sun']
     print(f'{state["timestamp_local"]} sun {sun["altitude_deg"]:.1f} deg az {sun["azimuth_deg"]:.1f} '
-          f'daylight {state["lighting"]["daylight"]} -> {args.out}')
+          f'daylight {state["lighting"]["daylight"]} weather '
+          f'{state["weather"]["condition"] if state["weather"] else "seasonal model"} -> {args.out}')
 
 
 if __name__ == '__main__':

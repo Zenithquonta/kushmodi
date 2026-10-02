@@ -11,7 +11,7 @@ WorkingDirectory=/opt/observatory/repo
 Environment=XDG_CACHE_HOME=/tmp
 # Cached masks, star list and compact images (rebuilt automatically when the code or assets change)
 CacheDirectory=observatory
-ExecStart=/opt/observatory/venv/bin/python /opt/observatory/repo/scripts/render_live.py --out /var/lib/observatory/live
+ExecStart=/opt/observatory/venv/bin/python /opt/observatory/repo/scripts/render_live.py --out /var/lib/observatory/live --weather /var/lib/observatory/weather/current.json
 Nice=10
 CPUQuota=80%
 MemoryMax=1G

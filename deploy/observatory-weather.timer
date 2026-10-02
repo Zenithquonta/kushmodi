@@ -1,0 +1,11 @@
+# A few minutes before each quarter-hour render, matching the provider's 15-minute updates.
+[Unit]
+Description=Fetch Mumbai's weather every 15 minutes
+
+[Timer]
+OnCalendar=*:12/15
+OnBootSec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

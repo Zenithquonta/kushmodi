@@ -630,3 +630,18 @@ Also on main with this switch: one-shot Oracle Cloud Shell setup (deploy/oci-clo
 Revert at any time: python scripts/readme_live.py repo, commit, push.
 Decision: approve
 ```
+
+### LO-P14/15a — Telescope fix, render cache, real weather (2026-10-02)
+
+```text
+Requested by: user ("start phase 14 yourself"; then "fix the telescope ... add weather based in Mumbai ...")
+Implemented and reviewed by: supervisor agent; plans reviewed by the advisor before coding
+Telescope: day plates no longer haze near objects (rock, telescope, tree silhouettes); dark anodised tube; no blue
+  night glints by day; tracker box strapped to the column.
+Cache: CacheDirectory disk cache for masks, stars and compact encodings; 18.4 s -> 2.4 s here, identical output.
+Weather: scripts/weather.py + observatory-weather.timer; validated, optional, renderer offline; real fixture.
+Commands and outcomes: 177 tests pass; gate passes; shellcheck clean; systemd-analyze verify clean (server paths
+  aside); default scene byte-identical.
+User verified on the server: update.sh applied 9ef2f75; 43-47 s CPU per render before the cache.
+Decision: approve
+```

@@ -359,3 +359,21 @@ amendments that follow from measured facts, open decisions, and phase status.
   recomputed; writes are atomic. Measured here: 18.4 s uncached, 2.4 s warm, byte-identical output; a corrupted
   entry is recomputed. Off by default, so the default build and CI are unchanged. Tests: `scripts/test_cache.py`.
 
+## Phase 15a notes — real Mumbai weather
+
+- `scripts/weather.py` (stdlib) fetches Open-Meteo's current conditions for Mumbai (no key; data CC BY 4.0, credited
+  under the live image). It keeps only whitelisted fields within fixed ranges (temperature, humidity, precipitation,
+  rain, cloud cover, wind, gusts, is_day), maps the WMO code to the observatory's own conditions (clear,
+  partly-cloudy, overcast, fog, drizzle, rain, heavy-rain, thunderstorm) and writes `current.json` and a 48-hour
+  `history.json` atomically. Files read back are validated again; extra fields are dropped.
+- `observatory-weather.timer` (:12/:27/:42/:57) runs the fetcher, the only online part (IP sockets, writes only
+  `/var/lib/observatory/weather`). The renderers stay offline: `render_live.py --weather current.json` uses it when
+  within 90 minutes of the render, `render_daily.py --weather-log history.json` uses the reading nearest each frame;
+  otherwise the seasonal model is used and `live.json` shows `"weather": null`.
+- Mapping: cloud cover sets cloud density (at least 0.72 when it rains); precipitation (mm per 15 minutes) and the
+  condition set the rain amount, replacing the seeded showers; rain wets the ground; fog thickens the haze.
+- Verified against a real response captured on the server (2 Oct 2026 16:00: drizzle, 69 % cloud, gusts 31 km/h),
+  saved as `scripts/fixtures/open-meteo-2026-10-02T1600.json`. Measured on the Micro before the cache: 43-47 s CPU
+  per render, 142 MB peak.
+- Next (15b): lightning, wind-driven grass, grounded airliner with an advisory hologram.
+

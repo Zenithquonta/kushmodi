@@ -44,7 +44,7 @@ ffmpeg -hide_banner -version | grep -q enable-librsvg || die "this ffmpeg was bu
 say "service user and directories"
 id observatory >/dev/null 2>&1 || useradd --system --home-dir "$STATE" --no-create-home --shell /usr/sbin/nologin observatory
 install -d -o root -g root -m 755 "$APP"
-install -d -o observatory -g observatory -m 755 "$STATE" "$LIVE"
+install -d -o observatory -g observatory -m 755 "$STATE" "$LIVE" "$STATE/weather"
 
 say "code (read-only to the service) in $APP/repo"
 if [[ ! -d "$APP/repo/.git" ]]; then
@@ -55,7 +55,8 @@ fi
 "$APP/venv/bin/pip" install --quiet -r "$APP/repo/requirements.txt"
 
 say "systemd timer"
-install -m 644 "$APP/repo/deploy/observatory-live.service" "$APP/repo/deploy/observatory-live.timer" /etc/systemd/system/
+install -m 644 "$APP/repo/deploy/observatory-live.service" "$APP/repo/deploy/observatory-live.timer" \
+  "$APP/repo/deploy/observatory-weather.service" "$APP/repo/deploy/observatory-weather.timer" /etc/systemd/system/
 # Small servers (under 2 GB of memory, such as Oracle's E2.1.Micro with a fraction of a CPU) render every 15 minutes
 # with a longer time limit instead of every 5; override with OBSERVATORY_EVERY=<minutes>.
 memory_mb=$(( $(awk '/MemTotal/ {print $2}' /proc/meminfo) / 1024 ))
@@ -70,7 +71,8 @@ else
 fi
 say "rendering every $every minutes (${memory_mb} MB of memory)"
 systemctl daemon-reload
-systemctl enable --quiet --now observatory-live.timer
+systemctl enable --quiet --now observatory-live.timer observatory-weather.timer
+systemctl start observatory-weather.service || echo "install: first weather fetch failed; the seasonal model is used until it works"
 say "first render (up to a minute or two)"
 systemctl start observatory-live.service || die "first render failed: journalctl -u observatory-live.service"
 

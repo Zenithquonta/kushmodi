@@ -22,6 +22,15 @@ for name in live.svg live.png live.json; do
   fi
 done
 
+echo "weather"
+systemctl is-active --quiet observatory-weather.timer; report $? "weather timer active" "weather timer not active"
+if [[ -f /var/lib/observatory/weather/current.json ]]; then
+  age=$(( $(date +%s) - $(stat -c %Y /var/lib/observatory/weather/current.json) ))
+  (( age < 3600 )); report $? "weather fetched ${age}s ago ($(grep -o '"condition": "[a-z-]*"' /var/lib/observatory/weather/current.json))" "weather is ${age}s old (journalctl -u observatory-weather.service)"
+else
+  report 1 "" "no weather yet (journalctl -u observatory-weather.service)"
+fi
+
 if id obsync >/dev/null 2>&1; then
   echo "archive"
   systemctl is-active --quiet observatory-archive.timer; report $? "archive timer active" "archive timer not active"

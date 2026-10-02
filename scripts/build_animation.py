@@ -1368,9 +1368,36 @@ SHELTER = [(1162, 612), (1672, 478), (1672, 941), (1162, 941)]       # under the
 PUDDLES = [(930, 904, 66, 6), (1004, 924, 44, 4), (1268, 916, 40, 4)]   # x, y, width, height on the earth path
 
 
+RAINY = ('drizzle', 'rain', 'heavy-rain', 'thunderstorm')
+RAIN_FLOOR = {'drizzle': .3, 'rain': .6, 'heavy-rain': .9, 'thunderstorm': .85}   # by condition, before intensity
+
+
+def live_environment(env, observation):
+    """The season's environment with real weather laid over it: cloud cover, fog haze and wet ground."""
+    env = dict(env)
+    condition = observation['condition']
+    env['cloud_density'] = observation['cloud_cover_pct']/100
+    if condition in RAINY:
+        env['cloud_density'] = max(env['cloud_density'], .72)
+        env['ground_wetness'] = max(env['ground_wetness'], .5+.5*live_rain(observation))
+    if condition == 'fog':
+        env['haze'] = max(env['haze'], .9)
+    return env
+
+
+def live_rain(observation):
+    """Rain amount 0..1 from the real observation (precipitation is mm in the last 15 minutes)."""
+    per_hour = observation['precipitation_mm']*4
+    if observation['condition'] not in RAINY and per_hour <= 0:
+        return 0
+    return round(max(RAIN_FLOOR.get(observation['condition'], .3), min(1, (per_hour/8)**.5)), 4)
+
+
 def season(light, state):
     """Add the season's values and its static markup (sky veils, clouds, haze, wet ground) to ``light``."""
-    env = state['environment']
+    observation = state.get('weather')
+    env = state['environment'] if not observation else live_environment(state['environment'], observation)
+    light['observation'] = observation
     light['env'] = env
     light['seed'] = state['seed_int']
     light['day'] = daily_variation(state)
@@ -1378,7 +1405,7 @@ def season(light, state):
     light['night'] = round(light['night']*visibility, 4)
     light['overcast'] = OVERCAST[2]*_smooth((env['cloud_density']-OVERCAST[0])/(OVERCAST[1]-OVERCAST[0]))
     light['dry'] = round(DRY[2]*_smooth((DRY[0]-env['greenery'])/DRY[1])*light['plates']['day'], 4)
-    light['rain'] = shower(state, env)
+    light['rain'] = live_rain(observation) if observation else shower(state, env)
     light['haze'] = HAZE_PEAK*env['haze']
     light['haze_colour'] = _colour_for(light, (40, 46, 70), _mix((214, 220, 226), (226, 210, 180),
                                                                  _smooth((env['haze']-.5)/.3)), (240, 176, 150))

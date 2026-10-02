@@ -6,7 +6,7 @@
   <img src="https://observatorysky.duckdns.org/live.svg" width="100%" alt="Kush Modi's observatory live from Mumbai: the real sky, season and weather over the telescope and maker workshop, redrawn through the day" />
 </picture>
 
-<sub>Live from Mumbai, redrawn through the day · if it does not load, <a href="./assets/observatory.gif">open the animated observatory</a></sub>
+<sub>Live from Mumbai, redrawn through the day · weather by <a href="https://open-meteo.com/">Open-Meteo.com</a> · if it does not load, <a href="./assets/observatory.gif">open the animated observatory</a></sub>
 <!-- hero:end -->
 
 **Astronomy first. Building toward the unexplored.**

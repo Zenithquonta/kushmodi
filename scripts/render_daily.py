@@ -23,6 +23,7 @@ import astronomy as ae
 
 import build_animation as scene
 import scene_state
+import weather as weather_data
 
 ROOT = Path(__file__).resolve().parents[1]
 MIN_WEBP_BYTES = 8_000
@@ -104,12 +105,13 @@ def _render_one(state, png, webp, width, quality):
     png.unlink()
 
 
-def render_date(d, out, config, width, quality, pool=None):
+def render_date(d, out, config, width, quality, pool=None, weather_log=None):
     """Render, validate and install both frames for ``d``; returns its index entry."""
     out = Path(out)
     year_dir = out/f'{d.year:04d}'
     year_dir.mkdir(parents=True, exist_ok=True)
-    states = {kind: scene_state.scene_state(when, config) for kind, when in zip(KINDS, frame_times(d, config))}
+    states = {kind: scene_state.scene_state(when, config, weather_data.nearest(weather_log, when) if weather_log else None)
+              for kind, when in zip(KINDS, frame_times(d, config))}
     with tempfile.TemporaryDirectory(prefix='.frames-', dir=out) as directory:
         temp = Path(directory)
         jobs = [(states[kind], temp/f'{kind}.png', temp/f'{kind}.webp', width, quality) for kind in KINDS]
@@ -146,7 +148,7 @@ def write_index(out, index):
     os.replace(handle.name, out/'index.json')
 
 
-def run(dates, out, config, width=None, quality=None, force=False, log=print):
+def run(dates, out, config, width=None, quality=None, force=False, log=print, weather_log=None):
     """Render every date in ``dates`` (inside the year window) under one lock; returns the dates rendered."""
     archive = config['archive']
     width, quality = width or archive['width'], quality or archive['webp_quality']
@@ -164,7 +166,7 @@ def run(dates, out, config, width=None, quality=None, force=False, log=print):
                 if not force and is_complete(out, d, width) and d.isoformat() in index['frames']:
                     log(f'{d} already archived')
                     continue
-                index['frames'][d.isoformat()] = render_date(d, out, config, width, quality, pool)
+                index['frames'][d.isoformat()] = render_date(d, out, config, width, quality, pool, weather_log)
                 write_index(out, index)   # after every date, so an interrupted range keeps what it finished
                 rendered.append(d)
                 entry = index['frames'][d.isoformat()]
@@ -182,6 +184,7 @@ def main():
     parser.add_argument('--out', default=str(ROOT/'archive'))
     parser.add_argument('--width', type=int)
     parser.add_argument('--force', action='store_true', help='re-render dates that are already archived')
+    parser.add_argument('--weather-log', help='history.json from weather.py (the reading nearest each frame is used)')
     args = parser.parse_args()
     config = scene_state.load_config()
     if args.range:
@@ -196,7 +199,7 @@ def main():
             return
     else:
         dates = [args.date or today_local(config)]
-    run(dates, args.out, config, args.width, force=args.force)
+    run(dates, args.out, config, args.width, force=args.force, weather_log=args.weather_log)
 
 
 def recent_dates(today, count, config):

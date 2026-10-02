@@ -1,0 +1,34 @@
+# Fetches Mumbai's current weather from Open-Meteo (no key) into /var/lib/observatory/weather. The only part of the
+# observatory that goes online: it may open IP sockets, writes only its weather directory, and keeps only validated
+# numbers and condition names (scripts/weather.py). The renderer stays offline and reads the result.
+[Unit]
+Description=Fetch Mumbai's weather for the live observatory
+
+[Service]
+Type=oneshot
+User=observatory
+Group=observatory
+WorkingDirectory=/opt/observatory/repo
+ExecStart=/opt/observatory/venv/bin/python /opt/observatory/repo/scripts/weather.py fetch --out /var/lib/observatory/weather
+TimeoutStartSec=60
+UMask=0022
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/observatory/weather
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
