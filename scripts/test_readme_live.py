@@ -13,14 +13,16 @@ HOST = 'sky.example.com'
 
 
 class Switch(unittest.TestCase):
-    def test_published_readme_is_in_repo_mode_with_no_host(self):
-        self.assertEqual(readme_live.mode(README), 'repo')
-        self.assertIsNone(json.loads(CONFIG_TEXT)['live']['host'])
+    def test_readme_mode_matches_the_configured_host(self):
+        host = json.loads(CONFIG_TEXT)['live']['host']
+        self.assertEqual(readme_live.mode(README), 'repo' if host is None else f'live ({host})')
 
     def test_round_trip_restores_the_readme_byte_for_byte(self):
-        live = readme_live.switch(README, HOST)
+        repo = readme_live.switch(README)          # whichever mode the README is in now
+        self.assertEqual(readme_live.mode(repo), 'repo')
+        live = readme_live.switch(repo, HOST)
         self.assertEqual(readme_live.mode(live), f'live ({HOST})')
-        self.assertEqual(readme_live.switch(live), README)
+        self.assertEqual(readme_live.switch(live), repo)
 
     def test_only_the_hero_changes(self):
         live = readme_live.switch(README, HOST)
@@ -40,9 +42,11 @@ class Switch(unittest.TestCase):
                 readme_live.switch(README, host)
 
     def test_config_edit_changes_only_the_host(self):
-        new = readme_live.set_host(CONFIG_TEXT, HOST)
+        base = readme_live.set_host(CONFIG_TEXT, None)
+        new = readme_live.set_host(base, HOST)
         self.assertEqual(json.loads(new)['live']['host'], HOST)
-        self.assertEqual(new.replace(f'"host": "{HOST}"', '"host": null'), CONFIG_TEXT)
+        self.assertEqual(new.replace(f'"host": "{HOST}"', '"host": null'), base)
+        self.assertEqual(readme_live.set_host(new, None), base)
 
 
 class Gate(unittest.TestCase):

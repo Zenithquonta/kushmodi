@@ -2,9 +2,11 @@
 
 <!-- hero:start -->
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="./assets/observatory-poster.png" />
-  <img src="./assets/observatory.gif" width="100%" alt="Kush Modi's pixel observatory: telescope under a galaxy, orbiting moons, passing spacecraft, and an illuminated maker workshop" />
+  <source media="(prefers-reduced-motion: reduce)" srcset="https://observatorysky.duckdns.org/live.png" />
+  <img src="https://observatorysky.duckdns.org/live.svg" width="100%" alt="Kush Modi's observatory live from Mumbai: the real sky, season and weather over the telescope and maker workshop, redrawn every five minutes" />
 </picture>
+
+<sub>Live from Mumbai, redrawn every five minutes · if it does not load, <a href="./assets/observatory.gif">open the animated observatory</a></sub>
 <!-- hero:end -->
 
 **Astronomy first. Building toward the unexplored.**
