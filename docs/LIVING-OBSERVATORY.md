@@ -542,8 +542,9 @@ All live only (they need a scene state); the default `scene()` stays byte-identi
 ## Phase 17 notes — the real night sky, facing north
 
 - **Projection (supersedes the Phase 8 and 15e wording).** The live scene faces north (`FACING = 0`): west at the left
-  edge, north at the centre, east at the right edge. The dome style is kept: `x = W/2 + sin(az - facing) x cos(alt) x
-  W/2`, `y` linear in altitude to y = 40 at the zenith. Only the front hemisphere, `cos(az - facing) >= 0`, exists:
+  edge, north at the centre, east at the right edge. A rectangular panorama (polish pass): `x = W (az - facing + 90) / 180`,
+  `y` linear in altitude, the horizon at HORIZON_Y and the zenith at y = 40, so the whole picture is sky (the first
+  version's lens-shaped dome left the upper corners empty). Only the front hemisphere, `cos(az - facing) >= 0`, exists:
   whatever is behind the viewer is not drawn, however high (nothing is mirrored; `in_view` no longer has the
   60-degree overhead exception). The Sun, the sunrise/sunset glow (sunrise right, sunset left), the Moon, the planets,
   the planet reticle and the satellite pass track all use it. In Mumbai the winter Sun rises and sets south of the
@@ -553,9 +554,9 @@ All live only (they need a scene state); the default `scene()` stays byte-identi
   city, traffic, title and log panel remain. `scene()` without a state is byte-identical to `observatory.svg` and
   `poster.svg`, and the fallback GIF is unchanged.
 - **Data.** `scripts/sky_catalog.py` (run once, offline afterwards) converts the Yale Bright Star Catalogue (BSC5, to
-  magnitude 5.0, 1,630 stars with proper names for 186), the d3-celestial Milky Way outlines (five brightness steps,
+  magnitude 5.8, 4,103 stars with proper names for 186), the d3-celestial Milky Way outlines (five brightness steps,
   thinned to 0.45 degrees) and constellation lines into `assets/sky/stars.json`, `milkyway.json`,
-  `constellations.json` (about 165 kB together) with `SOURCES.md` (credits and the BSD 3-Clause text). Downloads are
+  `constellations.json` (about 245 kB together) with `SOURCES.md` (credits and the BSD 3-Clause text). Downloads are
   cached outside the repository; the renderer and the tests never touch the network.
 - **Geometry (`scripts/night_sky.py`).** J2000 positions are turned into the equator of date by astronomy-engine's
   precession/nutation matrix and into hour angle by the local sidereal time; altitudes agree with
@@ -564,9 +565,11 @@ All live only (they need a scene state); the default `scene()` stays byte-identi
   pole; where an outline leaves the front hemisphere it is closed along the edge of the dome through its inside,
   tested with a crossing count to that pole. Lines are cut exactly at the edge. The layout is cached per moment.
 - **Drawing.** An opaque night gradient inside `sky-mask` (opaque up to a sun altitude of -6 degrees, gone by +4, where
-  the day overlay is at least 97% opaque) hides the painted sky; on it the Milky Way (soft: blurred 5 px, five
-  stacked fills of 0.06 to 0.10), faint constellation lines and the stars as pixel squares (10, 8, 6, 4 or 3 px by
-  magnitude, coloured by temperature, dimmer near the horizon, kept clear of the name). They fade with the night
+  the day overlay is at least 97% opaque) hides the painted sky; on it the Milky Way (soft: blurred 6 px, five
+  stacked fills), faint constellation lines and the stars as pixel squares (10, 8, 6, 4 or 3 px by
+  magnitude, coloured by temperature, dimmer near the horizon, kept clear of the name; stars brighter than 2.0 also get a
+  small cross glint). The faintest magnitude drawn is 5.1 to 5.8 by the night's visibility; the Milky Way is blue-violet,
+  stacked to about 0.35, and the Moon's glare washes it out. They fade with the night
   factor, the night's visibility and overcast, are drawn under the day overlay and the clouds, and the faint stars drop
   out first on a murky night. The 30 brightest stars in open sky twinkle on SMIL opacity tracks (periods 2, 3, 4 or 6 s,
   begin <= 0, dips of at most 0.3 at under 0.7 per second: never a flash). Positions are recomputed at every 15-minute
@@ -584,4 +587,4 @@ All live only (they need a scene state); the default `scene()` stays byte-identi
 - **State.** `scene_state` adds `location` (name, latitude, longitude), `astronomy.moon` and each planet gain
   `ra_hours`, `dec_deg` and `trail`.
 - **Cost.** Live scene generation grows by about 0.04 s (the layout is 25 ms); rasterizing is faster than before
-  (about 1.4 s against 1.75 s at 840 px) as the galaxy sprites are gone. The animated live SVG is about 1.84 MB.
+  (about 1.4 s against 1.75 s at 840 px) as the galaxy sprites are gone. The animated live SVG is about 1.85 MB.

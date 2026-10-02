@@ -5,7 +5,7 @@ files. They are produced by `scripts/sky_catalog.py` from the public data below;
 
 | File | Content | Source |
 | --- | --- | --- |
-| `stars.json` | The 5.0-magnitude-or-brighter stars of the Yale Bright Star Catalogue, 5th revised edition (BSC5): J2000 position, visual magnitude, colour temperature in kelvin, Harvard Revised number and proper names | Hoffleit and Warren Jr. (1991), VizieR V/50, as a JSON file by Bretton Wade: https://github.com/brettonw/YaleBrightStarCatalog (`bsc5-short.json`) |
+| `stars.json` | The 5.8-magnitude-or-brighter stars of the Yale Bright Star Catalogue, 5th revised edition (BSC5): J2000 position, visual magnitude, colour temperature in kelvin, Harvard Revised number and proper names | Hoffleit and Warren Jr. (1991), VizieR V/50, as a JSON file by Bretton Wade: https://github.com/brettonw/YaleBrightStarCatalog (`bsc5-short.json`) |
 | `milkyway.json` | The Milky Way outline in five brightness steps, thinned to 0.45 degree spacing | Olaf Frohn, d3-celestial, `data/mw.json`: https://github.com/ofrohn/d3-celestial |
 | `constellations.json` | The constellation stick figures | Olaf Frohn, d3-celestial, `data/constellations.lines.json` |
 

@@ -5,7 +5,7 @@
 
 Three public catalogues are converted into small JSON files that the renderer (scripts/night_sky.py) reads:
 
-    stars.json           the Yale Bright Star Catalogue (BSC5) down to magnitude 5.0
+    stars.json           the Yale Bright Star Catalogue (BSC5) down to magnitude 5.8
     milkyway.json        the Milky Way outline in five brightness steps (d3-celestial mw.json)
     constellations.json  the constellation stick figures (d3-celestial constellations.lines.json)
     SOURCES.md           where the data comes from, with the credit and the BSD licence text
@@ -31,7 +31,7 @@ SOURCES = {
     'constellations.lines.json': HOST+'/ofrohn/d3-celestial/master/data/constellations.lines.json',
     'LICENSE': HOST+'/ofrohn/d3-celestial/master/LICENSE',
 }
-MAG_LIMIT = 5.0           # stars brighter than this (smaller V) are kept
+MAG_LIMIT = 5.8           # stars brighter than this (smaller V) are kept
 NAME_LIMIT = 3.5          # proper names are kept for the stars brighter than this
 MW_STEP_DEG = .45         # a Milky Way outline point is kept when it is this far from the last one kept
 MW_MIN_POINTS = 4         # rings that shrink below this are dropped

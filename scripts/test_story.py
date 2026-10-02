@@ -235,11 +235,11 @@ class Panel(unittest.TestCase):
 
 class Reticle(unittest.TestCase):
     def test_it_stays_clear_of_everything_and_follows_the_planet(self):
-        start, found = datetime(2026, 11, 18, 2, 0, tzinfo=IST), 0   # Jupiter climbs the north-eastern sky before dawn
+        start, found = datetime(2026, 10, 8, 2, 0, tzinfo=IST), 0   # Mars climbs the eastern sky before dawn
         for step in range(24):   # 02:00 .. 08:00
             when = start+timedelta(minutes=15*step)
             light = scene.lighting(scene_state.scene_state(when))
-            place = scene.reticle_place(light, 'Jupiter')
+            place = scene.reticle_place(light, 'Mars')
             if place is None:
                 continue
             found += 1
@@ -248,14 +248,14 @@ class Reticle(unittest.TestCase):
                 self.assertFalse(overlap(box, getattr(scene, name)), (when, name))
             self.assertTrue(box[0] >= 0 and box[2] <= scene.W and box[1] >= 0, (when, box))
             self.assertLessEqual(box[3], scene.skyline_top(box[0], box[2]), when)
-            self.assertEqual(place, scene.planet_place(light, light['astronomy'], 'Jupiter')[:2])
+            self.assertEqual(place, scene.planet_place(light, light['astronomy'], 'Mars')[:2])
         self.assertGreater(found, 0)
 
     def test_none_under_cloud(self):
         for step in range(0, 45, 4):
-            when = datetime(2026, 11, 18, 2, 0, tzinfo=IST)+timedelta(minutes=15*step)
+            when = datetime(2026, 10, 8, 2, 0, tzinfo=IST)+timedelta(minutes=15*step)
             light = scene.lighting(scene_state.scene_state(when, None, storm(when)))
-            self.assertIsNone(scene.reticle_place(light, 'Jupiter'), when)
+            self.assertIsNone(scene.reticle_place(light, 'Mars'), when)
 
     def test_the_marker_is_in_the_picture_only_for_a_drawn_planet(self):
         for step in range(45):

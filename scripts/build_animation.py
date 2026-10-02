@@ -1218,9 +1218,9 @@ DOME = night_sky.Dome(W, HORIZON_Y, 40, SKY_TOP_ALT, FACING)
 
 
 def sun_screen(altitude, azimuth, facing=None):
-    """Scene position of a sky object on the dome for a viewer facing ``facing`` (default FACING, north): the
-    direction 90 degrees to the left is the left edge, 90 degrees to the right the right edge, the zenith the top
-    centre (x follows the sideways direction, so objects near the zenith converge on the middle)."""
+    """Scene position of a sky object in the panorama for a viewer facing ``facing`` (default FACING, north): x is
+    linear in azimuth, 90 degrees to the left of the facing is the left edge, 90 degrees to the right the right edge;
+    y is linear in altitude, the horizon at HORIZON_Y and the zenith at the top (y = 40)."""
     return night_sky.project(altitude, azimuth, DOME if facing is None else DOME._replace(facing=facing))
 
 
@@ -2100,12 +2100,13 @@ DEFAULT_LOCATION = dict(latitude=19.076, longitude=72.8777)   # Mumbai, for a ha
 NIGHT_SKY = dict(top=(2, 6, 20), horizon=(12, 26, 58))        # the opaque night gradient
 NIGHT_COVER = [(-6, 1), (4, 0)]   # sun altitudes: the painted sky is fully replaced up to -6, and the day overlay
                                   # (>= 97% opaque by +4 degrees) owns the sky from there
-MW_COLOUR = (122, 184, 206)
-MW_OPACITY = (.07, .06, .07, .08, .10)   # per outline level, outermost first; they stack to about .38 in the core
-MW_BLUR = 5                              # standard deviation in px: the Milky Way is soft
+MW_COLOUR = (190, 198, 250)               # blue-violet, like the painted band
+MW_OPACITY = (.15, .07, .06, .05, .04)   # per outline level, outermost first; they stack to about .35 in the core
+MW_BLUR = 6                              # standard deviation in px: the Milky Way is soft
 CONSTELLATION_STYLE = dict(colour=(124, 170, 222), opacity=.2, width=1)
-STAR_SIZES = ((.5, 10), (1.5, 8), (2.5, 6), (4.0, 4))   # (brighter than this magnitude, side in px); fainter: STAR_SMALL
+STAR_SIZES = ((.5, 10), (1.5, 8), (2.5, 6), (4.2, 4))   # (brighter than this magnitude, side in px); fainter: STAR_SMALL
 STAR_SMALL = 3
+GLINT_BELOW = 2.0   # stars brighter than this also get a small cross glint
 STAR_TEMPERATURES = ((3500, (255, 176, 120)), (4500, (255, 205, 150)), (5500, (255, 228, 180)),
                      (6500, (255, 246, 228)), (8000, (240, 242, 255)), (11000, (214, 228, 255)),
                      (20000, (190, 212, 255)), (10**9, (170, 198, 255)))   # (kelvin up to, rgb)
@@ -2127,12 +2128,12 @@ def star_colour(kelvin):
 
 def star_opacity(magnitude, altitude):
     """Brighter stars are fuller; stars near the horizon are dimmed by the thicker air."""
-    return round(max(.6, min(1.0, 1.1-.14*max(0, magnitude-1.5)))*(.4+.6*min(1.0, altitude/12)), 2)
+    return round(max(.74, min(1.0, 1.2-.09*max(0, magnitude-1.5)))*(.45+.55*min(1.0, altitude/12)), 2)
 
 
 def star_limit(env):
     """Faintest magnitude drawn: a murky night loses the faint stars first."""
-    return 4.4+.6*env['night_visibility']
+    return 5.1+.7*env['night_visibility']
 
 
 def real_sky(light, state):
@@ -2166,6 +2167,22 @@ def night_sky_defs(light):
             f'<feGaussianBlur stdDeviation="{MW_BLUR}"/></filter>')
 
 
+def _glint(s, size, colour, opacity):
+    """A small pixel cross through a bright star: arms of 1.4 x its size, 2 px thick, half as bright as the star."""
+    arm = round(size*1.4/2)*2
+    x, y = s['x'], s['y']
+    return (f'<path d="M{x-arm} {y-1}h{2*arm}v2h{-2*arm}zM{x-1} {y-arm}h2v{2*arm}h-2z" fill="{_rgb(colour)}" '
+            f'opacity="{_num(opacity*.45, 3)}"/>')
+
+
+def moon_wash(light):
+    """How much of the faint sky the Moon washes out: its lit share times the sine of its altitude, at most 0.7."""
+    moon = (light.get('astronomy') or {}).get('moon')
+    if not moon:
+        return 0.0
+    return .7*moon['illuminated_fraction']*max(0.0, math.sin(math.radians(moon['altitude_deg'])))
+
+
 def _square(x, y, size):
     return f'M{_num(x-size/2)} {_num(y-size/2)}h{size}v{size}h{-size}z'
 
@@ -2184,20 +2201,23 @@ def night_stars(t, animated, light):
     sky = light['sky']
     twinkling = {s['hr'] for s in sky['twinkle']}
     plain = [s for s in sky['stars'] if s['hr'] not in twinkling]
-    groups, halos = {}, ''
+    groups, halos, glints = {}, '', ''
     for s in plain:
         key = (star_size(s['mag']), star_colour(s['kelvin']), star_opacity(s['mag'], s['alt']))
         groups.setdefault(key, []).append(_square(s['x'], s['y'], key[0]))
+        if s['mag'] < GLINT_BELOW:
+            glints += _glint(s, key[0], key[1], key[2])
         if s['mag'] < HALO_BELOW:
             halos += f'<circle cx="{s["x"]}" cy="{s["y"]}" r="{key[0]*1.5:g}" fill="{_rgb(key[1])}" opacity="{_num(key[2]*.1, 3)}"/>'
-    out = halos+''.join(f'<path d="{"".join(d)}" fill="{_rgb(colour)}" opacity="{_num(opacity, 2)}"/>'
+    out = halos+glints+''.join(f'<path d="{"".join(d)}" fill="{_rgb(colour)}" opacity="{_num(opacity, 2)}"/>'
                         for (size, colour, opacity), d in sorted(groups.items(), key=lambda item: -item[0][0]))
     for s in sky['twinkle']:
         track = twinkle_track(s['hr'])
         size, colour, opacity = star_size(s['mag']), star_colour(s['kelvin']), star_opacity(s['mag'], s['alt'])
         halo = (f'<circle cx="{s["x"]}" cy="{s["y"]}" r="{size*1.5:g}" fill="{_rgb(colour)}" opacity="{_num(opacity*.1, 3)}"/>'
                 if s['mag'] < HALO_BELOW else '')
-        out += (f'<g opacity="{track.value_text(t)}">{track.smil("opacity") if animated else ""}{halo}'
+        glint = _glint(s, size, colour, opacity) if s['mag'] < GLINT_BELOW else ''
+        out += (f'<g opacity="{track.value_text(t)}">{track.smil("opacity") if animated else ""}{halo}{glint}'
                 f'<path d="{_square(s["x"], s["y"], size)}" fill="{_rgb(colour)}" opacity="{_num(opacity, 2)}"/></g>')
     return out
 
@@ -2211,7 +2231,8 @@ def night_sky_layer(t, animated, light):
     out = f'<rect data-nightsky="cover" width="{W}" height="{HORIZON_Y+10}" fill="url(#night-grad)" opacity="{_num(cover, 4)}"/>'
     sky = light['sky']
     if sky:
-        way = ''.join(f'<path d="{d}" fill="{_rgb(MW_COLOUR)}" fill-rule="evenodd" opacity="{opacity}"/>'
+        wash = 1-moon_wash(light)
+        way = ''.join(f'<path d="{d}" fill="{_rgb(MW_COLOUR)}" fill-rule="evenodd" opacity="{_num(opacity*wash, 4)}"/>'
                       for d, opacity in zip(sky['layout']['milky_way'], MW_OPACITY) if d)
         style = CONSTELLATION_STYLE
         lines = (f'<path data-nightsky="lines" d="{sky["layout"]["lines"]}" fill="none" stroke="{_rgb(style["colour"])}" '

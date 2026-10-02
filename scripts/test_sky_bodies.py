@@ -11,7 +11,7 @@ import scene_state
 import test_portfolio
 
 IST = ZoneInfo('Asia/Kolkata')
-CRESCENT_DUSK = datetime(2026, 12, 13, 19, 0, tzinfo=IST)
+CRESCENT_DUSK = datetime(2027, 3, 10, 19, 30, tzinfo=IST)   # a thin waxing crescent over the western horizon
 FULL_NIGHT = datetime(2026, 10, 27, 0, 0, tzinfo=IST)
 
 
@@ -50,9 +50,9 @@ class Placement(unittest.TestCase):
         self.assertAlmostEqual(scene.sun_screen(0, 270)[0], 0)         # west on the left
         self.assertAlmostEqual(scene.sun_screen(0, 90)[0], scene.W)    # east on the right
         self.assertAlmostEqual(scene.sun_screen(0, 0)[0], scene.W/2)   # north in the middle
-        x, y = scene.sun_screen(90, 37)
+        x, y = scene.sun_screen(90, 0)
         self.assertAlmostEqual(x, scene.W/2)
-        self.assertAlmostEqual(y, 40)
+        self.assertAlmostEqual(y, 40)                                  # the zenith is the top row
         self.assertTrue(scene.in_view(20, 20))
         self.assertFalse(scene.in_view(75, 150))   # behind the viewer, however high
 

@@ -1,4 +1,4 @@
-"""Phase 17: the real night sky. The catalogue conversion, the north-facing dome (west left, east right, nothing behind
+"""Phase 17: the real night sky. The catalogue conversion, the north-facing panorama (west left, east right, nothing behind
 the viewer), where real stars land, the telescope's lock-on on a real object, the trails behind the planets and the
 Moon, and the generic SMIL-versus-raster and loop checks on a live night state. No test here uses the network."""
 from datetime import datetime, timedelta, timezone
@@ -23,7 +23,7 @@ from test_storm import clear, storm
 
 IST = ZoneInfo('Asia/Kolkata')
 NIGHT = datetime(2026, 10, 4, 23, 30, tzinfo=IST)         # clear night: no planet or Moon in the northern sky
-PLANET_NIGHT = datetime(2026, 10, 31, 4, 0, tzinfo=IST)   # Mars and Jupiter rise in the north-east before dawn
+PLANET_NIGHT = datetime(2026, 10, 2, 5, 0, tzinfo=IST)    # Mars and Jupiter climb the eastern sky before dawn
 MOON_NIGHT = datetime(2026, 10, 26, 22, 0, tzinfo=IST)    # the full Moon is in the front half of the sky
 DUSK = datetime(2026, 10, 4, 18, 45, tzinfo=IST)
 NOON = datetime(2026, 10, 4, 12, 0, tzinfo=IST)
@@ -56,7 +56,7 @@ def expected_position(ra_deg, dec_deg, when):
     vector = ae.RotateVector(ae.Rotation_EQJ_EQD(t), ae.Vector(math.cos(d)*math.cos(r), math.cos(d)*math.sin(r), math.sin(d), t))
     eq = ae.EquatorFromVector(vector)
     h = ae.Horizon(t, ae.Observer(*MUMBAI), eq.ra, eq.dec, ae.Refraction.Airless)
-    x = W/2+math.sin(math.radians(h.azimuth))*math.cos(math.radians(h.altitude))*W/2
+    x = W*((h.azimuth+180) % 360-180+90)/180   # linear in azimuth: west (-90) left, east (+90) right
     return h.altitude, h.azimuth, x, HORIZON_Y-h.altitude/90*(HORIZON_Y-40)
 
 
@@ -104,14 +104,14 @@ class Catalogue(unittest.TestCase):
         self.assertAlmostEqual(by_hr[424][1], 89.264, delta=.001)                        # Polaris
         self.assertEqual(stars['names']['2491'], 'Sirius')
         self.assertEqual([row[2] for row in stars['stars']], sorted(row[2] for row in stars['stars']))
-        self.assertTrue(1500 < len(stars['stars']) < 1700 and max(row[2] for row in stars['stars']) <= 5.0)
+        self.assertTrue(4000 < len(stars['stars']) < 4200 and max(row[2] for row in stars['stars']) <= 5.8)
         self.assertEqual(len(json.loads((ASSETS/'sky'/'milkyway.json').read_text())['levels']), 5)
         self.assertGreater(len(json.loads((ASSETS/'sky'/'constellations.json').read_text())['lines']), 100)
         sources = (ASSETS/'sky'/'SOURCES.md').read_text()
         for needle in ('Yale Bright Star Catalogue', 'Olaf Frohn', 'BSD 3-Clause', 'Redistribution and use in source and binary'):
             self.assertIn(needle, sources)
         for name in ('stars.json', 'milkyway.json', 'constellations.json'):
-            self.assertLess((ASSETS/'sky'/name).stat().st_size, 120_000, name)
+            self.assertLess((ASSETS/'sky'/name).stat().st_size, 160_000, name)
 
     def test_the_milky_way_outlines_follow_the_galactic_plane(self):
         """Even-odd across the five outlines: the Galactic centre is inside the band, the north galactic pole and the
@@ -131,13 +131,17 @@ class Dome(unittest.TestCase):
         self.assertAlmostEqual(scene.sun_screen(0, 0)[0], W/2)           # north: the centre
         self.assertAlmostEqual(scene.sun_screen(0, 90)[0], W)            # east: the right edge
         self.assertAlmostEqual(scene.sun_screen(0, 0)[1], HORIZON_Y)
-        x, y = scene.sun_screen(90, 123)
-        self.assertAlmostEqual(x, W/2)
-        self.assertAlmostEqual(y, 40)                                    # the zenith: top centre
+        self.assertAlmostEqual(scene.sun_screen(90, 0)[1], 40)           # the zenith is the top row
+        self.assertAlmostEqual(scene.sun_screen(45, 315)[0], W/4)        # linear in azimuth, whatever the altitude
+        self.assertAlmostEqual(scene.sun_screen(80, 45)[0], W*3/4)
+        self.assertAlmostEqual(scene.sun_screen(30, 0)[1], HORIZON_Y-30/90*(HORIZON_Y-40))   # and in altitude
         self.assertLess(scene.sun_screen(30, 315)[0], W/2)
         self.assertGreater(scene.sun_screen(30, 45)[0], W/2)
         self.assertAlmostEqual(scene.sun_screen(0, 180, facing=180)[0], W/2)   # a south-facing viewer still works
         self.assertAlmostEqual(scene.sun_screen(0, 90, facing=180)[0], 0)
+        for altitude in (0, 20, 60, 89):                                  # the whole front half fills the rectangle
+            for az in range(270, 361, 15):
+                self.assertTrue(0 <= scene.sun_screen(altitude, az % 360)[0] <= W/2+1e-9)
 
     def test_nothing_behind_the_viewer_is_in_view_however_high(self):
         for altitude in (0, 30, 60, 75, 89):
@@ -212,7 +216,7 @@ class RealStars(unittest.TestCase):
                 self.assertEqual(s['x'] > W/2, math.sin(math.radians(az)) > 0, (when, s['hr'], az))   # east right, west left
                 self.assertGreater(s['alt'], night_sky.HORIZON_FLOOR-1e-9)
 
-    def test_the_milky_way_and_the_lines_stay_on_the_dome(self):
+    def test_the_milky_way_and_the_lines_stay_in_the_picture(self):
         for when in (NIGHT, MOON_NIGHT):
             layout = self.layout(when)
             self.assertEqual(len(layout['milky_way']), 5)
@@ -221,9 +225,7 @@ class RealStars(unittest.TestCase):
                 for x, y in re.findall(r'(-?[\d.]+) (-?[\d.]+)', d):
                     x, y = float(x), float(y)
                     self.assertTrue(-1 <= x <= W+1 and 39 <= y, (when, x, y))
-                    # inside the dome: no point is farther sideways than the edge circle allows at its altitude
-                    alt = (HORIZON_Y-y)/(HORIZON_Y-40)*90
-                    self.assertLessEqual(abs(x-W/2), W/2*math.cos(math.radians(max(alt, 0)))+1.5 if alt >= 0 else W/2+1.5, (when, x, y))
+                    # the sky fills the rectangle: some of it reaches every part of the top
 
     def test_the_layout_is_cached_per_moment(self):
         a = self.layout(NIGHT)
@@ -370,7 +372,7 @@ class LockOn(unittest.TestCase):
         moon = self.plan(MOON_NIGHT)
         self.assertEqual((moon['kind'], moon['name']), ('moon', 'MOON'))
         star = self.plan(NIGHT)
-        self.assertEqual((star['kind'], star['name']), ('star', 'MIRFAK'))
+        self.assertEqual((star['kind'], star['name']), ('star', 'HAMAL'))
         self.assertEqual(self.plan(NOON), None)                                           # no lock-on in daylight
         self.assertIsNone(scene.lighting(scene_state.scene_state(NIGHT, None, storm(NIGHT)))['lock'])   # nor under thick cloud
 
@@ -418,16 +420,16 @@ class LockOn(unittest.TestCase):
 
     def test_the_readout_shows_the_real_name_and_coordinates(self):
         star = self.plan(NIGHT)
-        texts = ['TARGET LOCK · MIRFAK', 'RA 03h24m', "DEC +49°52'"]         # Mirfak, J2000: 03h24m19s +49d51m40s
+        texts = ['TARGET LOCK · HAMAL', 'RA 02h07m', "DEC +23°28'"]          # Hamal, J2000: 02h07m10s +23d27m45s
         for (d, x, y, _, _), text, row in zip(star['lines'], texts, range(3)):
             self.assertEqual(d, scene.pixel_text(text, scene.LOCK_TEXT_XY[0], scene.LOCK_TEXT_XY[1]+row*scene.LOCK_LINE_PITCH)[0])
-        self.assertEqual((star['constellation'], star['constellation_symbol']), ('Perseus', 'Per'))
+        self.assertEqual((star['constellation'], star['constellation_symbol']), ('Aries', 'Ari'))
         planet = self.plan(PLANET_NIGHT)
         state = live(PLANET_NIGHT)
         mars = state['astronomy']['planets']['Mars']
         self.assertEqual((planet['ra_hours'], planet['dec_deg']), (mars['ra_hours'], mars['dec_deg']))
         self.assertEqual(planet['lines'][1][0], scene.pixel_text(f"RA {night_sky.ra_text(mars['ra_hours'])}", *planet['lines'][1][1:3])[0])
-        self.assertEqual(planet['constellation'], 'Leo')
+        self.assertEqual(planet['constellation'], 'Cancer')
         moon = self.plan(MOON_NIGHT)
         self.assertEqual((moon['ra_hours'], moon['dec_deg']), tuple(live(MOON_NIGHT)['astronomy']['moon'][k] for k in ('ra_hours', 'dec_deg')))
         self.assertEqual(night_sky.ra_text(13.4979), '13h30m')
@@ -436,7 +438,7 @@ class LockOn(unittest.TestCase):
 
     def test_the_planets_and_moon_state_carries_ra_and_dec_from_the_ephemeris(self):
         state = live(PLANET_NIGHT)
-        t = ae.Time.Make(2026, 10, 30, 22, 30, 0)
+        t = ae.Time.Make(2026, 10, 1, 23, 30, 0)
         eq = ae.Equator(ae.Body.Mars, t, ae.Observer(*MUMBAI), False, True)
         mars = state['astronomy']['planets']['Mars']
         self.assertAlmostEqual(mars['ra_hours'], eq.ra, delta=.0002)
@@ -454,7 +456,7 @@ class LockOn(unittest.TestCase):
         self.assertIn('lock', [kind for _, kind, _ in scene.robot_reactions(light)])
 
     def test_the_log_beat_is_about_the_real_target(self):
-        for when, kind, word in ((NIGHT, 'star', 'MIRFAK'), (PLANET_NIGHT, 'planet', 'MARS'), (MOON_NIGHT, 'moon', 'MOON')):
+        for when, kind, word in ((NIGHT, 'star', 'HAMAL'), (PLANET_NIGHT, 'planet', 'MARS'), (MOON_NIGHT, 'moon', 'MOON')):
             state = live(when)
             light = scene.lighting(state)
             context = story.context(state, dict(light, lock=light['lock']), fits=scene.story_fits)
@@ -464,12 +466,12 @@ class LockOn(unittest.TestCase):
             self.assertIn(word, beat['lines'][0])
             self.assertTrue(beat['lines'][0].startswith(('TELESCOPE ON', 'LOCK')) or kind == 'star')
             if kind == 'star':
-                self.assertEqual(beat['lines'][2], 'IN PERSEUS')
+                self.assertEqual(beat['lines'][2], 'IN ARIES')
                 self.assertIsNone(beat['inset'])
                 self.assertIn(f"MAG {story._num(light['lock']['mag'])}", beat['lines'][1])
             if kind == 'planet':
                 self.assertEqual(beat['inset'], 'planet')
-                self.assertEqual(beat['lines'][2], 'IN LEO')
+                self.assertEqual(beat['lines'][2], 'IN CANCER')
             if kind == 'moon':
                 self.assertEqual(beat['inset'], 'moon')
                 self.assertTrue(beat['lines'][1].endswith('% LIT'))
@@ -495,7 +497,7 @@ class Trails(unittest.TestCase):
         # Mars is rising: its past positions are lower in the sky than where it is now
         self.assertTrue(all(b[2] >= a[2] for a, b in zip(run, run[1:])))
         # and match the ephemeris three hours earlier
-        t = ae.Time.Make(2026, 10, 30, 22, 30, 0).AddDays(-10/1440)               # 10 minutes before the render
+        t = ae.Time.Make(2026, 10, 1, 23, 30, 0).AddDays(-10/1440)               # 10 minutes before the render
         eq = ae.Equator(ae.Body.Mars, t, ae.Observer(*MUMBAI), True, True)
         h = ae.Horizon(t, ae.Observer(*MUMBAI), eq.ra, eq.dec, ae.Refraction.Airless)
         self.assertAlmostEqual(mars['trail'][0][0], h.altitude, delta=.01)
@@ -524,7 +526,7 @@ class Trails(unittest.TestCase):
         self.assertEqual(len(run), 4)                                                # stops at the first point below the horizon
         body = dict(altitude_deg=30, azimuth_deg=60, trail=[[30, 80], [30, 95], [30, 100]])
         self.assertEqual(len(scene.trail_points(body)), 2)                           # stops where the path leaves the front
-        for when in (PLANET_NIGHT, MOON_NIGHT, NIGHT, datetime(2026, 11, 7, 4, 0, tzinfo=IST)):
+        for when in (PLANET_NIGHT, MOON_NIGHT, NIGHT, datetime(2026, 11, 7, 4, 0, tzinfo=IST), datetime(2026, 10, 2, 2, 0, tzinfo=IST)):
             astronomy = live(when)['astronomy']
             for name, body in list(astronomy['planets'].items())+[('Moon', astronomy['moon'])]:
                 run = scene.trail_points(body)

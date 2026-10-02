@@ -4,13 +4,15 @@ are, for one moment and one place, projected onto the observatory's dome.
 Pure geometry and data, no drawing and no dependency on build_animation (the renderer passes its canvas in as a
 ``Dome``). The catalogue files in assets/sky/ come from scripts/sky_catalog.py and are read once.
 
-Projection (the dome style the Sun, Moon and planets already use): the viewer faces ``dome.facing`` (azimuth in
-degrees, 0 = north), so the left edge is 90 degrees to the left of that and the right edge 90 degrees to the right.
+Projection (a rectangular panorama that the Sun, Moon and planets share): the viewer faces ``dome.facing``
+(azimuth in degrees, 0 = north), so the left edge is 90 degrees to the left of that and the right edge 90 degrees to
+the right. Both axes are linear, so the whole picture is sky:
 
-    x = width/2 + sin(az - facing) * cos(alt) * width/2        y = horizon_y - alt/top_alt * (horizon_y - top_y)
+    x = width * (az - facing + 90) / 180        y = horizon_y - alt/top_alt * (horizon_y - top_y)
 
-Only the front hemisphere, cos(az - facing) >= 0, exists on the dome: whatever is behind the viewer is not drawn,
-however high it stands (nothing is mirrored). Polygons and lines that cross the boundary are cut exactly there.
+Only the front hemisphere, cos(az - facing) >= 0, exists: whatever is behind the viewer is not drawn, however high it
+stands (nothing is mirrored). Polygons and lines that cross the boundary are cut exactly there (the left and right
+edges of the picture).
 """
 from collections import namedtuple
 from datetime import datetime, timezone
@@ -33,9 +35,8 @@ ARC_STEP_DEGREES = 4.0      # step of the arc that closes a Milky Way outline al
 def project(alt, az, dome):
     """Scene position of the point at altitude ``alt`` and azimuth ``az`` (degrees); does not cut at the horizon
     or at the edge of the dome (use ``in_front``)."""
-    d = math.radians(az-dome.facing)
-    return (dome.width/2+math.sin(d)*math.cos(math.radians(alt))*dome.width/2,
-            dome.horizon_y-alt/dome.top_alt*(dome.horizon_y-dome.top_y))
+    d = (az-dome.facing+180) % 360-180
+    return (dome.width*(d+90)/180, dome.horizon_y-alt/dome.top_alt*(dome.horizon_y-dome.top_y))
 
 
 def in_front(az, facing):
@@ -46,7 +47,8 @@ def in_front(az, facing):
 def to_screen(v, dome):
     """Scene position of a viewer-frame unit vector (right, forward, up)."""
     alt = math.degrees(math.asin(max(-1.0, min(1.0, v[2]))))
-    return dome.width/2+v[0]*dome.width/2, dome.horizon_y-alt/dome.top_alt*(dome.horizon_y-dome.top_y)
+    side = math.degrees(math.atan2(v[0], v[1])) if v[0] or v[1] else 0.0   # the zenith has no direction
+    return dome.width*(side+90)/180, dome.horizon_y-alt/dome.top_alt*(dome.horizon_y-dome.top_y)
 
 
 # ---------------------------------------------------------------------------------------------------------------
