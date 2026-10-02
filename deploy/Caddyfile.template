@@ -28,7 +28,7 @@ __SITE__ {
 			-Server
 		}
 		file_server {
-			hide .* *.md
+			hide *.md
 		}
 	}
 	handle {

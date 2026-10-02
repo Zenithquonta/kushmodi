@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kush Modi - Living Observatory</title>
+<meta name="description" content="Kush Modi's observatory in Mumbai as an explorable 3D world with the real sky: astronomy first, then aviation, robotics, LEGO, CAD and 3D printing.">
+<meta name="theme-color" content="#050a1e">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/site.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<canvas id="view" tabindex="0" role="img" aria-label="Interactive 3D observatory under the real Mumbai sky. The same content is available as text through the Text version button."></canvas>
+
+<div id="hud" class="hud" hidden>
+  <div class="panel hud-title">
+    <div class="name">KUSH MODI</div>
+    <div class="tag">BUILDING TOWARD THE UNEXPLORED</div>
+    <div class="clock"><span id="hud-time">--:--:--</span> <span id="hud-date"></span></div>
+  </div>
+  <div class="compass" aria-hidden="true"><div id="compass-strip"></div><div class="needle"></div></div>
+  <div id="compass-heading" class="heading" aria-hidden="true">000&deg; N</div>
+  <div class="panel hud-up">
+    <div class="label">UP NOW</div>
+    <ul id="hud-sky"></ul>
+    <div id="hud-weather" class="weather"></div>
+  </div>
+  <div id="readout" class="panel readout" role="status" aria-live="polite" hidden>
+    <dl id="readout-body"></dl>
+  </div>
+  <div id="hud-hint" class="panel hint"></div>
+  <div class="buttons">
+    <button type="button" id="btn-text">Text version</button>
+    <button type="button" id="btn-lines" aria-pressed="true">Constellations</button>
+    <button type="button" id="btn-help" aria-expanded="false" aria-controls="hud-help">Help</button>
+  </div>
+  <div id="hud-help" class="panel help" hidden>
+    <p><strong>Move</strong> W A S D or arrow keys (Shift runs). <strong>Look</strong> move the mouse after a click, or drag. <strong>Telescope</strong> click it, or press E beside it. <strong>C</strong> toggles constellation lines.</p>
+    <p>The sky is computed live from your clock for Mumbai (19.08 N, 72.88 E). Sun and Moon are drawn larger than life so they show on a small picture. Weather and season come from the observatory's live feed.</p>
+  </div>
+  <div id="joy" class="joy" aria-hidden="true"><div id="knob" class="knob"></div></div>
+</div>
+
+<main id="text-version" class="text-version" tabindex="-1">
+<div class="text-bar"><button type="button" id="btn-close-text">Back to the 3D observatory</button></div>
+<header>
+<h1>Kush Modi</h1>
+<p class="tagline">Astronomy first. Building toward the unexplored.</p>
+<p id="fallback-note" class="note" hidden></p>
+</header>
+<figure id="hero" class="hero">
+<noscript><picture><source media="(prefers-reduced-motion: reduce)" srcset="/live.png"><img src="/live.svg" alt="Kush Modi's observatory live from Mumbai: the real sky, season and weather over the telescope and maker workshop, redrawn through the day"></picture></noscript>
+</figure>
+<nav aria-label="Sections"><a href="#observatory">Observatory</a> &middot; <a href="#flight-deck">Flight deck</a> &middot; <a href="#fab-lab">Fab lab</a> &middot; <a href="#mission-log">Mission log</a></nav>
+<section id="observatory" aria-labelledby="observatory-h">
+<h2 id="observatory-h">Observatory</h2>
+<p>I'm Kush Modi, an Integrated MBA Tech (Computer Engineering) student in Mumbai, on a five-year dual degree at MPSTME, NMIMS (2024 to 2029, expected). I'm an avid amateur astronomer, and that led to a telescope mount project and an interest in autonomous systems for unmapped environments. The artwork here starts from my own telescope-under-the-Milky-Way photograph.</p>
+<h3>Automated alt-azimuth star tracker and mount</h3>
+<p>A low-cost two-axis alt-az tracking mount with stepper motors and custom reduction gearing designed in Autodesk Fusion 360. Open-source ephemeris data, smartphone IMU feedback and microcontroller control give real-time sky-coordinate compensation and object tracking.</p>
+<h3>Team Astrofix, Smart India Hackathon 2025</h3>
+<p>As team leader, I led a cross-functional team through ideation, technical architecture and rapid deployment for a national-priority problem statement (Ministry of Education Innovation Cell). I managed sprints, documentation, architecture reviews and presentations. We qualified and competed at the national level.</p>
+<p>AstroFixxer repositories: <a href="https://github.com/Zenithquonta/astrofixer-baby">AstroFixxer web</a> · <a href="https://github.com/Zenithquonta/astrofixxer-android">AstroFixxer Android</a></p>
+</section>
+<section id="flight-deck" aria-labelledby="flight-deck-h">
+<h2 id="flight-deck-h">Flight deck</h2>
+<p>Aviation, spacecraft and exploration pull at me. Star Trek and Star Wars inspire the ships in the artwork.</p>
+<h3>NETRA (Navigation and Exploration in Terrain-Restricted Areas)</h3>
+<p>A modular autonomous aerial exploration platform for GPS-denied, communication-constrained, unmapped terrain. A secondary pathway leads toward hazardous-environment work such as mining and disaster response.</p>
+<h3>ESP32-S3 micro drone (in design)</h3>
+<p>I'm designing a sub-100 g drone with coreless motors, flown over WiFi through WebSocket control. The plan includes PID stabilisation, an on-board vision layer for object tracking, and IMU-based dead reckoning.</p>
+<h3>Exploration beyond engineering</h3>
+<p>High-altitude trekking certification (Beas Kund expedition), intermediate snow skiing certification (Gulmarg), and PADI Scuba Diver certification in progress.</p>
+</section>
+<section id="fab-lab" aria-labelledby="fab-lab-h">
+<h2 id="fab-lab-h">Fab lab</h2>
+<p>Making is the other constant: imagining something, building it, and finding out what it can do.</p>
+<ul>
+<li><strong>CAD:</strong> Autodesk Fusion 360 and SolidWorks, with parametric 3D modelling.</li>
+<li><strong>Fabrication:</strong> FDM printing on Bambu Lab and Creality Ender printers in PLA, PETG and TPU, plus aluminium extrusion, sheet metal and acrylic.</li>
+<li><strong>Electronics:</strong> I design my own PCBs. Embedded work with Arduino, STM32, ESP32-S3, ESP32-C3, PID control, WebSocket, ESP-NOW and motor drivers.</li>
+<li><strong>LEGO:</strong> a hobby, and a good way to think in small pieces.</li>
+</ul>
+<p>Look for the rocket on the printer, the rotating wireframe display, the brick-built spacecraft, and the rover outside the workshop.</p>
+</section>
+<section id="mission-log" aria-labelledby="mission-log-h">
+<h2 id="mission-log-h">Mission log</h2>
+<h3>Robotics: Team Darwin, MPSTME</h3>
+<ul>
+<li><strong>Head Design and Simulation Engineer (2025 to 2026):</strong> I built the Gazebo simulation for the autonomous ground vehicles Vega and Kaizen (Intelligent Ground Vehicle Competition, IGVC), so navigation could be tested before hardware runs. I designed the rover chassis in aluminium extrusion, steel, acrylic and custom 3D-printed parts, balancing rigidity and weight for off-road use. I also originated the dynamic cost-field navigation approach, with a seven-rule priority hierarchy for obstacle avoidance and lane following, which the software team implemented.</li>
+<li><strong>Electronics core member (2024 to 2025):</strong> I integrated the ZED 2i, RPLidar A3, uBlox GPS, MPU-9250, Arduino Mega and Rhino motor drivers, with low-latency ROS serial links for motor actuation and sensor telemetry.</li>
+<li><strong>Team results:</strong> 1st in qualifying and 5th in the AutoNav challenge at IGVC.</li>
+</ul>
+<h3>Tools I work with</h3>
+<p>Python · C · C++ · Java · SQL · JavaScript · ROS · Gazebo · sensor fusion · SLAM · path planning · LiDAR · stereo vision · IMU · React · Node.js · REST APIs · Supabase · Google Cloud Platform · Git · Linux · Docker</p>
+</section>
+<footer>
+<p><a href="https://github.com/Zenithquonta">GitHub</a> &middot; <a href="https://www.linkedin.com/in/kush-modi-b85388311">LinkedIn</a> &middot; <a href="mailto:kushmodi@gmail.com">Email</a></p>
+<p class="small">Look up. Build something. Keep going.</p>
+</footer>
+</main>
+</body>
+</html>

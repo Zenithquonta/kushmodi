@@ -15,7 +15,7 @@ left and east on the right, as the user asked. Ground height is a function `grou
 | --- | --- | --- |
 | Player start | (0, 16) | facing north (yaw 0), eye height 1.7 m |
 | Hill crown | radius 0 to 30 | flat; slopes away to about radius 90, then a plain with ridges to the east, south and west |
-| Telescope | (-7, -4) | equatorial mount (polar axis tilted to latitude 19.076 degrees) on a tripod; the tube points at the object chosen by the sky |
+| Telescope | (-7, -4), drawn 1.5 times life size | equatorial mount (polar axis tilted to latitude 19.076 degrees) on a tripod; the tube points at the object chosen by the sky |
 | Maker shed | (17, -9), 8 x 5 m, open front facing south-west | roof, workbench, glowing wall screen, 3D printer with a rocket, LEGO starship on a shelf, lantern with a warm point light, neon strips |
 | Rover and robot | (-15, 7) | six-wheel rover with a mast camera and a small robot beside it |
 | Overland van | (-24, -15) | parked at the western edge, warm window glow |
@@ -38,6 +38,8 @@ linear fog toward the horizon colour.
   the hill.
 - `prefers-reduced-motion`: no head bob, no hovering drone or patrolling robot, no lightning, no sparkle. The sky still
   moves with the real clock because that is the point of the site.
+- `scripts/site_browser_check.mjs` is the real-browser check (Chromium through Playwright with software GL, against the
+  site served by Caddy with the repository's template, so the Content-Security-Policy is really in force).
 - Test hooks (URL parameters, harmless for visitors): `?time=ISO8601-with-offset` starts the simulated clock there and
   lets it run, `?speed=N` multiplies the clock rate, `?heading=DEG` and `?pitch=DEG` set the view.
 
@@ -65,7 +67,14 @@ elevation 14 m, read from `config/observatory.json` by `scripts/build_site_data.
 - Telescope pointing: the highest of the Moon and the planets brighter than magnitude 3 above 5 degrees, else the
   highest star brighter than magnitude 2 above 15 degrees, else Polaris. The Sun is never targeted. Clicking it shows
   name, RA, Dec, altitude, azimuth.
-- Positions are refreshed every 2 seconds of simulated time, the sidereal rotation every frame.
+- Trails: the Moon and each planet leave a comet-like line over the path of the last three hours (36 segments of 5
+  minutes, computed with `bodyTrails()` every 30 seconds of sky time), brightest at the body and fading to nothing at
+  the oldest point; the head follows the body at every refresh. A trail fades with its body's visibility (limiting
+  magnitude), so under heavy cloud or for Uranus and Neptune it is not drawn.
+- The sky is a full 360 degrees: the sky objects sit on a sphere of 5 km radius, beyond the 2.6 km terrain, so the
+  ground hides them through the depth test and the visitor can look in every direction (the start view faces north).
+- Positions and the sidereal rotation are refreshed every 2 seconds of simulated time (sub-pixel at real speed); the
+  telescope slews smoothly between refreshes.
 
 ## Data flow
 
@@ -108,8 +117,8 @@ date). It is re-fetched every 5 minutes.
 - No CDN, no third-party request at runtime, no inline script or inline `style=` attribute. Libraries are vendored and
   pinned with their licence files.
 - No `innerHTML`, `eval` or `new Function` with dynamic data anywhere in `site/js`.
-- Everything outside `site/` and the three live files still returns 404; there is no directory listing; `*.md` and
-  dotfiles inside `site/` are hidden.
+- Everything outside `site/` and the three live files still returns 404; there is no directory listing; `*.md` files inside `site/` are
+  hidden, and only an allowlist of paths is served at all.
 - The service user cannot write to `site/`; code reaches the server only through `deploy/update.sh`.
 
 ## Milestones

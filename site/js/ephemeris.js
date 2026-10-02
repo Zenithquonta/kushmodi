@@ -75,6 +75,25 @@ function bodyState(name, date, observer, m) {
   };
 }
 
+// The recent path of bodies across the sky, as unit world vectors: out[i] holds (spanMinutes / stepMinutes + 1)
+// samples for names[i], newest first (the sample at `date`, then one every stepMinutes back in time).
+export function bodyTrails(date, observer, names, spanMinutes = 180, stepMinutes = 5) {
+  const n = Math.floor(spanMinutes / stepMinutes) + 1;
+  const out = names.map(() => new Float32Array(n * 3));
+  const w = [0, 0, 0];
+  for (let k = 0; k < n; k++) {
+    const when = new Date(date.getTime() - k * stepMinutes * 60000);
+    const m = skyMatrix(when, observer);
+    names.forEach((name, i) => {
+      const eq = A.Equator(name, when, observer, false, true);
+      const len = Math.hypot(eq.vec.x, eq.vec.y, eq.vec.z);
+      applyMatrix(m, eq.vec.x / len, eq.vec.y / len, eq.vec.z / len, w);
+      out[i].set(w, k * 3);
+    });
+  }
+  return out;
+}
+
 // Everything the scene needs about the sky at one instant.
 export function skyState(date, observer) {
   const m = skyMatrix(date, observer);
