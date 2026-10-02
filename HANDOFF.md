@@ -269,12 +269,9 @@ parity and mutation checks, merges into `ccr-19e1f533-c4auq1`, pushes to the bra
 the session scratchpad (`coder-15e.log`, `coder-16.log`) and are lost with the container.
 
 Remaining, in order:
-1. **15e satellites** (ISS 25544, Hubble 20580, Tiangong 48274): implemented in worktree
-   `worktree-agent-a7719a9a49049d159` (fetcher `scripts/satellites.py`, systemd units, state key `satellites`, SAT TRACK
-   screen page, story beats, animated real pass track, `scripts/test_satellites.py`, real TLE fixture
-   `scripts/fixtures/celestrak-2026-10-02.tle` from the user's server). Being finished by a coder; then supervisor
-   review (diff, full suite, renders, Chromium parity, mutation check), merge, push, tell the user to run update.sh.
-   If the worktree is gone, redo from this description; the real TLEs are in scripts/fixtures/celestrak-2026-10-02.tle.
+1. **15e satellites**: DONE and on `main` (8374f18): ISS/Hubble/Tiangong fetcher + systemd timer, SGP4 passes, SAT
+   TRACK screen page, log beats, animated real pass track. Still to verify on the server: `check.sh` satellites
+   section and a real CelesTrak fetch after `update.sh`; browser playback of a pass.
 2. **Real sky in the SVG (user request 2026-10-02)**: remove the rotating galaxies (`celestial` layer) and the ringed
    planet with moons at top right in live mode; face NORTH (west on the left, east on the right: change
    `sun_screen`/`in_view` for live states); replace the painted sky in live mode with a real one (Yale Bright Star
