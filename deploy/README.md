@@ -12,6 +12,21 @@ serves exactly three files over HTTPS:
 Everything else on the host returns 404. The live part never touches GitHub; the README switches to these URLs in
 Phase 12. The daily archive (below) is a separate, optional step with its own key.
 
+## Easiest: one script in Oracle Cloud Shell
+
+1. On duckdns.org: sign in, add a subdomain (e.g. `kushsky`), copy your token from the top of the page.
+2. In the Oracle console click the **>_** (Cloud Shell) icon at the top, wait for the prompt, then run:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/Zenithquonta/kushmodi/main/deploy/oci-cloudshell.sh -o oci.sh
+   bash oci.sh
+   ```
+3. Enter the DuckDNS name and token when asked. The script creates the network (ports 22/80/443), an Ubuntu 24.04
+   instance (free Ampere if available, else the free Micro), points DuckDNS at it, and the instance installs itself.
+   The token is used only inside Cloud Shell to update DuckDNS.
+4. After 10-20 minutes it prints how to read the install log; `https://<name>.duckdns.org/live.png` then shows the sky.
+
+The manual route below does the same by hand.
+
 ## Before you start (once, in the Oracle console)
 
 1. Instance on **Ubuntu 24.04** (Ampere/ARM or x86).

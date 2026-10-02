@@ -101,6 +101,15 @@ class DeployFiles(unittest.TestCase):
         self.assertIn('memory_mb < 2000 ? 15 : 5', text)
         self.assertIn("OnCalendar=\\nOnCalendar=*:0/%s", text)   # clear the unit's 5-minute schedule first
 
+    def test_cloud_shell_setup_keeps_the_duckdns_token_off_the_instance(self):
+        text = (DEPLOY/'oci-cloudshell.sh').read_text()
+        boot = text.split('cat > "$BOOT" <<BOOTSTRAP', 1)[1].split('\nBOOTSTRAP\n', 1)[0]
+        self.assertNotIn('TOKEN', boot)
+        self.assertIn('read -r -s -p "DuckDNS token', text)
+        self.assertIn('deploy/install.sh $HOST', boot)
+        for port in ('rule 22', 'rule 80', 'rule 443'):
+            self.assertIn(port, text)
+
     def test_install_validates_the_hostname_before_using_it(self):
         text = (DEPLOY/'install.sh').read_text()
         self.assertLess(text.index('[[ "$HOST" =~'), text.index('sed -e "s|__SITE__|$HOST|"'))

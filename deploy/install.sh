@@ -37,8 +37,8 @@ if [[ -f /etc/caddy/Caddyfile ]] && ! grep -qF "$MARKER" /etc/caddy/Caddyfile; t
 fi
 
 say "installing packages"
-apt-get update -qq
-apt-get install -y -qq git python3-venv ffmpeg caddy >/dev/null
+apt-get -o DPkg::Lock::Timeout=900 update -qq
+DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=900 install -y -qq git python3-venv ffmpeg caddy >/dev/null
 ffmpeg -hide_banner -version | grep -q enable-librsvg || die "this ffmpeg was built without librsvg"
 
 say "service user and directories"
