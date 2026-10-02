@@ -278,11 +278,11 @@ Remaining, in order:
    Catalog stars, d3-celestial Milky Way outline, optional constellation lines; data via
    `scripts/build_site_data.py` from Phase 16) at real positions; retarget the telescope lock-on to a real object in
    view. Keep the default fallback scene byte-identical unless the user asks otherwise.
-3. **Phase 16 website** (AGENTS.md "Living Observatory website"): worktree `worktree-agent-ae7fa91f43a57b7d5` has
-   `docs/WEBSITE.md`, `scripts/build_site_data.py` and vendored three.js 0.186.1 / astronomy-engine 2.1.19 (MIT) plus
-   star data; M1 (walkable 3D observatory, real live sky facing north, HUD, touch controls, HTML fallback, Caddy static
-   root with CSP, `scripts/test_site.py`, headless-Chromium screenshots) is not finished. Then M2 (portfolio stations
-   from README) and M3 (shared story beats in live.json).
+3. **Phase 16 website**: M1 DONE and on `main` (5f170f2): `site/` 3D observatory with the live Mumbai sky (360°,
+   initial view north), planet/Moon fading trails, HUD from live.json, telescope target readout, touch controls,
+   text fallback; Caddy `@site` allowlist with CSP; `scripts/test_site.py`, `scripts/site_browser_check.mjs`.
+   Next (M2): denser/brighter stars and a visible Milky Way at the low render resolution, constellation lines
+   subtler or off by default, portfolio stations from README; then M3 shared story beats via live.json.
 4. User on the server: `kill %1 %2` (two update.sh runs were suspended with Ctrl+Z), `jobs`, then
    `sudo bash /opt/observatory/repo/deploy/update.sh` and `.../check.sh`. Optional: install-archive.sh with a deploy
    key; regenerate the DuckDNS token; delete the unused `kushsky` domain.
