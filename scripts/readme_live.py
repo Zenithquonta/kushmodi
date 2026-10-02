@@ -31,10 +31,10 @@ REPO_HERO = '''<picture>
 def live_hero(host):
     return f'''<picture>
   <source media="(prefers-reduced-motion: reduce)" srcset="https://{host}/live.png" />
-  <img src="https://{host}/live.svg" width="100%" alt="Kush Modi's observatory live from Mumbai: the real sky, season and weather over the telescope and maker workshop, redrawn every five minutes" />
+  <img src="https://{host}/live.svg" width="100%" alt="Kush Modi's observatory live from Mumbai: the real sky, season and weather over the telescope and maker workshop, redrawn through the day" />
 </picture>
 
-<sub>Live from Mumbai, redrawn every five minutes · if it does not load, <a href="./assets/observatory.gif">open the animated observatory</a></sub>
+<sub>Live from Mumbai, redrawn through the day · if it does not load, <a href="./assets/observatory.gif">open the animated observatory</a></sub>
 '''
 
 
