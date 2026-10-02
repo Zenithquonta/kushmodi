@@ -301,7 +301,10 @@ Remaining, in order:
 - **Agent briefing**: `docs/AGENT-BRIEFING.md` is the prompt for any new agent.
 - **Waiting on Kush**: 2-3 lines each for AeroLink, the enclosure/chamber project and dengue forecasting (shown as
   "PROJECT INFORMATION COMING SOON" until then); running `kill %1 %2`, `jobs`, `update.sh`, `check.sh` on the VPS.
-- If a worktree is missing after a restart, redo its task from this description and the coder logs' intent.
+- Both were stopped by the user and pushed as unreviewed branches: `wip/readme-sky` (Phase 17, top commit
+  e55b648 on 9b82f6b) and `wip/walkable-world` (Phase 16 M2, top commit aa2c905). To resume: check out the branch,
+  finish the task above, verify (full suite, renders, browser check), then merge into `main`. Never merge them
+  unreviewed.
 
 Sky decisions (user, 2026-10-02): the README image faces NORTH (west left, east right, Polaris centre); the website
 sky is a full 360°. Planets and the Moon carry a trail: "not a complete arc, a continuous line that gets dimmer
