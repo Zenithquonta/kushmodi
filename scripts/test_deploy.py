@@ -66,7 +66,8 @@ class DeployFiles(unittest.TestCase):
     def test_scripts_hold_no_secrets_and_never_pull_code_automatically(self):
         for path in (p for p in DEPLOY.glob('*') if p.is_file()):
             text = path.read_text()
-            self.assertNotRegex(text, r'(?i)(ghp_|github_pat_|token=|password=|BEGIN [A-Z ]*PRIVATE KEY)')
+            # literal credentials only: 'token=$TOKEN' (a value read at run time) is fine
+            self.assertNotRegex(text, r'(?i)(ghp_|github_pat_|(token|password)=(?!\$)[^\s&"\'$]{8,}|BEGIN [A-Z ]*PRIVATE KEY)')
         self.assertNotIn('git pull', (DEPLOY/'observatory-live.service').read_text())
         self.assertIn('--ff-only', (DEPLOY/'update.sh').read_text())
 
