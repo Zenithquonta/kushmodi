@@ -375,5 +375,31 @@ amendments that follow from measured facts, open decisions, and phase status.
 - Verified against a real response captured on the server (2 Oct 2026 16:00: drizzle, 69 % cloud, gusts 31 km/h),
   saved as `scripts/fixtures/open-meteo-2026-10-02T1600.json`. Measured on the Micro before the cache: 43-47 s CPU
   per render, 142 MB peak.
-- Next (15b): lightning, wind-driven grass, grounded airliner with an advisory hologram.
+- Phase 15b followed: lightning, wind-driven grass, grounded airliner with an advisory hologram.
+
+## Phase 15b notes — storms, the grounded airliner and the meadow
+
+Everything here needs a real observation (the seasonal model never grounds flights or throws lightning), and the
+default `scene()` stays byte-identical.
+
+- Storm deck: heavy rain and thunderstorms raise the overcast deck to 0.80/0.86 and darken it toward black (the
+  Milky Way disappears), and a `storm-shade` rect dims the sunlit ground.
+- Lightning (thunderstorm only): three seeded strikes per 24 s loop, one in each of 1.5-7, 9-15 and 17-22.5 s.
+  Each is a double flicker (0 -> 1 -> 0.12 -> 0.9 -> 0 over 0.24 s): a jagged bolt with branches from the cloud
+  base to behind the skyline (sky-masked; the city is drawn over it) and a sky flash at opacity 0.3. Never more than
+  two flashes in any second (limit 3), and opacity 0 at t = 0, so the still PNG and the reduced-motion copy never
+  show a flash.
+- Grounded airliner: thunderstorm, heavy rain, fog, or gusts of 60 km/h or more remove the airliner route (the
+  fictional starships keep flying). A cyan hologram projected from the van's roof rack reads `! AIRSPACE ADVISORY /
+  FLIGHTS SUSPENDED / <reason> OVER MUMBAI / WIND n KM/H · GUSTS n KM/H / STAND BY >>`. It has shimmer, a glitch
+  dip, scanlines, amber corner brackets and a blinking last line. The text comes only from the validated numbers
+  and fixed strings.
+- Meadow: 64 grass tufts along the foreground (only on ground-mask pixels, clear of objects, puddles and protected
+  painting). They sway with a 4 s period, phase-shifted across the field so gusts roll through. Sway amplitude
+  `min(22°, 1.5 + 0.42·wind + 0.12·gust)` uses the real wind, otherwise a seasonal breeze from cloud and wetness.
+  Colour follows day/night, dry season and storm shade.
+- Verified: 11 new tests in `test_storm.py`. The generic SMIL-vs-raster and loop checks rerun on a stormy night,
+  sampled inside every strike; deliberately broken lightning and meadow timing are both caught. Chromium vs librsvg
+  worst 167×94 cell is 19 (limit 150) at five times including two strikes. The animated SVG is 1.8 MB (stormy
+  night) to 2.4 MB (day).
 

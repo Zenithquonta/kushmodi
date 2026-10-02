@@ -652,3 +652,19 @@ Commands and outcomes: 177 tests pass; gate passes; shellcheck clean; systemd-an
 User verified on the server: update.sh applied 9ef2f75; 43-47 s CPU per render before the cache.
 Decision: approve
 ```
+
+### LO-P15b — Storms, grounded airliner hologram, wind-swept meadow (2026-10-02)
+
+```text
+Requested by: user ("yes start phase 15b yourself, don't wait")
+Implemented and reviewed by: supervisor agent
+Changed: build_animation.py (storm deck and ground shade, lightning, advisory hologram, grounded routes, meadow,
+  extra pixel-font glyphs), test_storm.py (new), docs/LIVING-OBSERVATORY.md.
+Evidence: 840 px renders of a stormy night/day, a clear gale, the real drizzle fixture and a calm night inspected;
+  first pass found a bright blue sky under a thunderstorm, bolts stopping in mid-air, a hologram beam across the
+  telescope and a sunlit ground; all four fixed and re-inspected. Chromium parity worst cell 19/150. The new
+  animation test fails on deliberately broken lightning and meadow timing.
+Commands and outcomes: 188 tests pass (137 s); gate passes; default scene byte-identical.
+Decision: approve
+Next: 15c shed lamp flicker and reactive rover; 15d story beats (incl. Saturn opposition 4 Oct).
+```

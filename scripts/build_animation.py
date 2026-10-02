@@ -1386,6 +1386,8 @@ PUDDLES = [(930, 904, 66, 6), (1004, 924, 44, 4), (1268, 916, 40, 4)]   # x, y, 
 
 RAINY = ('drizzle', 'rain', 'heavy-rain', 'thunderstorm')
 RAIN_FLOOR = {'drizzle': .3, 'rain': .6, 'heavy-rain': .9, 'thunderstorm': .85}   # by condition, before intensity
+STORM_SHADE = .5   # ground shade per unit of storm darkening
+STORM_DECK = {'heavy-rain': (.8, .35), 'thunderstorm': (.86, .5)}   # real storms: deck opacity, darkening toward black
 
 
 def live_environment(env, observation):
@@ -1426,6 +1428,11 @@ def season(light, state):
     light['haze_colour'] = _colour_for(light, (40, 46, 70), _mix((214, 220, 226), (226, 210, 180),
                                                                  _smooth((env['haze']-.5)/.3)), (240, 176, 150))
     light['deck'] = _colour_for(light, (18, 22, 34), (150, 158, 170), (190, 130, 128))
+    if observation and observation['condition'] in STORM_DECK:   # a storm hides the sky, Milky Way included
+        opacity, darken = STORM_DECK[observation['condition']]
+        light['overcast'] = max(light['overcast'], opacity)
+        light['deck'] = _mix(light['deck'], (6, 8, 14), darken)
+    light['storm'] = STORM_DECK[observation['condition']][1] if observation and observation['condition'] in STORM_DECK else 0
     light['city'] = city_markup(light)+city_glow(light)
     light['weather'] = season_markup(light)
     light['bodies'] = sky_bodies(light, state)
@@ -1546,6 +1553,9 @@ def season_markup(light):
                     f'<rect x="{x}" y="{y+2}" width="{w}" height="{h-2}" fill="{_rgb(sky)}"/>'
                     f'<rect x="{x+w//3}" y="{y+1}" width="{w//4}" height="2" fill="{_rgb(shine)}"/>')
         out += '</g>'
+    if light.get('storm'):   # no sunlight on the ground under a storm
+        out += (f'<rect data-season="storm-shade" width="{W}" height="{H}" fill="rgb(10,14,22)" '
+                f'opacity="{_num(STORM_SHADE*light["storm"], 4)}" mask="url(#ground-mask)"/>')
     veil = ''
     if light['overcast'] > .005:
         veil += (f'<rect data-season="overcast" width="{W}" height="{HORIZON_Y+10}" fill="{_rgb(light["deck"])}" '
@@ -1660,7 +1670,7 @@ def _city_colours(light):
     haze = .2+.45*env['haze']
     lit = _colour_for(light, (26, 32, 58), _mix((178, 190, 208), light['haze_colour'], haze), (222, 156, 132))
     shade = _colour_for(light, (16, 20, 40), _mix((104, 118, 146), light['haze_colour'], haze*.7), (132, 92, 108))
-    overcast = light['overcast']/OVERCAST[2]   # 0..1
+    overcast = min(1, light['overcast']/OVERCAST[2])   # 0..1
     lit = _mix(lit, light['deck'], .6*overcast)
     shade = _mix(shade, _mix(light['deck'], (0, 0, 0), .2), .45*overcast)
     return lit, shade
@@ -2037,7 +2047,8 @@ def sky_bodies(light, state):
 STRIKE_SLOTS = ((1.5, 7.0), (9.0, 15.0), (17.0, 22.5))
 STRIKE_SHAPE = ((0, 0), (.02, 1), (.08, .12), (.13, .9), (.24, 0))   # (seconds after the strike, opacity)
 SKY_FLASH = .3                     # peak opacity of the sky's flash: bright, never full white
-BOLT_ZONE = (620, 1560, 110, 640)  # x0, x1, top, bottom
+BOLT_ZONE = (620, 1560, 110, HORIZON_Y+30)  # x0, x1, top, bottom (the sky mask and the skyline end it)
+HOLO_EMITTER = (190, 618)           # the van's roof rack projects the hologram
 ADVISORY_BOX = (40, 404, 420, 556)  # x0, y0, x1, y1 of the hologram panel
 ADVISORY_COLOURS = dict(frame='#5ef2ff', text='#a8f8ff', warn='#ffc44d', back='#04141f')
 GROUNDING = (('thunderstorm', 'THUNDERSTORM OVER MUMBAI'), ('heavy-rain', 'SEVERE WEATHER OVER MUMBAI'),
@@ -2130,8 +2141,8 @@ def advisory(t, animated, light):
     x0, y0, x1, y1 = ADVISORY_BOX
     shimmer = Track([.92, .8, .95, .88, .55, .93, .92], [0, .2, .4, .6, .62, .64, 1], 6)
     blink = Track([1, 1, .15, .15, 1], [0, .5, .5, .99, 1], 1.5)
-    sx, sy = STATION
-    beam = f'M{sx+6} {sy-2}L{x0+40} {y1}L{x1-60} {y1}L{sx+22} {sy-2}z'
+    sx, sy = HOLO_EMITTER
+    beam = f'M{sx-3} {sy}L{x0+60} {y1}L{x1-120} {y1}L{sx+3} {sy}z'
     out = (f'<g data-advisory="hologram" opacity="{shimmer.value_text(t)}">{anim(shimmer)}'
            f'<path d="{beam}" fill="{c["frame"]}" opacity=".07"/>'
            f'<rect x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" fill="{c["back"]}" opacity=".62"/>'
@@ -2189,6 +2200,7 @@ def meadow(t, animated, light):
     wind, gust = wind_of(light)
     amp = sway_amplitude(wind, gust)
     colour = _outdoor(light, (16, 30, 22), _mix((92, 150, 64), (178, 160, 86), light['dry']/DRY[2] if DRY[2] else 0))
+    colour = _mix(colour, (10, 14, 22), STORM_SHADE*light.get('storm', 0))
     tip = _mix(colour, (255, 255, 230), .25)
     parts = []
     for x, y, blades in meadow_tufts():
