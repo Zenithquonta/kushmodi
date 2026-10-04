@@ -92,6 +92,7 @@ def context(state, light, fits=None):
                 shower=state.get('sky_events', {}).get('meteor_shower'), mood=light.get('mood', 'calm'),
                 flicker=light.get('flicker', False), grounded=light.get('grounded', False),
                 lst=astronomy.get('local_sidereal_time_hours'), satellites=state.get('satellites') or {},
+                lock=light.get('lock'),
                 fits=fits or _approx_fits)
 
 
@@ -355,10 +356,28 @@ def season(c):
                             f"DAY {s['day_index_in_season']+1} OF {s['name'].upper()}"], weight=1)]
 
 
+def lock_on(c):
+    """The object the telescope is locked on (the renderer's lock-on plan: a planet in view, else the Moon, else the
+    brightest star), with facts that come straight from the sky: magnitude, altitude, constellation."""
+    lock = c.get('lock')
+    if not lock or c['dark'] < .5:
+        return []
+    kind, name = lock['kind'], lock['name']
+    alt = f"ALT {round(lock['alt'])}°"
+    where = lambda inset: pick(c, inset, f"IN {lock['constellation'].upper()}", f"IN {lock['constellation_symbol'].upper()}")
+    if kind == 'moon':
+        return [beat('lock-moon', ['TELESCOPE ON THE MOON', f"{round(100*lock['fraction'])}% LIT", alt], 'moon',
+                     weight=2, body='Moon')]
+    inset = _inset_for(name.title()) if kind == 'planet' else None
+    title = pick(c, inset, f'TELESCOPE ON {name}', f'LOCK · {name}', name)
+    return [beat(f'lock-{kind}', [title, f"MAG {_num(lock['mag'])} · {alt}", where(inset)], inset, weight=2,
+                 body=name.title() if kind == 'planet' else None)]
+
+
 def night_sky(c):
     if c['dark'] < .5:
         return []
-    out = [beat('m51', ['TELESCOPE ON M51', 'WHIRLPOOL GALAXY', 'IN CANES VENATICI'], weight=2)]
+    out = lock_on(c)
     if c['lst'] is not None:
         hours, minutes = divmod(round(c['lst']*60) % 1440, 60)
         out.append(beat('sidereal', ['LOCAL SIDEREAL TIME', f'{hours:02d}:{minutes:02d}',
@@ -382,7 +401,7 @@ def workshop(c):
 
 
 TEMPLATES = (oppositions, satellite_pass, on_this_day, meteor_shower, moon_extremes, planets_up, planets_rising,
-             jupiter_moons, outer_planets, moon_phase, sun_events, weather, satellites, season, night_sky, workshop)
+             jupiter_moons, outer_planets, moon_phase, sun_events, weather, satellites, season, night_sky, workshop)   # night_sky holds the lock-on beat
 
 
 def eligible(c):

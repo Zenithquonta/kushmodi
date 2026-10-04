@@ -101,7 +101,7 @@ class Days(unittest.TestCase):
         svg = scene.scene(0, False, state=state)
         self.assertIn(scene.meteor_defs(day['meteors'], day['meteor_count']), svg)
         self.assertNotIn(scene.meteor_defs(), svg)
-        self.assertIn(scene.twinkle_defs(day['twinkles']), svg)
+        self.assertNotIn(scene.twinkle_defs(day['twinkles']), svg)   # the live sky has real stars, not painted twinkles
 
 
 if __name__ == '__main__':

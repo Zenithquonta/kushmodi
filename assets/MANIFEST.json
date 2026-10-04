@@ -225,6 +225,30 @@
       "animation_elements": 4
     },
     {
+      "path": "assets/sky/SOURCES.md",
+      "bytes": 2599,
+      "sha256": "5430ea9d75e3313bfdd0d04a0626ed8796ae4bd8f92e5d94c68c561798ad9059",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md"
+    },
+    {
+      "path": "assets/sky/constellations.json",
+      "bytes": 15377,
+      "sha256": "7c6e3f4042cde9138e741b6f90e1bbc319400b2fdc1da24e0e10058bed1beb9d",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md"
+    },
+    {
+      "path": "assets/sky/milkyway.json",
+      "bytes": 94472,
+      "sha256": "202b4e361dda2f401aca70bf620e0d7b67cfe02e308a4db9864078f8742fb78f",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md"
+    },
+    {
+      "path": "assets/sky/stars.json",
+      "bytes": 55362,
+      "sha256": "7124d569570392ae74e11ce36df3eeccb8ff202e8a0b031af7cad4767eac8d40",
+      "role": "active artwork or source; see docs/ASSET-REGISTRY.md"
+    },
+    {
       "path": "assets/space-sprites.png",
       "bytes": 1828948,
       "sha256": "8d51e493176b5eb149eaf601823710e0f79f8d2450a52cc7d4c1bc01ba75b6bd",

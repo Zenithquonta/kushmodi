@@ -91,6 +91,16 @@ def _horizon(body, t, observer):
     return round(h.altitude, 3), round(h.azimuth, 3)
 
 
+TRAIL_MINUTES, TRAIL_STEP = 180, 10
+
+
+def trail(body, utc, observer):
+    """Where a body was over the last three hours: [altitude, azimuth] in degrees every ten minutes, from ten minutes
+    ago back to 180 (the renderer draws the comet-like trail behind the body from these)."""
+    return [list(_horizon(body, _ae_time(utc-timedelta(minutes=age)), observer)[:2])
+            for age in range(TRAIL_STEP, TRAIL_MINUTES+1, TRAIL_STEP)]
+
+
 def _local(t, tz):
     return None if t is None else t.Utc().replace(tzinfo=timezone.utc).astimezone(tz).replace(microsecond=0).isoformat()
 
@@ -119,19 +129,22 @@ def scene_state(when, config=None, weather=None, satellites=None):
         'date': local.date().isoformat(),
         'time': local.strftime('%H:%M:%S'),
         'timezone': loc['timezone'],
+        'location': {'name': loc['name'], 'latitude': loc['latitude'], 'longitude': loc['longitude']},
         'timestamp_local': local.replace(microsecond=0).isoformat(),
         'timestamp_utc': utc.replace(microsecond=0).isoformat().replace('+00:00', 'Z'),
         'season': season_for(local.date(), cfg),
         'environment': environment_for(local.date(), cfg),
         'astronomy': {
             'sun': {'altitude_deg': sun_alt, 'azimuth_deg': sun_az},
-            'moon': {'altitude_deg': moon_alt, 'azimuth_deg': moon_az,
+            'moon': {'altitude_deg': moon_alt, 'azimuth_deg': moon_az, **_j2000(ae.Body.Moon, t, observer),
+                     'trail': trail(ae.Body.Moon, utc, observer),
                      'phase_angle_deg': round(illum.phase_angle, 3),  # 0 = full, 180 = new
                      'illuminated_fraction': round(illum.phase_fraction, 4),
                      'waxing': ae.MoonPhase(t) < 180},
             'planets': {body.name: dict({'altitude_deg': alt, 'azimuth_deg': az,
                                          'magnitude': round(ae.Illumination(body, t).mag, 2)},
-                                        **planet_facts(body, t, observer), **night_events(body.name, night, loc_key))
+                                        **planet_facts(body, t, observer), **night_events(body.name, night, loc_key),
+                                        trail=trail(body, utc, observer))
                         for body in PLANETS for alt, az in [_horizon(body, t, observer)]},
             'moon_times': night_events('Moon', night, loc_key),
             'jupiter_moons': jupiter_moons(t),
@@ -172,12 +185,20 @@ def altitude_by_hour(local_date, tz, observer):
             for name, body in (('sun', ae.Body.Sun), ('moon', ae.Body.Moon))}
 
 
+def _j2000(body, t, observer):
+    """Right ascension (hours) and declination (degrees) of a body against the J2000 equator, as the telescope's
+    lock-on readout and the star catalogue give them."""
+    eq = ae.Equator(body, t, observer, False, True)
+    return {'ra_hours': round(eq.ra, 4), 'dec_deg': round(eq.dec, 3)}
+
+
 def planet_facts(body, t, observer):
     """Where a planet is among the constellations (IAU boundaries) and how far away it is, right now."""
     eq = ae.Equator(body, t, observer, False, True)   # J2000, as the constellation boundaries need
     where = ae.Constellation(eq.ra, eq.dec)
     return {'constellation': where.name, 'constellation_symbol': where.symbol,
-            'distance_au': round(ae.GeoVector(body, t, True).Length(), 3)}
+            'distance_au': round(ae.GeoVector(body, t, True).Length(), 3),
+            'ra_hours': round(eq.ra, 4), 'dec_deg': round(eq.dec, 3)}   # J2000, like the star catalogue
 
 
 def jupiter_moons(t):

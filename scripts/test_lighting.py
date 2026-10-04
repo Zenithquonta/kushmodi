@@ -44,7 +44,7 @@ class DefaultOutput(unittest.TestCase):
 
 class Lighting(unittest.TestCase):
     def test_night_keeps_the_sky_and_has_no_sun(self):
-        svg = scene.scene(0, False, state=scene_state.scene_state(NIGHT))
+        svg = scene.scene(0, False, state=scene_state.scene_state(NIGHT))   # the faint layers that remain follow the night
         self.assertTrue(re.findall(r'data-night="[^"]+" opacity="([^"]+)"', svg))
         state = scene_state.scene_state(NIGHT)
         visibility = scene.VISIBILITY_FLOOR+(1-scene.VISIBILITY_FLOOR)*state['environment']['night_visibility']
@@ -54,7 +54,10 @@ class Lighting(unittest.TestCase):
     def test_noon_hides_celestial_layers_and_shows_the_sun(self):
         svg = scene.scene(0, False, state=scene_state.scene_state(NOON))
         self.assertTrue(all(float(v) == 0 for v in re.findall(r'data-night="[^"]+" opacity="([^"]+)"', svg)))
-        self.assertIn('data-sun="disc"', svg)
+        self.assertNotIn('data-nightsky', svg)                       # the real stars are not even drawn by day
+        # the sun is in front of the north-facing viewer on a May evening (it sets north of west)
+        summer = scene.scene(0, False, state=scene_state.scene_state(datetime(2027, 5, 10, 17, 30, tzinfo=IST)))
+        self.assertIn('data-sun="disc"', summer)
         self.assertIn('mask="url(#sky-mask)"', svg)
         self.assertNotIn('clip-path="url(#sky-clip)"', svg)
 
@@ -75,11 +78,11 @@ class Lighting(unittest.TestCase):
         values = [scene.night_factor(a/10) for a in range(-200, 100)]
         self.assertEqual(values, sorted(values, reverse=True))
 
-    def test_sun_faces_south_with_east_on_the_left(self):
-        self.assertAlmostEqual(scene.sun_screen(0, 90)[0], 0)
-        self.assertAlmostEqual(scene.sun_screen(0, 180)[0], scene.W/2)
-        self.assertAlmostEqual(scene.sun_screen(0, 270)[0], scene.W)
-        self.assertAlmostEqual(scene.sun_screen(0, 180)[1], scene.HORIZON_Y)
+    def test_sun_faces_north_with_west_on_the_left(self):
+        self.assertAlmostEqual(scene.sun_screen(0, 270)[0], 0)
+        self.assertAlmostEqual(scene.sun_screen(0, 0)[0], scene.W/2)
+        self.assertAlmostEqual(scene.sun_screen(0, 90)[0], scene.W)
+        self.assertAlmostEqual(scene.sun_screen(0, 0)[1], scene.HORIZON_Y)
 
 
 class PlateMasks(unittest.TestCase):

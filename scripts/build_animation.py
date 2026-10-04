@@ -19,6 +19,8 @@ import shutil
 import subprocess
 import tempfile
 
+import night_sky
+
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / 'assets'
 W, H, PERIOD = 1672, 941, 24
@@ -715,13 +717,13 @@ LOCK_LEADER = 'M860 134L890 106H938'
 LOCK_OPACITY = (.95, .8, .8)   # readout line opacities: title a little brighter than the coordinates
 
 
-def _lock_tracks():
+def _lock_tracks(end=LOCK_END):
     t = {}
     # Timeline (seconds): the dotted line grows 12.8-14.4, the reticle flies in 13.4-14.6, snaps tight at 14.75 with a
     # brighter pulse, the readout types in line by line from 14.9, everything holds until 20.0 and fades by 20.9.
     # Fighters fade in and the explorer is away around then; the old idle reticle steps aside meanwhile.
-    t['line_x'] = Track.timeline([(12.8, LOCK_FROM[0]), (14.4, LOCK_END[0]), (20.9, LOCK_END[0]), (21.0, LOCK_FROM[0])], LOCK_FROM[0])
-    t['line_y'] = Track.timeline([(12.8, LOCK_FROM[1]), (14.4, LOCK_END[1]), (20.9, LOCK_END[1]), (21.0, LOCK_FROM[1])], LOCK_FROM[1])
+    t['line_x'] = Track.timeline([(12.8, LOCK_FROM[0]), (14.4, end[0]), (20.9, end[0]), (21.0, LOCK_FROM[0])], LOCK_FROM[0])
+    t['line_y'] = Track.timeline([(12.8, LOCK_FROM[1]), (14.4, end[1]), (20.9, end[1]), (21.0, LOCK_FROM[1])], LOCK_FROM[1])
     t['line_a'] = Track.timeline([(12.8, 0), (13.1, .85), (20.0, .85), (20.9, 0)], 0)
     t['half'] = Track.timeline([(13.4, 100), (14.6, 50), (14.75, 38), (14.95, LOCK_HALF), (20.9, LOCK_HALF), (21.0, 100)], 100)
     t['ret_a'] = Track.timeline([(13.4, 0), (13.8, .65), (14.75, .9), (20.0, .9), (20.9, 0)], 0)
@@ -759,42 +761,51 @@ def lock_state(t):
         idle=LOCK['idle'].at(t))
 
 
-def lock_on(t, animated):
-    anim = lambda track, name, kind=None: track.smil(name, kind) if animated else ''
-    cx, cy = LOCK_CORE
+DEFAULT_LOCK = dict(core=LOCK_CORE, end=LOCK_END, tracks=LOCK, leader=LOCK_LEADER, lines=LOCK_LINES)   # the M51 lock-on
+
+
+def lock_on(t, animated, plan=None):
+    """The lock-on sequence for ``plan`` (default: M51; the live scene plans one for a real object, see lock_target)."""
+    plan = plan or DEFAULT_LOCK
+    track = plan['tracks']
+    anim = lambda tr, name, kind=None: tr.smil(name, kind) if animated else ''
+    cx, cy = plan['core']
     parts = []
     # dotted targeting line, drawn on by moving its end point so the dots stay put
-    x2, y2 = LOCK['line_x'], LOCK['line_y']
-    parts.append(f'<g data-lock="line" opacity="{LOCK["line_a"].value_text(t)}">{anim(LOCK["line_a"], "opacity")}'
+    x2, y2 = track['line_x'], track['line_y']
+    parts.append(f'<g data-lock="line" opacity="{track["line_a"].value_text(t)}">{anim(track["line_a"], "opacity")}'
                  # dark under-stroke (a dash 2 px longer than each dot on both sides) separates the dots from the bright band
                  f'<line x1="{LOCK_FROM[0]}" y1="{LOCK_FROM[1]}" x2="{x2.value_text(t)}" y2="{y2.value_text(t)}" '
                  f'stroke="#04101c" stroke-width="6" stroke-dasharray="9 3" stroke-dashoffset="2" opacity=".55">{anim(x2, "x2")}{anim(y2, "y2")}</line>'
                  f'<line x1="{LOCK_FROM[0]}" y1="{LOCK_FROM[1]}" x2="{x2.value_text(t)}" y2="{y2.value_text(t)}" '
                  f'stroke="#a8f6ff" stroke-width="3" stroke-dasharray="5 7">{anim(x2, "x2")}{anim(y2, "y2")}</line></g>')
     # reticle: four corner brackets that fly in and snap around the core; each corner is a translate of one shape
-    half = LOCK['half']
+    half = track['half']
     corners = []
     for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
         pose = Track([(cx+sx*h, cy+sy*h) for h in half.values], half.key_times, half.dur, half.begin, half.digits)
         arm = f'M0 0H{-sx*LOCK_ARM}M0 0V{-sy*LOCK_ARM}'
         corners.append(f'<g transform="translate({pose.value_text(t)})">{anim(pose, "transform", "translate")}'
                        f'<path d="{arm}" fill="none" stroke="#6cf4ff" stroke-width="{LOCK_STROKE}"/>'
-                       f'<path d="{arm}" fill="none" stroke="#f2ffff" stroke-width="{LOCK_STROKE}" opacity="{LOCK["pulse"].value_text(t)}">'
-                       f'{anim(LOCK["pulse"], "opacity")}</path></g>')
-    parts.append(f'<g data-lock="reticle" opacity="{LOCK["ret_a"].value_text(t)}">{anim(LOCK["ret_a"], "opacity")}{"".join(corners)}</g>')
-    parts.append(f'<g data-lock="leader" opacity="{LOCK["leader_a"].value_text(t)}">{anim(LOCK["leader_a"], "opacity")}'
-                 f'<path d="{LOCK_LEADER}" fill="none" stroke="#40daed" stroke-width="1.2"/></g>')
+                       f'<path d="{arm}" fill="none" stroke="#f2ffff" stroke-width="{LOCK_STROKE}" opacity="{track["pulse"].value_text(t)}">'
+                       f'{anim(track["pulse"], "opacity")}</path></g>')
+    parts.append(f'<g data-lock="reticle" opacity="{track["ret_a"].value_text(t)}">{anim(track["ret_a"], "opacity")}{"".join(corners)}</g>')
+    parts.append(f'<g data-lock="leader" opacity="{track["leader_a"].value_text(t)}">{anim(track["leader_a"], "opacity")}'
+                 f'<path d="{plan["leader"]}" fill="none" stroke="#40daed" stroke-width="1.2"/></g>')
     rows = []
-    for (d, *_), track in zip(LOCK_LINES, LOCK['text_a']):
-        rows.append(f'<g opacity="{track.value_text(t)}">{anim(track, "opacity")}<path d="{d}" fill="#72f0ff"/></g>')
+    for (d, *_), tr in zip(plan['lines'], track['text_a']):
+        rows.append(f'<g opacity="{tr.value_text(t)}">{anim(tr, "opacity")}<path d="{d}" fill="#72f0ff"/></g>')
     parts.append(f'<g data-lock="readout">{"".join(rows)}</g>')
     return ''.join(parts)
 
 
-def sky_details(t, animated, seed=29):
+def sky_details(t, animated, seed=29, live=False, plan=None):
+    """The default scene's crosses, idle target path and reticle, the lock-on and a meteor. In a live scene (``live``)
+    the crosses and the idle target belong to the painted sky and are gone: only the lock-on (``plan``, or none when
+    no real object qualifies, see lock_target) and the meteor remain."""
     rng=random.Random(seed)
     parts=[]
-    for i in range(32):
+    for i in range(0 if live else 32):
         x,y=rng.randint(20,1650),rng.randint(18,500)
         if 30<x<565 and 218<y<375:
             continue
@@ -803,13 +814,15 @@ def sky_details(t, animated, seed=29):
         twinkle=Track.sine(.6,.4,period,phase)
         parts.append(f'<path d="M{x-3} {y}h6M{x} {y-3}v6" stroke="#a7deff" stroke-width="1.4" opacity="{twinkle.value_text(t)}">'
                      f'{twinkle.smil("opacity") if animated else ""}</path>')
-    idle=LOCK['idle']
-    parts.append(f'<g data-idle="target" opacity="{idle.value_text(t)}">{idle.smil("opacity") if animated else ""}'
-                 '<path d="M811 551L1020 97L1460 133" fill="none" stroke="#40daed" stroke-width="1.6" stroke-dasharray="6 11" opacity=".38"/>')
-    reticle=Track.sine(.5,.3,3)
-    parts.append(f'<g opacity="{reticle.value_text(t)}">{reticle.smil("opacity") if animated else ""}'
-                 '<path d="M996 94V72H1013M1028 72H1045V94M1045 104V121H1028M1013 121H996V104" fill="none" stroke="#4ae8f2" stroke-width="2"/></g></g>')
-    parts.append(lock_on(t,animated))
+    if not live:
+        idle=LOCK['idle']
+        parts.append(f'<g data-idle="target" opacity="{idle.value_text(t)}">{idle.smil("opacity") if animated else ""}'
+                     '<path d="M811 551L1020 97L1460 133" fill="none" stroke="#40daed" stroke-width="1.6" stroke-dasharray="6 11" opacity=".38"/>')
+        reticle=Track.sine(.5,.3,3)
+        parts.append(f'<g opacity="{reticle.value_text(t)}">{reticle.smil("opacity") if animated else ""}'
+                     '<path d="M996 94V72H1013M1028 72H1045V94M1045 104V121H1028M1013 121H996V104" fill="none" stroke="#4ae8f2" stroke-width="2"/></g></g>')
+    if not live or plan:
+        parts.append(lock_on(t,animated,plan))
     u=(t/12)%1
     mx,my=1100+390*u,380+150*u
     # Meteor is visible for the first 16% of its 12s cycle: sin^2 fade-in/out, then hidden.
@@ -1109,14 +1122,20 @@ def layers(t, animated, light=None):
     weather = '' if light is None else light['weather']
     showers = '' if light is None else rain(t, animated, light)
     city = '' if light is None else light['city']+city_beacons(t, animated, light)
-    return (night_group('twinkles', twinkles(t, animated, day['twinkles']), night)+overlay
-            +night_group('celestial', celestial(t, animated), night)
-            +night_group('satellite', satellite(t, animated, SATELLITE_PATHS[day['satellite']]), night)
+    if light is None:   # the published scene: painted stars twinkle, galaxies turn, a fictional satellite crosses
+        painted = (night_group('twinkles', twinkles(t, animated, day['twinkles']), night)+overlay
+                   +night_group('celestial', celestial(t, animated), night)
+                   +night_group('satellite', satellite(t, animated, SATELLITE_PATHS[day['satellite']]), night))
+        details = night_group('sky-details', sky_details(t, animated, day['crosses']), night)
+    else:               # a live scene: the real sky replaces the painted one (see night_sky_layer)
+        painted = night_sky_layer(t, animated, light)+overlay
+        details = night_group('sky-details', sky_details(t, animated, day['crosses'], True, light['lock']), night)
+    return (painted
             +('' if light is None else light['bodies']+sat_pass(t, animated, light))+weather
             +('' if light is None else lightning(t, animated, light))+city+('' if light is None else light['title'])
                         +traffic(t, animated, night, flying_routes(day['airliner'], light))
             +('' if light is None else advisory(t, animated, light)+story_panel(t, animated, light))   # over the traffic
-            +night_group('sky-details', sky_details(t, animated, day['crosses']), night)
+            +details
             +night_group('meteors', meteors(t, animated, day['meteors'], day['meteor_count']), night)
             +('' if light is None else shed_flicker(t, animated, light)+screen(t, animated, light, light['astronomy'])+portfolio(t, animated, light)+meadow(t, animated, light)
                                     +robot(t, animated, light))+showers+workshop(t, animated))
@@ -1194,19 +1213,21 @@ def night_factor(altitude):
 SKY_TOP_ALT = 90           # altitude drawn at y=40 (the zenith), so a high moon or sun stays in the picture
 
 
-OVERHEAD_ALT = 60          # above this altitude an object is in view whatever its azimuth
+FACING = 0.0               # the live scene faces north: west at the left edge, north at the centre, east at the right
+DOME = night_sky.Dome(W, HORIZON_Y, 40, SKY_TOP_ALT, FACING)
 
 
-def sun_screen(altitude, azimuth):
-    """Scene position of a sky object on the south-facing dome: east at the left edge, west at the right, the zenith
-    at the top centre (x follows the east-west direction, so objects near the zenith converge on the middle)."""
-    x = W/2+math.sin(math.radians(azimuth-180))*math.cos(math.radians(altitude))*(W/2)
-    return x, HORIZON_Y-altitude/SKY_TOP_ALT*(HORIZON_Y-40)
+def sun_screen(altitude, azimuth, facing=None):
+    """Scene position of a sky object in the panorama for a viewer facing ``facing`` (default FACING, north): x is
+    linear in azimuth, 90 degrees to the left of the facing is the left edge, 90 degrees to the right the right edge;
+    y is linear in altitude, the horizon at HORIZON_Y and the zenith at the top (y = 40)."""
+    return night_sky.project(altitude, azimuth, DOME if facing is None else DOME._replace(facing=facing))
 
 
-def in_view(altitude, azimuth):
-    """The southern half of the sky, plus everything high overhead; the northern sky is behind the viewer."""
-    return altitude >= OVERHEAD_ALT or 90 <= azimuth % 360 <= 270
+def in_view(altitude, azimuth, facing=None):
+    """The half of the sky in front of the viewer (cos(azimuth - facing) >= 0), however high: what is behind the
+    viewer is not on the dome (nothing is mirrored)."""
+    return night_sky.in_front(azimuth, FACING if facing is None else facing)
 
 
 def lighting(state):
@@ -1319,7 +1340,8 @@ def lighting_defs(light):
     masks = ''.join(f'<mask id="{name}-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="{W}" height="{H}">'
                     f'<image width="{W}" height="{H}" href="{uri}" xlink:href="{uri}"/></mask>'
                     for name, uri in plate_masks().items())+season_defs(light)+light_defs(light)
-    return (f'<linearGradient id="sky-grad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="{HORIZON_Y}">{stops}</linearGradient>'
+    return (night_sky_defs(light)+
+            f'<linearGradient id="sky-grad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="{HORIZON_Y}">{stops}</linearGradient>'
             f'<radialGradient id="sky-glow"><stop offset="0" stop-color="{warm}" stop-opacity="1"/>'
             f'<stop offset=".4" stop-color="{warm}" stop-opacity=".55"/><stop offset="1" stop-color="{warm}" stop-opacity="0"/></radialGradient>'
             f'{masks}{plates}')
@@ -1441,6 +1463,9 @@ def season(light, state):
     light['storm'] = STORM_DECK[observation['condition']][1] if observation and observation['condition'] in STORM_DECK else 0
     light['city'] = city_markup(light)+city_glow(light)
     light['weather'] = season_markup(light)
+    light['night_cover'] = _keyed(NIGHT_COVER, light['altitude'])
+    light['sky'] = real_sky(light, state)
+    light['lock'] = lock_target(light)
     light['bodies'] = sky_bodies(light, state)
     light['story'] = story_beats(state, light)
     light['satellites'] = state.get('satellites')
@@ -1923,8 +1948,9 @@ def portfolio(t, animated, light):
 
 
 # ---------------------------------------------------------------------------
-# Real Moon and planets (Phase 8), placed with the same south-facing projection as the sun. The painted stars, Milky
-# Way, spiral galaxies and ringed planet stay as art; no real star catalogue is drawn.
+# Real Moon and planets (Phase 8), placed with the same dome projection as the sun (north-facing since Phase 17). In the
+# live scene the real star catalogue replaces the painted stars (see the real night sky below); each body also draws
+# a trail behind it.
 # ---------------------------------------------------------------------------
 MOON_RADIUS = 18
 MOON_CELL = 2
@@ -1999,7 +2025,7 @@ def moon_markup(light, state):
     fraction = moon['illuminated_fraction']
     opacity = DAY_MOON+(1-DAY_MOON)*darkness
     halo = .5*fraction*darkness
-    out = f'<g data-moon="disc" opacity="{_num(opacity, 4)}">'
+    out = f'<g data-moon="disc" opacity="{_num(opacity, 4)}">{trail_markup(moon, bright, "moon", (x, y))}'
     if halo > .01:
         out += (f'<circle cx="{x}" cy="{y}" r="{MOON_RADIUS*3.2:.0f}" fill="{_rgb(bright)}" opacity="{_num(halo*.18, 4)}"/>'
                 f'<circle cx="{x}" cy="{y}" r="{MOON_RADIUS*1.8:.0f}" fill="{_rgb(bright)}" opacity="{_num(halo*.3, 4)}"/>')
@@ -2040,6 +2066,7 @@ def planets_markup(light, state):
         size = 8 if body['magnitude'] < -3 else 6 if body['magnitude'] < -1 else 4   # readable at 840 px
         colour = _rgb(PLANET_COLOURS[name])
         out += (f'<g data-planet="{name.lower()}" opacity="{_num(seen, 4)}">'
+                f'{trail_markup(body, PLANET_COLOURS[name], name.lower(), (x, y))}'
                 f'<circle cx="{x}" cy="{y}" r="{size*1.6:.1f}" fill="{colour}" opacity=".22"/>'
                 f'<rect x="{x-size/2:g}" y="{y-size/2:g}" width="{size}" height="{size}" fill="{colour}"/></g>')
     return out
@@ -2059,6 +2086,320 @@ def sky_bodies(light, state):
     inner = planets_markup(light, state)+moon_markup(light, state)
     sky = f'<g data-sky="bodies" mask="url(#sky-mask)">{inner}</g>' if inner else ''
     return sky+moonlight(light, state)
+
+
+# ---------------------------------------------------------------------------
+# The real night sky (Phase 17). A live scene replaces the painted stars, Milky Way, galaxies and fictional satellite
+# with the sky as it is at the render time over Mumbai (scripts/night_sky.py, data in assets/sky/): an opaque night
+# gradient inside the sky mask, the Milky Way outline in five brightness steps, faint constellation lines and the
+# Yale Bright Star Catalogue stars as pixel squares sized by magnitude and coloured by temperature. The brightest
+# stars in the open sky twinkle gently. Everything is placed on the same north-facing dome as the Sun, Moon and
+# planets, and fades with the night factor, the night's visibility and overcast; the clouds stay above it.
+# ---------------------------------------------------------------------------
+DEFAULT_LOCATION = dict(latitude=19.076, longitude=72.8777)   # Mumbai, for a hand-made state without a location
+NIGHT_SKY = dict(top=(2, 6, 20), horizon=(12, 26, 58))        # the opaque night gradient
+NIGHT_COVER = [(-6, 1), (4, 0)]   # sun altitudes: the painted sky is fully replaced up to -6, and the day overlay
+                                  # (>= 97% opaque by +4 degrees) owns the sky from there
+MW_COLOUR = (190, 198, 250)               # blue-violet, like the painted band
+MW_OPACITY = (.15, .07, .06, .05, .04)   # per outline level, outermost first; they stack to about .35 in the core
+MW_BLUR = 6                              # standard deviation in px: the Milky Way is soft
+CONSTELLATION_STYLE = dict(colour=(124, 170, 222), opacity=.2, width=1)
+STAR_SIZES = ((.5, 10), (1.5, 8), (2.5, 6), (4.2, 4))   # (brighter than this magnitude, side in px); fainter: STAR_SMALL
+STAR_SMALL = 3
+GLINT_BELOW = 2.0   # stars brighter than this also get a small cross glint
+STAR_TEMPERATURES = ((3500, (255, 176, 120)), (4500, (255, 205, 150)), (5500, (255, 228, 180)),
+                     (6500, (255, 246, 228)), (8000, (240, 242, 255)), (11000, (214, 228, 255)),
+                     (20000, (190, 212, 255)), (10**9, (170, 198, 255)))   # (kelvin up to, rgb)
+STAR_MARGIN = 8             # stars keep this far from the name block
+TWINKLE_STARS = 30          # the brightest stars in open sky twinkle
+TWINKLE_PERIODS = (2, 3, 4, 6)   # all divide the loop
+TWINKLE_DEPTH = .3          # opacity dips from 1 to 1 - depth: small and slow, never a flash
+TWINKLE_MIN_ALT = 6
+HALO_BELOW = 1.5            # stars brighter than this magnitude get a faint halo
+
+
+def star_size(magnitude):
+    return next((px for limit, px in STAR_SIZES if magnitude < limit), STAR_SMALL)
+
+
+def star_colour(kelvin):
+    return (255, 255, 255) if not kelvin else next(rgb for limit, rgb in STAR_TEMPERATURES if kelvin <= limit)
+
+
+def star_opacity(magnitude, altitude):
+    """Brighter stars are fuller; stars near the horizon are dimmed by the thicker air."""
+    return round(max(.74, min(1.0, 1.2-.09*max(0, magnitude-1.5)))*(.45+.55*min(1.0, altitude/12)), 2)
+
+
+def star_limit(env):
+    """Faintest magnitude drawn: a murky night loses the faint stars first."""
+    return 5.1+.7*env['night_visibility']
+
+
+def real_sky(light, state):
+    """The stars of the night sky for this render, or None while the sun is too high for any to show. ``stars`` are
+    the drawn ones (snapped to the 2 px grid, brightest first, clear of the name block); ``twinkle`` the brightest
+    of them in open sky."""
+    if night_factor(light['altitude']) < .003:
+        return None
+    where = state.get('location') or DEFAULT_LOCATION
+    layout = night_sky.layout(state['timestamp_utc'], where['latitude'], where['longitude'], DOME)
+    limit, pad = star_limit(light['env']), STAR_MARGIN
+    x0, y0, x1, y1 = TEXT_RECT
+    stars = []
+    for star in layout['stars']:
+        x, y = round(star['x']/2)*2, round(star['y']/2)*2
+        if star['mag'] > limit or y > HORIZON_Y+8 or (x0-pad <= x <= x1+pad and y0-pad <= y <= y1+pad):
+            continue
+        stars.append(dict(star, x=x, y=y))
+    twinkle = [s for s in stars if s['alt'] >= TWINKLE_MIN_ALT and s['y'] < (skyline_top(s['x'], s['x']) or 0)-8]
+    return dict(layout=layout, stars=stars, twinkle=twinkle[:TWINKLE_STARS])
+
+
+def night_sky_defs(light):
+    """The opaque night gradient and the Milky Way's blur."""
+    if light['night_cover'] <= 0:
+        return ''
+    top, horizon = NIGHT_SKY['top'], NIGHT_SKY['horizon']
+    stops = ''.join(f'<stop offset="{o}" stop-color="{_rgb(_mix(top, horizon, o**2))}"/>' for o in (0, .5, 1))
+    return (f'<linearGradient id="night-grad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="{HORIZON_Y}">{stops}</linearGradient>'
+            f'<filter id="mw-blur" filterUnits="userSpaceOnUse" x="0" y="0" width="{W}" height="{HORIZON_Y+10}">'
+            f'<feGaussianBlur stdDeviation="{MW_BLUR}"/></filter>')
+
+
+def _glint(s, size, colour, opacity):
+    """A small pixel cross through a bright star: arms of 1.4 x its size, 2 px thick, half as bright as the star."""
+    arm = round(size*1.4/2)*2
+    x, y = s['x'], s['y']
+    return (f'<path d="M{x-arm} {y-1}h{2*arm}v2h{-2*arm}zM{x-1} {y-arm}h2v{2*arm}h-2z" fill="{_rgb(colour)}" '
+            f'opacity="{_num(opacity*.45, 3)}"/>')
+
+
+def moon_wash(light):
+    """How much of the faint sky the Moon washes out: its lit share times the sine of its altitude, at most 0.7."""
+    moon = (light.get('astronomy') or {}).get('moon')
+    if not moon:
+        return 0.0
+    return .7*moon['illuminated_fraction']*max(0.0, math.sin(math.radians(moon['altitude_deg'])))
+
+
+def _square(x, y, size):
+    return f'M{_num(x-size/2)} {_num(y-size/2)}h{size}v{size}h{-size}z'
+
+
+@functools.lru_cache(maxsize=None)
+def twinkle_track(hr):
+    """Opacity track of one twinkling star: period, phase and wobble come from its catalogue number."""
+    rng = random.Random(hr)
+    period, phase, phase2 = rng.choice(TWINKLE_PERIODS), rng.random(), rng.random()
+    waves = [_wave(i/12, phase2) for i in range(12)]
+    waves.append(waves[0])
+    return Track([1-TWINKLE_DEPTH*(.5-.5*w) for w in waves], None, period, -phase*period)
+
+
+def night_stars(t, animated, light):
+    sky = light['sky']
+    twinkling = {s['hr'] for s in sky['twinkle']}
+    plain = [s for s in sky['stars'] if s['hr'] not in twinkling]
+    groups, halos, glints = {}, '', ''
+    for s in plain:
+        key = (star_size(s['mag']), star_colour(s['kelvin']), star_opacity(s['mag'], s['alt']))
+        groups.setdefault(key, []).append(_square(s['x'], s['y'], key[0]))
+        if s['mag'] < GLINT_BELOW:
+            glints += _glint(s, key[0], key[1], key[2])
+        if s['mag'] < HALO_BELOW:
+            halos += f'<circle cx="{s["x"]}" cy="{s["y"]}" r="{key[0]*1.5:g}" fill="{_rgb(key[1])}" opacity="{_num(key[2]*.1, 3)}"/>'
+    out = halos+glints+''.join(f'<path d="{"".join(d)}" fill="{_rgb(colour)}" opacity="{_num(opacity, 2)}"/>'
+                        for (size, colour, opacity), d in sorted(groups.items(), key=lambda item: -item[0][0]))
+    for s in sky['twinkle']:
+        track = twinkle_track(s['hr'])
+        size, colour, opacity = star_size(s['mag']), star_colour(s['kelvin']), star_opacity(s['mag'], s['alt'])
+        halo = (f'<circle cx="{s["x"]}" cy="{s["y"]}" r="{size*1.5:g}" fill="{_rgb(colour)}" opacity="{_num(opacity*.1, 3)}"/>'
+                if s['mag'] < HALO_BELOW else '')
+        glint = _glint(s, size, colour, opacity) if s['mag'] < GLINT_BELOW else ''
+        out += (f'<g opacity="{track.value_text(t)}">{track.smil("opacity") if animated else ""}{halo}{glint}'
+                f'<path d="{_square(s["x"], s["y"], size)}" fill="{_rgb(colour)}" opacity="{_num(opacity, 2)}"/></g>')
+    return out
+
+
+def night_sky_layer(t, animated, light):
+    """The night gradient and, while it is dark enough, the Milky Way, the constellation lines and the stars; the
+    sky mask lets the trees, telescope and roof occlude all of it. Drawn under the day overlay and the clouds."""
+    cover = light['night_cover']
+    if cover <= 0:
+        return ''
+    out = f'<rect data-nightsky="cover" width="{W}" height="{HORIZON_Y+10}" fill="url(#night-grad)" opacity="{_num(cover, 4)}"/>'
+    sky = light['sky']
+    if sky:
+        wash = 1-moon_wash(light)
+        way = ''.join(f'<path d="{d}" fill="{_rgb(MW_COLOUR)}" fill-rule="evenodd" opacity="{_num(opacity*wash, 4)}"/>'
+                      for d, opacity in zip(sky['layout']['milky_way'], MW_OPACITY) if d)
+        style = CONSTELLATION_STYLE
+        lines = (f'<path data-nightsky="lines" d="{sky["layout"]["lines"]}" fill="none" stroke="{_rgb(style["colour"])}" '
+                 f'stroke-width="{style["width"]}" opacity="{style["opacity"]}"/>')
+        clear = night_factor(light['altitude'])*(.7+.3*light['env']['night_visibility'])*(1-light['overcast'])
+        out += (f'<g data-nightsky="stars" opacity="{_num(clear, 4)}">'
+                f'<g data-nightsky="milky-way" filter="url(#mw-blur)">{way}</g>{lines}{night_stars(t, animated, light)}</g>')
+    return f'<g data-sky="night" mask="url(#sky-mask)">{out}</g>'
+
+
+# --- the telescope's lock-on on a real object -------------------------------------------------------------------
+LOCK_PAD = 4
+
+
+def _padded(box, pad=LOCK_PAD):
+    return box[0]-pad, box[1]-pad, box[2]+pad, box[3]+pad
+
+
+def segment_hits(a, b, box):
+    """Whether the segment a-b touches the rectangle ``box`` (Liang-Barsky clipping)."""
+    t0, t1 = 0.0, 1.0
+    dx, dy = b[0]-a[0], b[1]-a[1]
+    for p, q in ((-dx, a[0]-box[0]), (dx, box[2]-a[0]), (-dy, a[1]-box[1]), (dy, box[3]-a[1])):
+        if p == 0:
+            if q < 0:
+                return False
+        else:
+            r = q/p
+            if p < 0:
+                t0 = max(t0, r)
+            else:
+                t1 = min(t1, r)
+            if t0 > t1:
+                return False
+    return True
+
+
+@functools.lru_cache(maxsize=64)
+def lock_tracks_for(end):
+    return _lock_tracks(end)
+
+
+def lock_plan(c):
+    """Plan the lock-on sequence on candidate ``c`` (kind, name, x, y, ra_hours, dec_deg, mag, alt): the reticle,
+    the dotted line from the finder, the leader and the readout box at LOCK_TEXT_XY, or None when the reticle (or its
+    line or leader) would touch the name block or the log panel, leave the sky or leave the canvas."""
+    core = (round(c['x']), round(c['y']))
+    reach = LOCK_HALF+LOCK_ARM
+    target = (core[0]-reach, core[1]-reach, core[0]+reach, core[1]+reach)
+    top = skyline_top(target[0], target[2])
+    if target[0] < 0 or target[2] > W or target[1] < 0 or top is None or target[3] > top:
+        return None
+    texts = [f"TARGET LOCK · {c['name']}", f"RA {night_sky.ra_text(c['ra_hours'])}", f"DEC {night_sky.dec_text(c['dec_deg'])}"]
+    if not all(ch in FONT for text in texts for ch in text):
+        return None
+    lines = []
+    for i, text in enumerate(texts):
+        y = LOCK_TEXT_XY[1]+i*LOCK_LINE_PITCH
+        d, w, h = pixel_text(text, LOCK_TEXT_XY[0], y)
+        lines.append((d, LOCK_TEXT_XY[0], y, w, h))
+    readout = (LOCK_TEXT_XY[0], LOCK_TEXT_XY[1], LOCK_TEXT_XY[0]+max(l[3] for l in lines), lines[-1][2]+lines[-1][4])
+    if readout[2] > W-12:
+        return None
+    # the leader leaves the reticle's upper corner on the side of the readout and runs level into its first line
+    if core[0]+reach < readout[0]-40:
+        side, end_x = 1, readout[0]-8
+    elif core[0]-reach > readout[2]+40:
+        side, end_x = -1, readout[2]+8
+    else:
+        return None
+    start = (core[0]+side*(LOCK_HALF+6), core[1]-(LOCK_HALF+6))
+    end_y = LOCK_TEXT_XY[1]+8
+    bend = (start[0]+side*30, end_y)
+    if (end_x-bend[0])*side < 0:
+        return None
+    leader = f'M{start[0]} {start[1]}L{bend[0]} {bend[1]}H{end_x}'
+    end = (core[0], core[1]+LOCK_HALF+6)
+    keep_clear = [_padded(TEXT_RECT), _padded(STORY_BOX)]
+    if any(overlaps(target, box) for box in keep_clear+[_padded(readout)]):
+        return None
+    for a, b in ((LOCK_FROM, end), (start, bend), (bend, (end_x, end_y))):
+        if any(segment_hits(a, b, box) for box in keep_clear):
+            return None
+    if segment_hits(LOCK_FROM, end, _padded(readout)):
+        return None
+    where = night_sky.constellation_of(c['ra_hours'], c['dec_deg'])
+    return dict(core=core, end=end, tracks=lock_tracks_for(end), leader=leader, lines=lines, kind=c['kind'],
+                name=c['name'], ra_hours=c['ra_hours'], dec_deg=c['dec_deg'], mag=c.get('mag'), alt=c['alt'],
+                fraction=c.get('fraction'), constellation=where[0], constellation_symbol=where[1],
+                boxes=dict(target=target, readout=readout,
+                           line=(min(LOCK_FROM[0], end[0])-3, end[1]-3, max(LOCK_FROM[0], end[0])+3, LOCK_FROM[1]+3)))
+
+
+def lock_candidates(light):
+    """What the telescope may lock on, in order of preference: the planets in view (brightest first), the Moon,
+    then the stars in the open sky (brightest first)."""
+    astronomy = light['astronomy']
+    planets = []
+    for name, body in astronomy.get('planets', {}).items():
+        place = planet_place(light, astronomy, name)
+        if place and place[2] >= .3 and 'ra_hours' in body:
+            planets.append((body['magnitude'], dict(kind='planet', name=name.upper(), x=place[0], y=place[1],
+                                                    ra_hours=body['ra_hours'], dec_deg=body['dec_deg'],
+                                                    mag=body['magnitude'], alt=body['altitude_deg'])))
+    out = [c for _, c in sorted(planets, key=lambda item: item[0])]
+    moon = astronomy['moon']
+    if moon['altitude_deg'] > 5 and in_view(moon['altitude_deg'], moon['azimuth_deg']) and 'ra_hours' in moon:
+        x, y = (round(v/MOON_CELL)*MOON_CELL for v in sun_screen(moon['altitude_deg'], moon['azimuth_deg']))
+        out.append(dict(kind='moon', name='MOON', x=x, y=y, ra_hours=moon['ra_hours'], dec_deg=moon['dec_deg'],
+                        alt=moon['altitude_deg'], fraction=moon['illuminated_fraction']))
+    for star in (light['sky'] or {}).get('stars', []):
+        if star['alt'] >= 8:
+            out.append(dict(kind='star', name=night_sky.star_name(star['hr']).upper(), x=star['x'], y=star['y'],
+                            ra_hours=star['ra_hours'], dec_deg=star['dec_deg'], mag=star['mag'], alt=star['alt']))
+    return out
+
+
+def lock_target(light):
+    """The telescope's lock-on plan: the brightest planet in view, else the Moon, else the brightest star, taking
+    the first whose reticle fits (see lock_plan). None in daylight, under thick cloud or when nothing fits."""
+    if light['astronomy'] is None or light['overcast'] > .3 or night_factor(light['altitude']) < .3:
+        return None
+    for candidate in lock_candidates(light):
+        plan = lock_plan(candidate)
+        if plan:
+            return plan
+    return None
+
+
+# --- the trail behind each planet and the Moon ------------------------------------------------------------------
+TRAIL_PEAK = .5      # opacity next to the body
+TRAIL_SPAN = 180     # minutes: the trail fades to nothing over the last three hours
+TRAIL_STEP = 10      # minutes between the positions in the scene state
+TRAIL_WIDTH = 1.5
+
+
+def trail_points(body, head=None):
+    """[(age in minutes, x, y)] from the body (age 0) back along the path it has just travelled, newest first, for as
+    long as the path stays above the horizon and in front of the viewer (a trail is one continuous line)."""
+    path = [(0, body['altitude_deg'], body['azimuth_deg'])]
+    path += [(TRAIL_STEP*(i+1), alt, az) for i, (alt, az) in enumerate(body.get('trail') or [])]
+    run = []
+    for age, alt, az in path:
+        if alt <= 0 or not in_view(alt, az):
+            break
+        run.append((age, *sun_screen(alt, az)))
+    if head and run:
+        run[0] = (0, *head)
+    return run
+
+
+def trail_opacity(older, newer):
+    """Opacity of the segment between two ages: TRAIL_PEAK at the body, falling straight to 0 at TRAIL_SPAN."""
+    return TRAIL_PEAK*(1-(older+newer)/2/TRAIL_SPAN)
+
+
+def trail_markup(body, colour, name, head=None):
+    """The trail as short consecutive segments, each dimmer than the one before it (the trail's name is on the group)."""
+    run = trail_points(body, head)
+    out = ''
+    for (a0, x0, y0), (a1, x1, y1) in zip(run, run[1:]):
+        if (x0, y0) != (x1, y1):
+            out += (f'<line x1="{_num(x0, 1)}" y1="{_num(y0, 1)}" x2="{_num(x1, 1)}" y2="{_num(y1, 1)}" '
+                    f'opacity="{_num(trail_opacity(a0, a1), 3)}"/>')
+    if not out:
+        return ''
+    return f'<g data-trail="{name}" stroke="{_rgb(colour)}" stroke-width="{TRAIL_WIDTH}" stroke-linecap="round">{out}</g>'
 
 
 # ---------------------------------------------------------------------------
@@ -2678,7 +3019,8 @@ def story_fits(text, inset):
 
 def story_beats(state, light):
     import story
-    extras = dict(mood=mood(light), flicker=bool(light_events(light)), grounded=bool(grounded(light)))
+    extras = dict(mood=mood(light), flicker=bool(light_events(light)), grounded=bool(grounded(light)),
+                  lock=light.get('lock'))
     context = story.context(state, dict(light, **extras), fits=story_fits)
     return story.choose(context, layer_seed(light['seed'], f'story-{light.get("slot", 0)}'))
 
@@ -2748,8 +3090,10 @@ def reticle_place(light, name):
         return None
     box = reticle_box(place[0], place[1])
     top = skyline_top(box[0], box[2])
+    lock = light.get('lock')
     if box[0] < 0 or box[2] > W or box[1] < 0 or top is None or box[3] > top or \
-            any(overlaps(box, globals()[avoid]) for avoid in RETICLE_AVOID):
+            any(overlaps(box, globals()[avoid]) for avoid in RETICLE_AVOID) or \
+            (lock and (lock['name'] == name.upper() or any(overlaps(box, b) for b in lock['boxes'].values()))):
         return None
     return place[:2]
 
@@ -2789,7 +3133,7 @@ def story_panel(t, animated, light):
 
 # ---------------------------------------------------------------------------
 # Phase 15e: a real satellite pass. When the ISS, Hubble or Tiangong has a visible pass that overlaps the next 15
-# minutes, its real track (scripts/satellites.py: altitude and azimuth every 10 s) crosses the south-facing sky once
+# minutes, its real track (scripts/satellites.py: altitude and azimuth every 10 s) crosses the north-facing sky once
 # per loop, compressed into PASS_SPAN seconds: a small bright dot with a faint trail, masked to the sky, behind the
 # name and the log, labelled with the real pass time. It is drawn only for the part of the track that is in view,
 # never at t = 0 (the still frame shows nothing), and only fades in and out: no flash.
@@ -2821,7 +3165,7 @@ def pass_overlapping(light):
 
 
 def pass_view(track):
-    """The longest run of the track that is in view (the south and everything high overhead), as scene positions."""
+    """The longest run of the track that is in view (the front half of the sky), as scene positions."""
     runs, run = [], []
     for _, alt, az in track:
         if in_view(alt, az):
@@ -2922,12 +3266,15 @@ def feather_defs():
 def scene(t=0, animated=False, embedded=True, state=None, compact=False):
     parts=[f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" aria-labelledby="title desc">',
            '<title id="title">Kush Modi — building toward the unexplored</title>',
-           '<desc id="desc">Pixel observatory based on Kush\'s telescope photograph. Slowly turning galaxies, twinkling stars, shooting stars, a satellite, planetary moons, exploration spacecraft, an airplane and a working maker workshop.</desc>',
+           '<desc id="desc">Pixel observatory based on Kush\'s telescope photograph. Slowly turning galaxies, twinkling stars, shooting stars, a satellite, planetary moons, exploration spacecraft, an airplane and a working maker workshop.</desc>'
+           if state is None else
+           '<desc id="desc">Pixel observatory based on Kush\'s telescope photograph, under the real sky over Mumbai facing north, west on the left and east on the right: the stars, the Milky Way, the Moon and the planets with their trails, shooting stars, exploration spacecraft, an airplane and a working maker workshop.</desc>',
            '<defs>',
            f'<image id="atlas" width="1536" height="1024" href="{ATLAS}" xlink:href="{ATLAS}"/>']
     light=None if state is None else lighting(state)
     day=DEFAULT_DAY if light is None else light['day']
-    parts+=[feather_defs(),twinkle_defs(day['twinkles']),meteor_defs(day['meteors'],day['meteor_count'])]+([] if light is None else [lighting_defs(light)])
+    parts+=[feather_defs()]+([twinkle_defs(day['twinkles'])] if light is None else [])   # live: no painted stars to twinkle
+    parts+=[meteor_defs(day['meteors'],day['meteor_count'])]+([] if light is None else [lighting_defs(light)])
     parts+=['</defs>',
             f'<image id="plate" width="{W}" height="{H}" href="{BACKGROUND}" xlink:href="{BACKGROUND}"/>']
     if animated:

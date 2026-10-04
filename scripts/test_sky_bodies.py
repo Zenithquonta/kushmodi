@@ -1,4 +1,4 @@
-"""Phase 8: the real Moon (position, phase, lit side) and planets, placed on the south-facing dome."""
+"""Phase 8: the real Moon (position, phase, lit side) and planets, placed on the dome (north-facing since Phase 17)."""
 from datetime import datetime
 import math
 import unittest
@@ -11,7 +11,7 @@ import scene_state
 import test_portfolio
 
 IST = ZoneInfo('Asia/Kolkata')
-CRESCENT_DUSK = datetime(2026, 12, 13, 19, 0, tzinfo=IST)
+CRESCENT_DUSK = datetime(2027, 3, 10, 19, 30, tzinfo=IST)   # a thin waxing crescent over the western horizon
 FULL_NIGHT = datetime(2026, 10, 27, 0, 0, tzinfo=IST)
 
 
@@ -38,22 +38,23 @@ class MoonPhase(unittest.TestCase):
         moon, sun = state['astronomy']['moon'], state['astronomy']['sun']
         self.assertTrue(moon['waxing'])
         dx, dy = scene.sun_direction(moon['altitude_deg'], moon['azimuth_deg'], sun['altitude_deg'], sun['azimuth_deg'])
-        self.assertGreater(dx, 0)   # the set sun is to the west, on the right
+        self.assertLess(dx, 0)      # the set sun is to the west, on the left of the north-facing view
         self.assertGreater(dy, 0)   # and below the horizon
         lit = [(x, y) for x, y, is_lit, _ in scene.moon_cells(moon['phase_angle_deg'], (dx, dy)) if is_lit]
-        self.assertGreater(sum(x for x, _ in lit)/len(lit), 0)
+        self.assertLess(sum(x for x, _ in lit)/len(lit), 0)
         self.assertGreater(sum(y for _, y in lit)/len(lit), 0)
 
 
 class Placement(unittest.TestCase):
     def test_dome_projection(self):
-        self.assertAlmostEqual(scene.sun_screen(0, 90)[0], 0)
-        self.assertAlmostEqual(scene.sun_screen(0, 270)[0], scene.W)
-        x, y = scene.sun_screen(90, 37)
+        self.assertAlmostEqual(scene.sun_screen(0, 270)[0], 0)         # west on the left
+        self.assertAlmostEqual(scene.sun_screen(0, 90)[0], scene.W)    # east on the right
+        self.assertAlmostEqual(scene.sun_screen(0, 0)[0], scene.W/2)   # north in the middle
+        x, y = scene.sun_screen(90, 0)
         self.assertAlmostEqual(x, scene.W/2)
-        self.assertAlmostEqual(y, 40)
-        self.assertTrue(scene.in_view(75, 20))
-        self.assertFalse(scene.in_view(20, 20))
+        self.assertAlmostEqual(y, 40)                                  # the zenith is the top row
+        self.assertTrue(scene.in_view(20, 20))
+        self.assertFalse(scene.in_view(75, 150))   # behind the viewer, however high
 
     def test_a_high_full_moon_in_the_east_is_drawn(self):
         svg = scene.scene(0, False, state=scene_state.scene_state(FULL_NIGHT))
@@ -61,7 +62,7 @@ class Placement(unittest.TestCase):
         self.assertIn('data-moon="light"', svg)
 
     def test_moon_and_planets_sit_behind_clouds_and_the_name(self):
-        svg = scene.scene(0, False, state=scene_state.scene_state(CRESCENT_DUSK))
+        svg = scene.scene(0, False, state=scene_state.scene_state(FULL_NIGHT))   # the full Moon is in the front half of the sky
         self.assertLess(svg.index('data-sky="bodies" mask="url(#sky-mask)"'), svg.index('data-light="title"'))
         weather = svg.find('data-season="sky"')
         if weather > 0:
@@ -78,7 +79,7 @@ class Placement(unittest.TestCase):
         self.assertGreater(scene.planet_visibility(.7, -18), .9)
 
     def test_daytime_moon_is_pale(self):
-        state = scene_state.scene_state(datetime(2026, 10, 18, 16, 0, tzinfo=IST))
+        state = scene_state.scene_state(datetime(2026, 10, 4, 10, 0, tzinfo=IST))   # a waning crescent in the western morning sky
         svg = scene.moon_markup(scene.lighting(state), state)
         self.assertIn(f'data-moon="disc" opacity="{scene.DAY_MOON}"', svg)
 
