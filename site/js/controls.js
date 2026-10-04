@@ -42,6 +42,7 @@ export class Player {
     this.pitch = options.pitch || 0;
     this.eyeY = groundHeight(this.pos.x, this.pos.z) + EYE;
     this.keys = new Set();
+    this.tapped = new Set();               // keys pressed since the last frame, so a tap shorter than one frame still moves
     this.joy = { x: 0, y: 0 };
     this.enabled = true;
     this.locked = false;
@@ -61,6 +62,7 @@ export class Player {
       if (!this.enabled || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
       this.keys.add(e.code);
+      this.tapped.add(e.code);
       if (/^(Arrow|Space)/.test(e.code)) e.preventDefault();
       if (!e.repeat) this.onKey(e.code);
     });
@@ -74,7 +76,7 @@ export class Player {
     canvas.addEventListener('pointerdown', (e) => {
       if (!this.enabled) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
-      canvas.setPointerCapture?.(e.pointerId);
+      try { canvas.setPointerCapture?.(e.pointerId); } catch (err) { /* the pointer may already be gone */ }
       const drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0, type: e.pointerType };
       if (e.pointerType === 'mouse') this.mouseDrag = drag; else this.touchLook = drag;
     });
@@ -110,7 +112,7 @@ export class Player {
         this.joy.x = dx; this.joy.y = dy;
         if (knob) { knob.style.setProperty('--kx', `${dx * 34}px`); knob.style.setProperty('--ky', `${dy * 34}px`); }
       };
-      joystick.addEventListener('pointerdown', (e) => { id = e.pointerId; joystick.setPointerCapture?.(id); set(e); e.preventDefault(); });
+      joystick.addEventListener('pointerdown', (e) => { id = e.pointerId; try { joystick.setPointerCapture?.(id); } catch (err) { /* synthetic or finished pointer */ } set(e); e.preventDefault(); });
       joystick.addEventListener('pointermove', (e) => { if (e.pointerId === id) set(e); });
       const end = (e) => {
         if (e.pointerId !== id) return;
@@ -132,7 +134,8 @@ export class Player {
   }
 
   update(dt) {
-    const k = this.keys;
+    const k = new Set([...this.keys, ...this.tapped]);
+    this.tapped.clear();
     let fwd = 0, side = 0, turn = 0;
     if (this.enabled) {
       if (k.has('KeyW') || k.has('ArrowUp')) fwd += 1;

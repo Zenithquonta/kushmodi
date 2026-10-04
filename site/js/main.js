@@ -95,33 +95,23 @@ async function boot() {
 
   // scene, camera, lights
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x000000, 120, 2300);
+  scene.fog = new THREE.Fog(0x000000, 14, 170);
   const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.1, 8000);
   const hemi = new THREE.HemisphereLight(0x3a4f8a, 0x141a2a, 1);
   const sunLight = new THREE.DirectionalLight(0xfff0d0, 0);
   const moonLight = new THREE.DirectionalLight(0x9fb8ff, 0);
   scene.add(hemi, sunLight, sunLight.target, moonLight, moonLight.target);
 
-  // A soft, cool environment key separates silhouettes from the dark meadow.
-  const rim = new THREE.DirectionalLight(0x8fbacb, 1.6);
-  rim.position.set(-25, 35, 18);
-  rim.castShadow = true;
-  rim.shadow.mapSize.set(coarse ? 512 : 1024, coarse ? 512 : 1024);
-  Object.assign(rim.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 120 });
-  rim.shadow.bias = -0.0005;
-  rim.shadow.normalBias = 0.05;
-  scene.add(rim);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
   const observer = makeObserver(site);
   const clock = makeClock();
-  const world = buildWorld(scene, site, env);
-  scene.traverse((object) => {
-    if (object.isMesh && (object.material.isMeshStandardMaterial || object.material.isMeshLambertMaterial)) {
-      object.receiveShadow = true;
-      object.castShadow = object.name !== 'terrain' && object.name !== 'illustrated-foliage';
-    }
-  });
+  let world;
+  try {
+    world = await buildWorld(scene, site, env);
+  } catch (error) {
+    console.error(error);
+    fallback('The scenery could not be loaded, so this is the text version.');
+    return;
+  }
   const sky = new Sky(scene, { stars, milkyway, constellations }, PLANETS, 1);
   const guides = new PlanetGuides(document.getElementById('planet-guides'), document.getElementById('btn-guides'));
   world.sky = sky;
@@ -185,13 +175,12 @@ async function boot() {
   function applyLook() {
     const alt = state.sun.altitude;
     const day = smooth(-6, 12, alt);
-    rim.intensity = lerp(0.65, 0.35, day);
     const look = sky.look;
     const fog = scene.fog;
     fog.color.setRGB(look.horizon[0], look.horizon[1], look.horizon[2], THREE.SRGBColorSpace);
     const mist = Math.min(1, env.haze * 0.5 + env.fog * 0.9 + env.rain * 0.35);
-    fog.near = lerp(140, 25, mist);
-    fog.far = lerp(2300, 700, mist * 0.9);
+    fog.near = lerp(14, 8, mist);                       // layered depth: the far clearing and tree line melt into the horizon colour
+    fog.far = lerp(170, 90, mist * 0.9);
     hemi.color.setRGB(lerp(0.2, 0.62, day) + look.zenith[0] * 0.3, lerp(0.3, 0.72, day) + look.zenith[1] * 0.3, lerp(0.55, 0.9, day), THREE.SRGBColorSpace);
     hemi.groundColor.setRGB(lerp(0.08, 0.3, day), lerp(0.1, 0.28, day), lerp(0.17, 0.2, day), THREE.SRGBColorSpace);
     hemi.intensity = lerp(1.3, 2.7, day) * (1 - env.cloud * 0.12);
@@ -224,7 +213,7 @@ async function boot() {
     if (hud.readoutOpen && !force) closeEyepiece();
     else {
       hud.showTelescope(target); player.enabled = false; guides.root.hidden = true;
-      player.keys.clear(); player.joy.x = player.joy.y = 0;
+      player.keys.clear(); player.tapped.clear(); player.joy.x = player.joy.y = 0;
       setEyepieceModal(true);
       if (document.pointerLockElement) document.exitPointerLock();
       document.getElementById('btn-close-eyepiece').focus();
@@ -307,7 +296,7 @@ async function boot() {
     player.apply(camera);
     sky.frame(camera, seconds, dt, env, reduced);
 
-    world.update(state, env, seconds, dt, reduced);
+    world.update(state, env, seconds, dt, reduced, camera);
     world.telescope.aim(target.world, dt, false);
     if (ts - hudAt > 200) {
       hudAt = ts; hud.setClock(date);
@@ -349,6 +338,19 @@ async function boot() {
       const { alt, az } = altAz(w);
       return { altitude: alt, azimuth: az, screen: project(w) };
     },
+    // Test hooks: is the sky direction (altitude, azimuth in degrees) covered by terrain or painted scenery from here?
+    blockedSky(altitude, azimuth) {
+      const a = altitude * DEG, z = azimuth * DEG;                         // azimuth: 0 north, 90 east; world +X east, -Z north
+      const dir = new THREE.Vector3(Math.cos(a) * Math.sin(z), Math.sin(a), -Math.cos(a) * Math.cos(z));
+      return guides.blocked(camera.position, dir, world);
+    },
+    frontHit(ox, oy, oz, dx, dy, dz) {
+      const d = new THREE.Vector3(dx, dy, dz).normalize();
+      return world.scenery.frontHit({ x: ox, y: oy, z: oz }, d);
+    },
+    get sprites() { return world.scenery.items.map((i) => ({ name: i.set.name, x: i.x, y: i.y, z: i.z, w: i.w, h: i.h })); },
+    get guides() { return [...document.querySelectorAll('.planet-guide')].map((n) => ({ name: n.querySelector('.planet-tag').textContent.replace(' · telescope', ''), hidden: n.hidden, x: parseFloat(n.style.left), y: parseFloat(n.style.top) })); },
+    planets() { return state ? state.planets.map((p) => ({ name: p.name, altitude: p.altitude, azimuth: p.azimuth, screen: project(p.world) })) : []; },
     setView(headingDeg, pitchDeg) { player.yaw = -headingDeg * DEG; player.pitch = pitchDeg * DEG; },
     setPosition(x, z) { player.pos.x = x; player.pos.z = z; },
   };

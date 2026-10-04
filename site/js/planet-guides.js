@@ -15,6 +15,12 @@ export class PlanetGuides {
     });
   }
 
+  // True when terrain or painted scenery covers the sky direction as seen from `origin` (a unit vector toward the body).
+  blocked(origin, direction, world) {
+    this.ray.set(origin, direction);
+    return this.ray.intersectObject(world.terrain, false).length > 0 || (world.scenery ? world.scenery.blocked(origin, direction) : false);
+  }
+
   update(state, camera, world) {
     if (!this.enabled || !state) return;
     const width = innerWidth, height = innerHeight;
@@ -39,9 +45,7 @@ export class PlanetGuides {
       this.point.copy(this.direction).multiplyScalar(5000).add(camera.position).project(camera);
       if (this.point.z > 1 || Math.abs(this.point.x) > .96 || Math.abs(this.point.y) > .94) { node.hidden = true; continue; }
       if (checkOcclusion) {
-        this.ray.set(camera.position, this.direction);
-        const blocked = this.ray.intersectObject(world.terrain, false).length > 0 || this.ray.intersectObject(world.shed, true).length > 0;
-        this.occluded.set(body.name, blocked);
+        this.occluded.set(body.name, this.blocked(camera.position, this.direction, world));
       }
       if (this.occluded.get(body.name)) { node.hidden = true; continue; }
       const x = (this.point.x + 1) * width / 2, y = (1 - this.point.y) * height / 2;

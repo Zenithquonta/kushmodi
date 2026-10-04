@@ -1,30 +1,30 @@
 {
  "night": {
   "polaris": {
-   "altitude": 19.47324644633811,
-   "azimuth": 0.5088626847662567,
+   "altitude": 19.473036313163625,
+   "azimuth": 0.5090463798909468,
    "screen": {
     "x": 645,
     "y": 249
    }
   },
   "saturn": {
-   "altitude": 67.39510070245844,
-   "azimuth": 137.40477291365414,
+   "altitude": 67.37908054031217,
+   "azimuth": 137.35478575358354,
    "screen": null
   },
   "moon": {
-   "altitude": -21.271620216657038,
-   "azimuth": 54.77214825835972,
+   "altitude": -21.289897155138267,
+   "azimuth": 54.75920458857502,
    "screen": {
-    "x": 1602,
+    "x": 1601,
     "y": 919
    }
   },
   "target": {
    "name": "Altair",
-   "altitude": 32.75219898665177,
-   "azimuth": 268.4513407176595
+   "altitude": 32.77584659426679,
+   "azimuth": 268.4427474904598
   },
   "heading": 0,
   "pixelRatio": 1,
@@ -32,11 +32,11 @@
    1280,
    720
   ],
-  "calls": 67,
-  "triangles": 105774,
+  "calls": 52,
+  "triangles": 38100,
   "limit": 3.194999999999999,
-  "fps": 19.25925925925926,
-  "hudTime": "23:30:06 IST",
+  "fps": 13.941445927103569,
+  "hudTime": "23:30:01 IST",
   "sky": [
    "Sun down, night",
    "Moon Waning crescent, 37% lit, below the horizon",
@@ -44,18 +44,23 @@
    "Saturn 67° SE, mag 0.2",
    "Uranus 27° E, mag 5.6"
   ],
-  "weather": "Partly cloudy · 50% cloud · Autumn"
+  "weather": "Partly cloudy · 50% cloud · Autumn",
+  "sprites": 1399
  },
  "readout": "Telescope targetAltairRA (J2000)19h 50m 47sDec (J2000)+08° 52′Altitude32.7°Azimuth268.5° WMagnitude0.8",
  "eyepiece": {
   "lit": 531,
+  "ring": 4,
+  "title": "Altair",
   "status": "Tracking tonight’s object in the real Mumbai sky",
+  "caption": "Pixel-art illustration · not a live camera image",
+  "label": "Altair pixel-art illustration",
   "inert": true
  },
  "saturn": {
   "saturn": {
-   "altitude": 72.88796392204297,
-   "azimuth": 179.8239316650413,
+   "altitude": 72.88790689926765,
+   "azimuth": 179.76528221793546,
    "screen": {
     "x": 639,
     "y": 167
@@ -63,47 +68,346 @@
   },
   "target": {
    "name": "Altair",
-   "altitude": 18.550582208267485,
-   "azimuth": 273.2858911016382
+   "altitude": 18.56687120394513,
+   "azimuth": 273.28056263248874
   }
  },
- "guides": [
-  {
-   "name": "Saturn",
-   "x": 639.431,
-   "y": 166.621
+ "guideState": {
+  "visible": 2,
+  "guides": [
+   {
+    "name": "Mercury",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Venus",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Mars",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Jupiter",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Saturn",
+    "hidden": false,
+    "x": 639.334,
+    "y": 166.621
+   },
+   {
+    "name": "Uranus",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Neptune",
+    "hidden": false,
+    "x": 730.495,
+    "y": 191.375
+   }
+  ],
+  "planets": [
+   {
+    "name": "Mercury",
+    "altitude": -70,
+    "screen": null
+   },
+   {
+    "name": "Venus",
+    "altitude": -69,
+    "screen": null
+   },
+   {
+    "name": "Mars",
+    "altitude": -15,
+    "screen": null
+   },
+   {
+    "name": "Jupiter",
+    "altitude": -31,
+    "screen": null
+   },
+   {
+    "name": "Saturn",
+    "altitude": 73,
+    "screen": {
+     "x": 639,
+     "y": 167
+    }
+   },
+   {
+    "name": "Uranus",
+    "altitude": 41,
+    "screen": {
+     "x": -339,
+     "y": -307
+    }
+   },
+   {
+    "name": "Neptune",
+    "altitude": 69,
+    "screen": {
+     "x": 730,
+     "y": 191
+    }
+   }
+  ]
+ },
+ "guideNorth": {
+  "visible": 0,
+  "guides": [
+   {
+    "name": "Mercury",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Venus",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Mars",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Jupiter",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Saturn",
+    "hidden": true,
+    "x": 639.527,
+    "y": 166.621
+   },
+   {
+    "name": "Uranus",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Neptune",
+    "hidden": true,
+    "x": 730.69,
+    "y": 191.375
+   }
+  ],
+  "planets": [
+   {
+    "name": "Mercury",
+    "altitude": -70,
+    "screen": null
+   },
+   {
+    "name": "Venus",
+    "altitude": -69,
+    "screen": null
+   },
+   {
+    "name": "Mars",
+    "altitude": -15,
+    "screen": {
+     "x": 1876,
+     "y": 841
+    }
+   },
+   {
+    "name": "Jupiter",
+    "altitude": -31,
+    "screen": {
+     "x": 1805,
+     "y": 1299
+    }
+   },
+   {
+    "name": "Saturn",
+    "altitude": 73,
+    "screen": null
+   },
+   {
+    "name": "Uranus",
+    "altitude": 41,
+    "screen": {
+     "x": 2381,
+     "y": -1119
+    }
+   },
+   {
+    "name": "Neptune",
+    "altitude": 69,
+    "screen": null
+   }
+  ]
+ },
+ "depth": {
+  "up": false,
+  "below": true,
+  "shed": {
+   "alt": 3.712347850166577,
+   "az": 39.28940686250036,
+   "blocked": true
   },
-  {
-   "name": "Neptune · telescope",
-   "x": 730.593,
-   "y": 191.375
+  "aboveShed": false,
+  "order": {
+   "fromTelescopeSide": "telescope",
+   "fromRockSide": "rock_a"
   }
- ],
+ },
  "east": {
   "uranus": {
-   "altitude": 27.29846597569848,
-   "azimuth": 75.55451758597104,
+   "altitude": 27.290982397023946,
+   "azimuth": 75.55283993797644,
    "screen": {
     "x": -164,
     "y": 359
    }
   },
   "saturn": {
-   "altitude": 67.38428588416441,
-   "azimuth": 137.37101532137092,
+   "altitude": 67.37905111195144,
+   "azimuth": 137.35469403400106,
    "screen": {
     "x": 629,
     "y": 172
    }
   }
  },
+ "guideEast": {
+  "visible": 2,
+  "guides": [
+   {
+    "name": "Mercury",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Venus",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Mars",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Jupiter",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Saturn",
+    "hidden": false,
+    "x": 628.931,
+    "y": 172.169
+   },
+   {
+    "name": "Uranus",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Neptune",
+    "hidden": false,
+    "x": 717.762,
+    "y": 132.745
+   }
+  ],
+  "planets": [
+   {
+    "name": "Mercury",
+    "altitude": -55,
+    "screen": null
+   },
+   {
+    "name": "Venus",
+    "altitude": -55,
+    "screen": null
+   },
+   {
+    "name": "Mars",
+    "altitude": -27,
+    "screen": null
+   },
+   {
+    "name": "Jupiter",
+    "altitude": -42,
+    "screen": null
+   },
+   {
+    "name": "Saturn",
+    "altitude": 67,
+    "screen": {
+     "x": 629,
+     "y": 172
+    }
+   },
+   {
+    "name": "Uranus",
+    "altitude": 27,
+    "screen": {
+     "x": -164,
+     "y": 359
+    }
+   },
+   {
+    "name": "Neptune",
+    "altitude": 70,
+    "screen": {
+     "x": 718,
+     "y": 133
+    }
+   }
+  ]
+ },
+ "saturnEyepiece": {
+  "lit": 5837,
+  "ring": 1849,
+  "title": "Saturn",
+  "status": "Tracking tonight’s object in the real Mumbai sky",
+  "caption": "Pixel-art illustration · not a live camera image",
+  "label": "Saturn pixel-art illustration",
+  "inert": true
+ },
+ "belowHorizon": {
+  "lit": 0,
+  "ring": 0,
+  "title": "Altair",
+  "status": "Below the horizon — the mount will continue tracking. Return when it rises.",
+  "caption": "Pixel-art illustration · not a live camera image",
+  "label": "Altair pixel-art illustration",
+  "inert": true
+ },
  "day": {
   "sun": {
-   "altitude": 65.61205448060923,
-   "azimuth": 163.3895597532761,
+   "altitude": 65.60730632679673,
+   "azimuth": 163.3485959119273,
    "screen": null
   },
-  "calls": 65,
+  "calls": 29,
   "sky": [
    "Sun up, 66° S",
    "Moon Last quarter, 42% lit, 24° W",
@@ -111,6 +415,99 @@
    "Mercury 46° SE, mag -0.1",
    "Venus 40° SE, mag -4.7",
    "Mars 36° W, mag 1.1"
+  ]
+ },
+ "guideDay": {
+  "visible": 0,
+  "guides": [
+   {
+    "name": "Mercury",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Venus",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Mars",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Jupiter",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Saturn",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Uranus",
+    "hidden": true,
+    "x": null,
+    "y": null
+   },
+   {
+    "name": "Neptune",
+    "hidden": true,
+    "x": null,
+    "y": null
+   }
+  ],
+  "planets": [
+   {
+    "name": "Mercury",
+    "altitude": 46,
+    "screen": null
+   },
+   {
+    "name": "Venus",
+    "altitude": 40,
+    "screen": null
+   },
+   {
+    "name": "Mars",
+    "altitude": 36,
+    "screen": null
+   },
+   {
+    "name": "Jupiter",
+    "altitude": 51,
+    "screen": null
+   },
+   {
+    "name": "Saturn",
+    "altitude": -68,
+    "screen": {
+     "x": -455,
+     "y": 4497
+    }
+   },
+   {
+    "name": "Uranus",
+    "altitude": -19,
+    "screen": {
+     "x": -3564,
+     "y": 1927
+    }
+   },
+   {
+    "name": "Neptune",
+    "altitude": -71,
+    "screen": {
+     "x": 229,
+     "y": 4180
+    }
+   }
   ]
  },
  "mobile": {
@@ -144,7 +541,6 @@
   "visible": "static",
   "canvas": "none",
   "heroNoscript": true
- }
+ },
+ "assertionFailures": 0
 }
-PROBLEMS:
-assertion: walking resumes after modal

@@ -50,6 +50,7 @@ export function buildTerrain(greenery = 0.7) {
   const SEG = 192;
   const positions = [];
   const colors = [];
+  const uvs = [];
   const index = [];
   const wet = new THREE.Color();
   const lush = new THREE.Color('#29423d'), dry = new THREE.Color('#62634b');
@@ -64,6 +65,7 @@ export function buildTerrain(greenery = 0.7) {
       const x = Math.sin(a) * r, z = Math.cos(a) * r;
       const y = groundHeight(x, z);
       positions.push(x, y, z);
+      uvs.push(x / 7, z / 7);                                  // one ground tile per 7 m
       // colour: flat crown is grass, slopes darker, plain farther away blends to a dark green, ridges to rock
       const crown = 1 - smooth(CROWN_RADIUS, 80, r);
       col.copy(grass).multiplyScalar(0.8 + 0.07 * Math.sin(x * 0.18) * Math.cos(z * 0.21) + 0.1 * crown);
@@ -84,6 +86,7 @@ export function buildTerrain(greenery = 0.7) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   g.setIndex(index);
   g.computeVertexNormals();
   const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: false }));
