@@ -289,7 +289,10 @@ Remaining, in order:
 
 ### In flight at session end (2026-10-02)
 
-- **Phase 17 polish (README sky)**: worktree `.claude/worktrees/agent-a0318701401430528`, branch
+- **Phase 17 (README sky)**: DONE and on `main` (polish b573960 merged; full suite 337 OK, gate 0, default scene
+  identical): rectangular north-facing panorama, Yale BSC5 stars to mag 5.8, visible Milky Way, faint lines, real
+  lock-on target, planet/Moon fading trails. Earlier notes follow.
+- (history) Phase 17 polish (README sky): worktree `.claude/worktrees/agent-a0318701401430528`, branch
   `worktree-agent-a0318701401430528`. First pass committed (9b82f6b: north-facing real sky, Yale BSC5 stars,
   d3-celestial Milky Way and lines, real lock-on target, planet/Moon fading trails; 313 tests OK). Polish requested:
   rectangular panorama projection (no empty top corners), deeper/brighter stars, visible Milky Way. Next: review its
@@ -309,6 +312,11 @@ Remaining, in order:
 Sky decisions (user, 2026-10-02): the README image faces NORTH (west left, east right, Polaris centre); the website
 sky is a full 360°. Planets and the Moon carry a trail: "not a complete arc, a continuous line that gets dimmer
 following the celestial object" (past ~3 h, fading with age). Galaxies and the ringed planet are removed in live.
+Server commands for Kush (he asked for this format every time; his SSH drops otherwise): one PowerShell line that
+logs in and runs the command, using the IP (his DNS sometimes fails) and keep-alive:
+`ssh -t -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -i "$HOME\Downloads\ssh-key-2026-10-01 (1).key" ubuntu@130.210.59.233 "COMMAND"`.
+Update: COMMAND = `sudo bash /opt/observatory/repo/deploy/update.sh </dev/null && sudo bash /opt/observatory/repo/deploy/check.sh`
+(stdin from /dev/null skips the y/N prompt, which Windows ssh answers empty).
 Decisions recorded: LinkedIn is https://www.linkedin.com/in/kush-modi-b85388311; keep Modi Fintelli out; contacts as
 in README; the user prefers terse step lists; check credit usage, the user will say when to wrap up.
 
