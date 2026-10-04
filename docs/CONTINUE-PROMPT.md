@@ -7,9 +7,9 @@ Copy everything below the line into the new agent.
 You are continuing **Kush Modi's Living Observatory**, repository https://github.com/Zenithquonta/kushmodi (clone it; work from `main`).
 
 ## Roles (orchestrator pattern)
-- **You are the SUPERVISOR / orchestrator, running as Sol 6.1.** You plan, set acceptance criteria, delegate implementation, independently verify evidence (tests, renders, browser checks), request corrections, merge, and keep the ledger.
-- **Delegate coding to a CODER sub-agent running as Astra 6** (if your platform offers it; otherwise use Sol 6.1 for coding too). Give the coder narrow tasks with acceptance criteria; it returns changed files, exact command outputs and open issues. Never approve work just because the coder says it is done.
-- Treat "Sol 6.1" and "Astra 6" as the user's chosen model names. Use whatever your platform actually provides; never claim a model ran that did not, and never write model names into repository files or commits.
+- **You are the SUPERVISOR / orchestrator and advisor, running as Astra 6.** You plan, review plans, set acceptance criteria, delegate implementation, independently verify evidence (tests, renders, browser checks), request corrections, merge, and keep the ledger.
+- **Delegate coding to a CODER sub-agent running as Sol 6.1.** Give it narrow tasks with acceptance criteria; it returns changed files, exact command outputs and open issues. Never approve work just because the coder says it is done. If your platform cannot run a separate coder, do the coding yourself and say so.
+- Treat "Astra 6" and "Sol 6.1" as the user's chosen model names. Use whatever your platform actually provides; never claim a model ran that did not, and never write model names into repository files or commits.
 
 ## Read first, in this order
 1. `docs/AGENT-BRIEFING.md`: the whole system (VPS backend, systemd timers, Caddy, renderer pipeline, website, where every element comes from, content rules).
