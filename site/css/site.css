@@ -87,3 +87,73 @@ html.touch .hint { bottom: 10px; left: 10px; max-width: 46vw; }
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+/* Refined instrument UI: quiet edges leave the landscape in focus. */
+#view { image-rendering: auto; }
+.panel, button, .compass { border: 1px solid #91c9ce40; box-shadow: 0 8px 32px #0003; background: rgba(7, 19, 29, .82); border-radius: 12px; }
+.panel { padding: 14px 18px; letter-spacing: .055em; }
+.hud-title { top: 28px; left: 28px; border: 0; box-shadow: none; background: transparent; padding: 0; max-width: 400px; }
+.hud-title::before { content: 'THE LIVING OBSERVATORY'; display: block; color: #98c7c8; font-size: 10px; letter-spacing: .24em; margin-bottom: 8px; }
+.hud-title .name { font: 500 clamp(28px, 3.5vw, 44px)/1.05 system-ui, sans-serif; letter-spacing: -.035em; color: #f0f3ec; }
+.hud-title .tag { font-size: 9px; letter-spacing: .12em; margin-top: 10px; color: #bfd3d4; }
+.hud-title .clock { font-size: 10px; margin-top: 12px; color: #d6bc91; }
+.compass { top: 30px; height: 28px; border-radius: 30px; width: min(240px, 26vw); margin-left: calc(min(240px, 26vw) / -2); }
+.heading { top: 68px; font-size: 10px; }
+.hud-up { top: 28px; right: 28px; font-size: 10px; min-width: 190px; }
+.hud-up .label { font-size: 9px; letter-spacing: .2em; margin-bottom: 8px; }
+.hud-up li { padding: 3px 0; }
+.weather { border-top: 1px solid #91c9ce25; padding-top: 9px; margin-top: 9px; font-size: 10px; }
+.hint { left: 28px; bottom: 26px; max-width: min(44vw, 440px); font-size: 10px; text-transform: none; }
+.buttons { right: 28px; bottom: 26px; gap: 8px; }
+button { padding: 12px 17px; min-height: 44px; font-size: 10px; letter-spacing: .06em; color: #d4e4e0; transition: background .2s, border-color .2s; }
+button:hover { background: #19363e; border-color: #a5ded3; }
+.help { bottom: 86px; right: 28px; line-height: 1.7; }
+.readout { bottom: 96px; border-color: #d6bc9180; }
+.text-version { max-width: 54rem; }
+.text-version h1 { font-family: system-ui, sans-serif; letter-spacing: -.045em; font-size: clamp(2.8rem, 8vw, 5rem); text-transform: none; color: #f0f3ec; }
+.text-version h2 { border-bottom-width: 1px; padding-bottom: .7rem; }
+.hero img { border: 1px solid #91c9ce40; border-radius: 12px; }
+@media (max-width: 900px) and (min-width: 641px) { .compass { top: 154px; } .heading { top: 190px; } }
+@media (max-width: 640px) {
+  .hud-title { top: 20px; left: 18px; }
+  .hud-title .name { font-size: 32px; }
+  .hud-title .tag { font-size: 8px; }
+  .hud-title .clock { font-size: 9px; }
+  .compass { top: 150px; width: 160px; margin-left: -80px; }
+  .heading { top: 185px; }
+  .hud-up { top: 222px; right: 14px; min-width: 0; max-width: 48vw; padding: 10px 12px; font-size: 9px; }
+  .hud-up li { padding: 1px 0; }
+  .buttons { right: 14px; bottom: 20px; gap: 6px; }
+  button { min-height: 44px; padding: 10px 12px; font-size: 9px; }
+  .hint, html.touch .hint { left: 14px; bottom: 20px; padding: 10px; max-width: 46vw; font-size: 9px; }
+  .help { right: 14px; bottom: 182px; }
+  .readout { bottom: 185px; }
+}/* Thin instrument marks identify actual ephemeris positions without catching input. */
+.planet-guides { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
+html.gl .planet-guides { display: block; }
+html.gl .planet-guides[hidden], .planet-guide[hidden] { display: none; }
+.planet-guide { position: absolute; width: 0; height: 0; color: #c7eff0; }
+.planet-ring { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; border: 1px solid #b5e1e0a6; border-radius: 50%; box-shadow: 0 0 5px #06151b66; }
+.planet-tag { position: absolute; left: 25px; top: -10px; padding: 3px 7px; white-space: nowrap; border-left: 1px solid #badbd77a; background: #06131d80; font: 10px/1.4 var(--font); letter-spacing: .12em; text-transform: uppercase; text-shadow: 0 1px 4px #000; }
+.label-left .planet-tag { left: auto; right: 25px; border-left: 0; border-right: 1px solid #badbd77a; }
+.hud .panel, .hud .buttons, .hud .compass, .hud .heading { z-index: 3; }
+@media(max-width:640px) { .help { bottom: 225px; } .readout { bottom: 235px; } .planet-tag { font-size: 9px; } }
+/* Eyepiece is a quiet full-screen observing view, with the scene controls paused. */
+.readout { inset: 0; transform: none; min-width: 0; max-width: none; width: 100%; height: 100dvh; border: 0; border-radius: 0; background: #020711f7; z-index: 70 !important; padding: 28px clamp(20px, 6vw, 100px); overflow-y: auto; text-transform: none; }
+.eyepiece-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 10px; letter-spacing: .18em; color: #92b5bc; }
+.eyepiece-layout { display: grid; grid-template-columns: minmax(220px, 440px) minmax(230px, 360px); gap: clamp(28px, 6vw, 90px); justify-content: center; align-items: center; min-height: calc(100dvh - 140px); }
+.eyepiece-optic { border: 1px solid #436170; padding: 12px; border-radius: 50%; background: #000; box-shadow: 0 0 0 6px #0c1620, 0 0 0 7px #263845, 0 0 65px #214b6929; }
+#eyepiece-canvas { display: block; width: 100%; height: auto; border-radius: 50%; image-rendering: pixelated; }
+.eyepiece-info h2 { font: 400 clamp(30px, 5vw, 52px)/1.1 system-ui, sans-serif; color: #e9ece4; margin: 0 0 16px; letter-spacing: -.03em; }
+#eyepiece-status { color: #cfb88d; font-size: 12px; line-height: 1.7; margin-bottom: 24px; }
+#readout-body { font-size: 11px; line-height: 1.9; }
+#eyepiece-caption, .eyepiece-note { color: #8099a6; font-size: 10px; line-height: 1.7; margin-top: 24px; }
+.eyepiece-note { margin-top: 8px; }
+@media(max-width:640px) {
+  .readout { inset: 0; padding: 18px; }
+  .eyepiece-header { align-items: flex-start; font-size: 8px; }
+  .eyepiece-header button { font-size: 8px; }
+  .eyepiece-layout { grid-template-columns: 1fr; gap: 28px; padding-top: 34px; min-height: 0; }
+  .eyepiece-optic { width: min(74vw, 310px); margin: 0 auto; }
+  .eyepiece-info { padding: 6px 12px 24px; }
+  .eyepiece-info h2 { font-size: 32px; }
+}

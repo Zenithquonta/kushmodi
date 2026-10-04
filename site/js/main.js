@@ -4,8 +4,9 @@ import { DEG, altAz, applyMatrix, bodyTrails, makeObserver, skyState, twilightNa
 import { Sky, TRAIL_BODIES } from './sky.js';
 import { buildWorld, POS } from './world.js';
 import { Player } from './controls.js';
+import { PlanetGuides } from './planet-guides.js';
 import { Hud } from './hud.js';
-import { brightStars, pickTarget, skyLines } from './target.js';
+import { brightStars, nightlyTargetPicker, skyLines } from './target.js';
 import { loadLive, weatherText } from './live.js';
 
 const html = document.documentElement;
@@ -78,7 +79,7 @@ async function boot() {
 
   let renderer;
   try {
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
   } catch (error) {
     fallback('The 3D observatory could not start on this device. This is the text version.');
     return;
@@ -101,13 +102,32 @@ async function boot() {
   const moonLight = new THREE.DirectionalLight(0x9fb8ff, 0);
   scene.add(hemi, sunLight, sunLight.target, moonLight, moonLight.target);
 
+  // A soft, cool environment key separates silhouettes from the dark meadow.
+  const rim = new THREE.DirectionalLight(0x8fbacb, 1.6);
+  rim.position.set(-25, 35, 18);
+  rim.castShadow = true;
+  rim.shadow.mapSize.set(coarse ? 512 : 1024, coarse ? 512 : 1024);
+  Object.assign(rim.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 120 });
+  rim.shadow.bias = -0.0005;
+  rim.shadow.normalBias = 0.05;
+  scene.add(rim);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   const observer = makeObserver(site);
   const clock = makeClock();
   const world = buildWorld(scene, site, env);
+  scene.traverse((object) => {
+    if (object.isMesh && (object.material.isMeshStandardMaterial || object.material.isMeshLambertMaterial)) {
+      object.receiveShadow = true;
+      object.castShadow = object.name !== 'terrain' && object.name !== 'illustrated-foliage';
+    }
+  });
   const sky = new Sky(scene, { stars, milkyway, constellations }, PLANETS, 1);
+  const guides = new PlanetGuides(document.getElementById('planet-guides'), document.getElementById('btn-guides'));
   world.sky = sky;
   world.look = sky.look;
   const bright = brightStars(stars);
+  const targetForNight = nightlyTargetPicker(bright, observer);
 
   const hud = new Hud();
   hud.el.root.hidden = false;
@@ -123,11 +143,11 @@ async function boot() {
   });
   player.reduced = reduced;
 
-  // ----- sizing: a low-resolution render target scaled up with nearest-neighbour filtering --------------------
+  // Full-resolution rendering, capped on dense displays to keep mobile GPU cost bounded.
   let pixelRatio = 1, renderW = 0, renderH = 0;
   function resize() {
     const w = Math.max(1, window.innerWidth), h = Math.max(1, window.innerHeight);
-    const scale = w < 600 ? 0.5 : 1 / 3;
+    const scale = Math.min(1, 1920 / w);
     pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
     renderW = Math.max(160, Math.round(w * scale));
     renderH = Math.max(90, Math.round(h * scale));
@@ -149,7 +169,7 @@ async function boot() {
 
   function refreshSky(date) {
     state = skyState(date, observer);
-    target = pickTarget(state, bright);
+    target = targetForNight(date, state);
     const ms = date.getTime();
     if (ms - lastTrailMs >= 30000 || ms < lastTrailMs) {            // the 3-hour trails are recomputed every 30 s of sky time
       lastTrailMs = ms;
@@ -165,6 +185,7 @@ async function boot() {
   function applyLook() {
     const alt = state.sun.altitude;
     const day = smooth(-6, 12, alt);
+    rim.intensity = lerp(0.65, 0.35, day);
     const look = sky.look;
     const fog = scene.fog;
     fog.color.setRGB(look.horizon[0], look.horizon[1], look.horizon[2], THREE.SRGBColorSpace);
@@ -192,23 +213,48 @@ async function boot() {
     ndc.set(centre ? 0 : ((clientX - rect.left) / rect.width) * 2 - 1, centre ? 0 : -((clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
     raycaster.far = 60;
-    if (raycaster.intersectObjects(world.pickables, false).length) toggleReadout(true);
+    if (raycaster.intersectObjects(world.pickables, false).length) {
+      if (Math.hypot(player.pos.x - POS.telescope[0], player.pos.z - POS.telescope[1]) < 6) toggleReadout(true);
+      else hud.setHint('Walk closer to the telescope to look through the eyepiece.');
+    }
   }
 
   function toggleReadout(force) {
     if (!state) return;
-    if (hud.readoutOpen && !force) hud.hideTelescope(); else hud.showTelescope(target);
+    if (hud.readoutOpen && !force) closeEyepiece();
+    else {
+      hud.showTelescope(target); player.enabled = false; guides.root.hidden = true;
+      player.keys.clear(); player.joy.x = player.joy.y = 0;
+      setEyepieceModal(true);
+      if (document.pointerLockElement) document.exitPointerLock();
+      document.getElementById('btn-close-eyepiece').focus();
+    }
   }
 
+  function closeEyepiece() {
+    hud.hideTelescope(); setEyepieceModal(false); player.enabled = true; guides.root.hidden = !guides.enabled; canvas.focus();
+  }
+  function setEyepieceModal(open) {
+    for (const element of document.body.children) if (element !== hud.el.root) element.inert = open;
+    for (const element of hud.el.root.children) if (element !== hud.el.readout) element.inert = open;
+  }
+  document.getElementById('btn-close-eyepiece').addEventListener('click', closeEyepiece);
+  document.getElementById('btn-telescope').addEventListener('click', () => toggleReadout(true));
+  window.addEventListener('keydown', e => {
+    if (!hud.readoutOpen) return;
+    if (e.code === 'Escape' || e.code === 'KeyE') { e.preventDefault(); closeEyepiece(); }
+    if (e.code === 'Tab') { e.preventDefault(); document.getElementById('btn-close-eyepiece').focus(); }
+    e.stopImmediatePropagation();
+  }, true);
   function key(code) {
     if (code === 'KeyE') {
       const d = Math.hypot(player.pos.x - POS.telescope[0], player.pos.z - POS.telescope[1]);
-      if (hud.readoutOpen) hud.hideTelescope();
-      else if (d < 14) hud.showTelescope(target);
+      if (hud.readoutOpen) closeEyepiece();
+      else if (d < 6) toggleReadout(true);
       else hud.setHint('Walk up to the telescope, then press E.');
     } else if (code === 'KeyC') toggleLines();
     else if (code === 'KeyH') toggleHelp();
-    else if (code === 'Escape') { hud.hideTelescope(); closeText(); }
+    else if (code === 'Escape') { closeText(); }
   }
 
   // ----- buttons and the text version ---------------------------------------------------------------------------
@@ -260,11 +306,18 @@ async function boot() {
     player.update(dt);
     player.apply(camera);
     sky.frame(camera, seconds, dt, env, reduced);
+
     world.update(state, env, seconds, dt, reduced);
     world.telescope.aim(target.world, dt, false);
-    if (ts - hudAt > 200) { hudAt = ts; hud.setClock(date); }
+    if (ts - hudAt > 200) {
+      hudAt = ts; hud.setClock(date);
+      const nearby = Math.hypot(player.pos.x - POS.telescope[0], player.pos.z - POS.telescope[1]) < 6;
+      document.getElementById('btn-telescope').hidden = !nearby;
+      if (nearby) hud.setHint(`Tonight: ${target.name}. Press E or tap Look through telescope.`);
+    }
     hud.setHeading(player.heading);
     renderer.render(scene, camera);
+    guides.update(state, camera, world);
     frames++;
     if (ts - fpsAt > 1000) { fps = (frames * 1000) / (ts - fpsAt); frames = 0; fpsAt = ts; }
   }

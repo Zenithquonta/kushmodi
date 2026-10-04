@@ -3,6 +3,8 @@
 // the whole world is a few dozen draw calls. Colliders are returned as plain data for controls.js.
 import * as THREE from '../vendor/three/three.module.js';
 import { Bag } from './geom.js';
+import { buildDetails } from './details.js';
+import { buildHabitat } from './habitat.js';
 import { HILL_TOP, WALK_RADIUS, buildTerrain, groundHeight } from './terrain.js';
 import { DEG } from './ephemeris.js';
 
@@ -10,7 +12,7 @@ const G = HILL_TOP;
 const PI = Math.PI;
 
 export const POS = {
-  start: [0, 16], telescope: [-7, -4], shed: [17, -9], rover: [-15, 7], van: [-24, -15], pad: [9, 11], boulder: [-6.5, -10.5],
+  start: [0, 10], telescope: [-2.5, -1], shed: [9, -1], rover: [4.8, 3.2], van: [-11, -5], pad: [17, 8], boulder: [-4.5, -4.5],
 };
 const SHED_YAW = -PI / 4;                 // the open front faces south-west, toward the start point
 
@@ -54,8 +56,10 @@ export function buildWorld(scene, site, env) {
   buildRover(world, root);
   buildVan(world, root);
   buildPad(world, root);
-  buildScatter(world, root);
+  // Vegetation and rock formations are built as a dense habitat below.
   buildSkyline(world, root);
+  buildDetails(root, world, POS);
+  buildHabitat(root, world, POS);
 
   world.update = (state, env2, seconds, delta, reduced) => update(world, state, env2, seconds, delta, reduced);
   return world;
@@ -65,7 +69,7 @@ export function buildWorld(scene, site, env) {
 function buildTelescope(world, root, site) {
   const [tx, tz] = POS.telescope;
   const t = group('telescope', tx, G, tz);
-  t.scale.setScalar(1.5);                  // a little larger than life so it reads from the start point
+  t.scale.setScalar(2.0);                  // a little larger than life so it reads from the start point
   root.add(t);
   const head = [0, 1.3, 0];
   const legs = new Bag();
@@ -371,9 +375,14 @@ function buildScatter(world, root) {
     const s = 0.9 + r() * 0.9;
     const tone = ['#14301f', '#1a3a26', '#10281a'][i % 3];
     b.cyl(0.18 * s, 0.24 * s, 1.4 * s, '#3a2a1c', x, y + 0.7 * s, z, 0, 0, 0, 5);
-    b.cone(1.5 * s, 3.0 * s, tone, x, y + 2.3 * s, z, 6);
-    b.cone(1.1 * s, 2.4 * s, tone, x, y + 3.9 * s, z, 6);
-    b.cone(0.7 * s, 1.8 * s, tone, x, y + 5.2 * s, z, 6);
+    for (let tier = 0; tier < 7; tier++) {
+      const h = (1.8 + tier * 0.52) * s;
+      const spread = (1.5 - tier * 0.17) * s;
+      for (let branch = 0; branch < 5; branch++) {
+        const a = branch * PI * 0.4 + tier * 0.7;
+        b.ball(spread * 0.65, tone, x + Math.cos(a) * spread * 0.55, y + h, z + Math.sin(a) * spread * 0.55, 1);
+      }
+    }
   }
   // rocks: the big boulder behind the telescope, and a few small ones
   const [bx, bz] = POS.boulder;
@@ -420,7 +429,7 @@ function buildSkyline(world, root) {
       const w = 12 + r() * 26, depth = 12 + r() * 14;
       const centre = 1 - Math.min(1, Math.abs(x) / 460);
       let h = 24 + r() * 50 + (r() < 0.16 + centre * 0.15 ? 55 + r() * 85 : 0);
-      if (row) h *= 0.8;
+      h *= row ? 0.28 : 0.32;
       const z = z0 + (r() - 0.5) * 50;
       const shade = row ? '#121a2c' : '#0b1220';
       body.box(w, h, depth, shade, x + w / 2, h / 2 - 2, z);

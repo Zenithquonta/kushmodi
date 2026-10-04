@@ -13,6 +13,7 @@
 <body>
 <canvas id="view" tabindex="0" role="img" aria-label="Interactive 3D observatory under the real Mumbai sky. The same content is available as text through the Text version button."></canvas>
 
+<div id="planet-guides" class="planet-guides" aria-label="Planet positions in the current view"></div>
 <div id="hud" class="hud" hidden>
   <div class="panel hud-title">
     <div class="name">KUSH MODI</div>
@@ -26,17 +27,21 @@
     <ul id="hud-sky"></ul>
     <div id="hud-weather" class="weather"></div>
   </div>
-  <div id="readout" class="panel readout" role="status" aria-live="polite" hidden>
-    <dl id="readout-body"></dl>
+  <div id="readout" class="panel readout" role="dialog" aria-modal="true" aria-labelledby="eyepiece-title" hidden>
+    <div class="eyepiece-header"><span>OBSERVATORY / NIGHTLY TARGET</span><button type="button" id="btn-close-eyepiece">Return to observatory</button></div>
+    <div class="eyepiece-layout"><div class="eyepiece-optic"><canvas id="eyepiece-canvas" width="192" height="192" role="img" aria-label="Telescope illustration"></canvas></div>
+    <div class="eyepiece-info"><h2 id="eyepiece-title"></h2><p id="eyepiece-status" role="status" aria-live="polite"></p><dl id="readout-body"></dl><p id="eyepiece-caption"></p><p class="eyepiece-note">One target for each observing night. Its position updates as Earth turns.</p></div></div>
   </div>
   <div id="hud-hint" class="panel hint"></div>
   <div class="buttons">
+    <button type="button" id="btn-telescope" hidden>Look through telescope</button>
     <button type="button" id="btn-text">Text version</button>
-    <button type="button" id="btn-lines" aria-pressed="true">Constellations</button>
+    <button type="button" id="btn-guides" aria-pressed="true">Planet guides</button>
+    <button type="button" id="btn-lines" aria-pressed="false">Constellations</button>
     <button type="button" id="btn-help" aria-expanded="false" aria-controls="hud-help">Help</button>
   </div>
   <div id="hud-help" class="panel help" hidden>
-    <p><strong>Move</strong> W A S D or arrow keys (Shift runs). <strong>Look</strong> move the mouse after a click, or drag. <strong>Telescope</strong> click it, or press E beside it. <strong>C</strong> toggles constellation lines.</p>
+    <p><strong>Move</strong> W A S D or arrow keys (Shift runs). <strong>Look</strong> move the mouse after a click, or drag. <strong>Telescope</strong> walk close and click it or press E to look through the eyepiece. Escape returns to the landscape. <strong>C</strong> toggles constellation lines.</p>
     <p>The sky is computed live from your clock for Mumbai (19.08 N, 72.88 E). Sun and Moon are drawn larger than life so they show on a small picture. Weather and season come from the observatory's live feed.</p>
   </div>
   <div id="joy" class="joy" aria-hidden="true"><div id="knob" class="knob"></div></div>

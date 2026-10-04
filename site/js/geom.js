@@ -40,7 +40,7 @@ export class Bag {
     return this.add(Bag.cache('box', 1, 1, 1), x, y, z, rx, ry, rz, color, w, h, d);
   }
 
-  cyl(rTop, rBottom, h, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, segments = 8) {
+  cyl(rTop, rBottom, h, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, segments = 24) {
     return this.add(Bag.cache('cyl', rTop, rBottom, h, segments), x, y, z, rx, ry, rz, color);
   }
 
@@ -76,7 +76,7 @@ export class Bag {
   }
 
   static litMaterial() {
-    if (!Bag._lit) Bag._lit = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    if (!Bag._lit) Bag._lit = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.12 });
     return Bag._lit;
   }
 

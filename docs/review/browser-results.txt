@@ -1,0 +1,150 @@
+{
+ "night": {
+  "polaris": {
+   "altitude": 19.47324644633811,
+   "azimuth": 0.5088626847662567,
+   "screen": {
+    "x": 645,
+    "y": 249
+   }
+  },
+  "saturn": {
+   "altitude": 67.39510070245844,
+   "azimuth": 137.40477291365414,
+   "screen": null
+  },
+  "moon": {
+   "altitude": -21.271620216657038,
+   "azimuth": 54.77214825835972,
+   "screen": {
+    "x": 1602,
+    "y": 919
+   }
+  },
+  "target": {
+   "name": "Altair",
+   "altitude": 32.75219898665177,
+   "azimuth": 268.4513407176595
+  },
+  "heading": 0,
+  "pixelRatio": 1,
+  "renderSize": [
+   1280,
+   720
+  ],
+  "calls": 67,
+  "triangles": 105774,
+  "limit": 3.194999999999999,
+  "fps": 19.25925925925926,
+  "hudTime": "23:30:06 IST",
+  "sky": [
+   "Sun down, night",
+   "Moon Waning crescent, 37% lit, below the horizon",
+   "Neptune 70° S, mag 7.8 (telescope)",
+   "Saturn 67° SE, mag 0.2",
+   "Uranus 27° E, mag 5.6"
+  ],
+  "weather": "Partly cloudy · 50% cloud · Autumn"
+ },
+ "readout": "Telescope targetAltairRA (J2000)19h 50m 47sDec (J2000)+08° 52′Altitude32.7°Azimuth268.5° WMagnitude0.8",
+ "eyepiece": {
+  "lit": 531,
+  "status": "Tracking tonight’s object in the real Mumbai sky",
+  "inert": true
+ },
+ "saturn": {
+  "saturn": {
+   "altitude": 72.88796392204297,
+   "azimuth": 179.8239316650413,
+   "screen": {
+    "x": 639,
+    "y": 167
+   }
+  },
+  "target": {
+   "name": "Altair",
+   "altitude": 18.550582208267485,
+   "azimuth": 273.2858911016382
+  }
+ },
+ "guides": [
+  {
+   "name": "Saturn",
+   "x": 639.431,
+   "y": 166.621
+  },
+  {
+   "name": "Neptune · telescope",
+   "x": 730.593,
+   "y": 191.375
+  }
+ ],
+ "east": {
+  "uranus": {
+   "altitude": 27.29846597569848,
+   "azimuth": 75.55451758597104,
+   "screen": {
+    "x": -164,
+    "y": 359
+   }
+  },
+  "saturn": {
+   "altitude": 67.38428588416441,
+   "azimuth": 137.37101532137092,
+   "screen": {
+    "x": 629,
+    "y": 172
+   }
+  }
+ },
+ "day": {
+  "sun": {
+   "altitude": 65.61205448060923,
+   "azimuth": 163.3895597532761,
+   "screen": null
+  },
+  "calls": 65,
+  "sky": [
+   "Sun up, 66° S",
+   "Moon Last quarter, 42% lit, 24° W",
+   "Jupiter 51° W, mag -1.9",
+   "Mercury 46° SE, mag -0.1",
+   "Venus 40° SE, mag -4.7",
+   "Mars 36° W, mag 1.1"
+  ]
+ },
+ "mobile": {
+  "pixelRatio": 1.5,
+  "renderSize": [
+   390,
+   844
+  ],
+  "touch": true,
+  "scrollW": 390
+ },
+ "fallback": {
+  "h1": "Kush Modi",
+  "hero": true,
+  "note": "The 3D observatory needs WebGL, which is not available here. This is the text version.",
+  "heroLoaded": true,
+  "links": [
+   "https://github.com/Zenithquonta",
+   "https://www.linkedin.com/in/kush-modi-b85388311",
+   "mailto:kushmodi@gmail.com"
+  ],
+  "sections": [
+   "",
+   "Observatory",
+   "Flight deck",
+   "Fab lab",
+   "Mission log"
+  ]
+ },
+ "nojs": {
+  "visible": "static",
+  "canvas": "none",
+  "heroNoscript": true
+ }
+}
+PROBLEMS:
+assertion: walking resumes after modal

@@ -2,6 +2,7 @@
 // anywhere else can inject markup.
 import { fmtDec, fmtRa } from './ephemeris.js';
 import { cardinal } from './target.js';
+import { drawEyepiece } from './eyepiece.js';
 
 const $ = (id) => document.getElementById(id);
 const timeFormat = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
@@ -70,6 +71,12 @@ export class Hud {
   }
 
   showTelescope(target) {
+    $('eyepiece-title').textContent = target.name;
+    const status = target.daylight ? 'Daylight — return after dusk for tonight’s target.' : target.altitude <= 0 ? 'Below the horizon — the mount will continue tracking. Return when it rises.' : 'Tracking tonight’s object in the real Mumbai sky';
+    if ($('eyepiece-status').textContent !== status) $('eyepiece-status').textContent = status;
+    $('eyepiece-caption').textContent = 'Pixel-art illustration · not a live camera image';
+    $('eyepiece-canvas').setAttribute('aria-label', `${target.name} pixel-art illustration`);
+    drawEyepiece($('eyepiece-canvas'), target);
     const body = this.el.readoutBody;
     body.textContent = '';
     const rows = [

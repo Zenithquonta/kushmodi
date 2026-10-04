@@ -106,10 +106,10 @@ void main(){
     col += mw * grain * uMw * smoothstep(0.0, 0.08, d.y);
   }
   col += uFlash*vec3(0.45, 0.5, 0.65);
-  // ordered dither (4x4 Bayer) at 40 levels: banding without hue shifts, and a pixel-art texture
+  // Subtle display dither avoids banding without quantizing the sky.
   vec2 q = mod(floor(gl_FragCoord.xy), 4.0);
   float bayer = mod(q.x*4.0 + q.y*7.0 + floor(q.y/2.0)*5.0, 16.0)/16.0;
-  col = floor(col*40.0 + bayer)/40.0;
+  col += (bayer - 0.5) / 255.0;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -196,7 +196,7 @@ void main(){
   float n = fbm(vec3(p*1.7, 3.0));
   float th = mix(0.78, 0.32, uCover);
   float a = smoothstep(th, th + 0.18, n);
-  a = floor(a*4.0 + 0.5)/4.0 * smoothstep(0.0, 0.12, d.y) * min(1.0, 0.35 + uCover);
+  a = a * smoothstep(0.0, 0.12, d.y) * min(1.0, 0.35 + uCover);
   if (a < 0.02) discard;
   float shade = fbm(vec3(p*3.1, 9.0));
   vec3 col = mix(uShade, uColor, smoothstep(0.25, 0.7, shade));
@@ -245,7 +245,7 @@ export class Sky {
     this.buildRain();
     this.look = { zenith: [0, 0, 0], horizon: [0, 0, 0] };
     this.flash = 0;
-    this.linesWanted = true;
+    this.linesWanted = false;
     this.matrix4 = new THREE.Matrix4();
     this.tmp = new THREE.Vector3();
     this.limit = 5.6;
@@ -495,7 +495,7 @@ export class Sky {
     const sunAlt = state.sun.altitude, moonAlt = state.moon.altitude;
     const moonIllum = state.moon.illuminated;
     this.limit = limitingMagnitude(sunAlt, moonAlt, moonIllum, env);
-    this.starUniforms.uLimit.value = this.limit;
+    this.starUniforms.uLimit.value = this.limit + 1.8 * smooth(-8, -18, sunAlt) * (1 - env.cloud);
     this.starUniforms.uTwinkle.value = reduced ? 0 : 1;
     const dark = smooth(-6, -16, sunAlt);
     this.dark = dark;
@@ -508,9 +508,9 @@ export class Sky {
     u.uSunColor.value.set(1, lerp(0.95, 0.55, low), lerp(0.8, 0.28, low));
     u.uSunGlow.value = sunAlt > -8 ? smooth(-8, 0, sunAlt) * (1 - env.cloud * 0.6) : 0;
     u.uCity.value = env.urbanGlow * dark * (1 - env.cloud * 0.2) + env.urbanGlow * 0.1 * (1 - dark) * 0;
-    u.uMw.value = dark * (0.55 + 0.4 * env.nightVisibility) * (1 - Math.min(0.9, env.cloud * 0.9)) * (1 - moonIllum * Math.min(1, Math.max(0, moonAlt) / 30) * 0.55) * (1 - env.haze * 0.3);
+    u.uMw.value = 2.2 * dark * (0.55 + 0.4 * env.nightVisibility) * (1 - Math.min(0.9, env.cloud * 0.9)) * (1 - moonIllum * Math.min(1, Math.max(0, moonAlt) / 30) * 0.55) * (1 - env.haze * 0.3);
 
-    this.lineMaterial.opacity = this.linesWanted ? 0.22 * smooth(-6, -14, sunAlt) * (1 - env.cloud * 0.5) : 0;
+    this.lineMaterial.opacity = this.linesWanted ? 0.09 * smooth(-6, -14, sunAlt) * (1 - env.cloud * 0.5) : 0;
     this.lines.visible = this.lineMaterial.opacity > 0.005;
 
     const place = (mesh, w, distance = R * 0.97) => mesh.position.set(w[0] * distance, w[1] * distance, w[2] * distance);

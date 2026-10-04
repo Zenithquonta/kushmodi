@@ -93,7 +93,7 @@ export class Player {
       if (mouse) this.mouseDrag = null; else this.touchLook = null;
       if (e.type === 'pointerup' && drag.moved < 8) {
         this.onPick(e.clientX, e.clientY, this.locked);
-        if (mouse && !this.locked) { try { const p = canvas.requestPointerLock?.(); if (p && p.catch) p.catch(() => {}); } catch (err) { /* ignored */ } }
+        if (mouse && this.enabled && !this.locked) { try { const p = canvas.requestPointerLock?.(); if (p && p.catch) p.catch(() => {}); } catch (err) { /* ignored */ } }
       }
     };
     canvas.addEventListener('pointerup', up);

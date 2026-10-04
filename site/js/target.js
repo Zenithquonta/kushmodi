@@ -1,5 +1,5 @@
 // What the telescope points at, and the text the HUD shows about the sky. Pure functions (no DOM, no three.js).
-import { altAz, applyMatrix, eqjUnit } from './ephemeris.js';
+import { altAz, applyMatrix, eqjUnit, skyState } from './ephemeris.js';
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 export const cardinal = (az) => COMPASS[Math.round((((az % 360) + 360) % 360) / 45) % 8];
@@ -35,7 +35,39 @@ function starTarget(star, m) {
 }
 
 function bodyTarget(b, label) {
-  return { kind: 'body', name: label || b.name, raHours: b.raHours, decDeg: b.decDeg, altitude: b.altitude, azimuth: b.azimuth, magnitude: b.magnitude, world: b.world };
+  return { kind: 'body', name: label || b.name, raHours: b.raHours, decDeg: b.decDeg, altitude: b.altitude, azimuth: b.azimuth, magnitude: b.magnitude, world: b.world, illuminated: b.illuminated, phaseAngle: b.phaseAngle };
+}
+
+// An observing night runs noon-to-noon in Mumbai, so midnight does not change the target.
+export function observingNight(date) {
+  return new Date(date.getTime() + 5.5 * 3600000 - 12 * 3600000).toISOString().slice(0, 10);
+}
+
+export function nightlyTargetPicker(bright, observer) {
+  let key = '', chosen = null;
+  return (date, current) => {
+    const night = observingNight(date);
+    if (night !== key) {
+      key = night;
+      const reference = skyState(new Date(`${night}T21:00:00+05:30`), observer);
+      const late = skyState(new Date(`${night}T23:59:00+05:30`), observer);
+      // Pick objects usable throughout the main evening session. An object that
+      // eventually sets stays selected: its honest horizon status explains the wait.
+      const candidates = reference.planets.filter(p => p.altitude > 15 && late.planets.find(b => b.name === p.name).altitude > 15).map(p => ({name:p.name, kind:'body'}));
+      if (reference.moon.altitude > 15 && late.moon.altitude > 15 && reference.moon.illuminated > .1) candidates.push({name:'Moon',kind:'body'});
+      const stars = bright.list.filter(s => !s.name.startsWith('Star ') && starTarget(s, reference.matrix).altitude > 20 && starTarget(s, late.matrix).altitude > 20).sort((a,b) => a.mag-b.mag).slice(0,5);
+      candidates.push(...stars.map(s => ({name:s.name,kind:'star',star:s})));
+      if (!candidates.length) {
+        const fallback = bright.polaris || bright.list[0];
+        candidates.push({name:fallback.name,kind:'star',star:fallback});
+      }
+      let hash = 2166136261;
+      for (const c of night) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619) >>> 0;
+      chosen = candidates[hash % candidates.length];
+    }
+    const target = chosen.kind === 'star' ? starTarget(chosen.star, current.matrix) : bodyTarget(chosen.name === 'Moon' ? current.moon : current.planets.find(p => p.name === chosen.name), chosen.name);
+    return {...target, night:key, daylight:current.sun.altitude > -4};
+  };
 }
 
 // The highest of the Moon and the planets brighter than magnitude 3 above 5 degrees; otherwise the highest star

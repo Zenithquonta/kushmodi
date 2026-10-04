@@ -1,5 +1,7 @@
 # Kush Modi's Pixel Observatory — full implementation handoff
 
+**Latest resume point (2026-10-04):** the user requested stopping and preserving all current work on `wip/observatory-polish`. Read [docs/CONTINUE-PROMPT.md](docs/CONTINUE-PROMPT.md) first for the latest execution roles, real-sky-only requirement, remaining checks and reproducible local preview. Landscape and Altair eyepiece screenshots were independently reviewed; 25 website tests passed (1 Caddy skip) and the quality gate passed. The expanded browser run completed with one unresolved assertion failure, `walking resumes after modal`; the focused click/below-horizon run was stopped without a result. This branch is a continuation package, not an approved deployment. Original foliage source, optimized atlas, prompt provenance and modest review screenshots are included.
+
 This is a continuation package, not a request to start the design over. The user approved the illustrated direction and then the animation. The animated deliverable has been built, reviewed against rendered frames and a real browser, and refined (task records T00–T14 in `TASKS.md`). The user published the original package, and the reviewed refinements have been fast-forwarded to `main` (section 10). Read `TASKS.md` for what is still open.
 
 ![Approved concept](assets/approved-concept.png)
@@ -253,6 +255,16 @@ The endpoint is a verified, visually reviewed profile and complete handoff in th
 Once the VPS archive sync is installed, `main` receives one commit a day ("Archive YYYY-MM-DD", author
 "Observatory archive", only files under `archive/`). Always fetch and merge `origin/main` before pushing; never
 force-push or rewrite those commits. Do not edit `archive/` by hand: the VPS is its only writer.
+
+## Website visual refinement (2026-10-04)
+
+Local branch `wip/observatory-polish`, based on main `99427e0`. The current user requested a less low-poly website using the Git profile as reference. This overrides the earlier low-resolution website rendering direction for this pass.
+
+Implemented full-resolution antialiasing (bounded pixel ratio), smooth lit geometry, layered foliage, procedural ground grain, stone paths and observing terrace, workshop cladding and roof detail, amber path markers, subtle environment shadows, smoother clouds and a refined responsive HUD. Celestial coordinates, live feed, text content and controls remain in place. Constellations now start off and remain toggleable. The sky presentation exposes more catalog stars at night and strengthens the existing Milky Way.
+
+No backend, archive, README or image asset changes. This is a local reviewable change; not pushed or deployed. The old unfinished walkable-world branch is not merged. Runtime-specific model names in historical instructions were unavailable; implementation and review occurred in one session.
+
+Verification and caveats are recorded under WEBSITE-POLISH in TASKS.md. The local preview uses an empty live.json fixture and existing fallback artwork, so it exercises seasonal defaults rather than claiming current weather.
 
 ## Current state and resume point (updated 2026-10-02, end of session)
 

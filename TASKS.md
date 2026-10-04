@@ -751,3 +751,21 @@ Supervisor review: merged 712f601; full suite rerun -> exit 0, Ran 276 tests in 
   not yet verified (server).
 Decision: approve
 ```
+
+### WEBSITE-POLISH — Profile-inspired visual refinement (2026-10-04)
+
+- Request: make the website less low-poly and more polished, referencing the Git profile.
+- Implemented: antialiased full-resolution view with display-density cap; smooth standard materials and rounder cylinders; layered tree crowns; ground texture; meadow blades; terrace and paths; workshop details; warm markers; cool environment light and filtered shadows; smooth clouds; brighter catalog presentation; responsive HUD.
+- Browser verification: `node scripts/site_browser_check.mjs http://127.0.0.1:8099 ../../outputs/browser-check` -> exit 0. Night/day/dusk/mobile/telescope/fallback screenshots generated, no console warnings/errors, page errors, failed requests or HTTP failures. Desktop/day/mobile screenshots visually inspected. Mobile scroll width 390 at a 390px viewport; touch controls present. Text version and help buttons additionally checked in the app browser. Local server used the production CSP and seasonal-default live fixture, not live weather.
+- `python -m unittest discover -s scripts -p 'test_site.py'` -> exit 0, 24 tests, 1 skip (Caddy unavailable). Fixed the existing Node sky-math test's Windows path handling with file URI and POSIX paths.
+- `python scripts/quality_gate.py` -> exit 0; `git diff --check` -> exit 0.
+- Full Python suite attempted: after declared Python dependencies were installed, 95 tests collected, 8 failures/22 errors/1 skip. Environment blockers include missing Windows timezone data (subsequently installed), Unix-only fcntl, unavailable bash/WSL and Windows temporary Git cleanup permissions. Full suite is NOT certified. No backend or image asset changes; local default-scene string comparison did not establish parity, so no parity claim is made.
+- Delivery: local preview and ZIP; no push, merge or deployment. Repository-wide Linux verification remains required before release. Older unfinished walkable-world expansion is outside this visual-polish change.
+
+### WEBSITE-HABITAT — Stop and preserve continuation (2026-10-04)
+
+- User scope: a dense reference-inspired environment with only the real Mumbai sky, actual planet circles/name tags, and a usable telescope with one tracked object per observing night and pixel-art eyepiece illustrations. Current implementation is preserved on `wip/observatory-polish`; no main merge or VPS deployment is approved by this review.
+- Implemented: compact clearing and detailed habitat with foreground foliage/flowers, rock beds and gravel, maker workbench/signage/lights; planet coordinate guides with toggle/occlusion and faint-object descriptor; noon-to-noon IST target stability; eyepiece rendering/status and modal focus/inertness/close controls. Original foliage source and complete prompt retained; no illustrated sky asset or alternate sky mode shipped.
+- Verified: 25 website tests OK, 1 Caddy skip; quality gate passed; diff check passed. New target tests cover midnight/reload stability, actual coordinate changes, varied successive nights, never Sun and usable evening targets. Night landscape and Altair eyepiece received independent visual approval; screenshots/report retained under `docs/review/`.
+- Expanded browser run completed with one failure: `assertion: walking resumes after modal`. Cause unresolved; investigate before approval. Other assertions did not report failures. Focused click/below-horizon test stopped at user request before result. Added real Oct5 Saturn capture remains unrun. The new checked-in local preview helper is preserved but was not launched after the stop request.
+- Stop requested to conserve tokens. No further features/tests/captures were pursued. Latest role instructions and strict remaining order are in `docs/CONTINUE-PROMPT.md`. Existing full-backend Windows limitations remain; renderer and archive code were not changed.

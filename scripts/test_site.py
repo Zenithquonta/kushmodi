@@ -313,6 +313,35 @@ class Fallback(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which('node'), 'node is not installed')
 class SkyMath(unittest.TestCase):
+    def test_nightly_target_is_stable_and_tracks_real_coordinates(self):
+        script = '''
+import fs from "node:fs";
+import {makeObserver, skyState} from "%s/site/js/ephemeris.js";
+import {brightStars, nightlyTargetPicker, observingNight} from "%s/site/js/target.js";
+const obs=makeObserver(JSON.parse(fs.readFileSync("%s/site/data/site.json")));
+const bright=brightStars(JSON.parse(fs.readFileSync("%s/site/data/stars.json")));
+const picker=nightlyTargetPicker(bright,obs);
+const at=iso=>{const d=new Date(iso);return picker(d,skyState(d,obs));};
+const evening=at("2026-10-04T21:00:00+05:30"), midnight=at("2026-10-05T00:30:00+05:30");
+const reloaded=nightlyTargetPicker(bright,obs)(new Date("2026-10-05T00:30:00+05:30"),skyState(new Date("2026-10-05T00:30:00+05:30"),obs));
+const nights=Array.from({length:14},(_,i)=>at(`2026-10-${String(i+4).padStart(2,'0')}T23:30:00+05:30`));
+const day=at("2026-10-04T13:00:00+05:30");
+console.log(JSON.stringify({evening,midnight,reloaded,nights,day,key:observingNight(new Date("2026-10-05T11:59:00+05:30")),nextKey:observingNight(new Date("2026-10-05T12:00:00+05:30"))}));
+''' % (ROOT.as_uri(), ROOT.as_uri(), ROOT.as_posix(), ROOT.as_posix())
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'nightly.mjs'
+            path.write_text(script)
+            result = subprocess.run(['node', str(path)], capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout.strip().splitlines()[-1])
+        self.assertEqual(data['evening']['name'], data['midnight']['name'])
+        self.assertEqual(data['midnight']['name'], data['reloaded']['name'])
+        self.assertNotEqual(data['evening']['azimuth'], data['midnight']['azimuth'])
+        self.assertEqual((data['key'], data['nextKey']), ('2026-10-04', '2026-10-05'))
+        self.assertGreater(len({t['name'] for t in data['nights']}), 1)
+        self.assertTrue(all(t['name'] != 'Sun' and t['altitude'] > 0 and not t['daylight'] for t in data['nights']))
+        self.assertTrue(data['day']['daylight'])
+
     def test_polaris_and_saturn_match_the_renderers_numbers(self):
         script = '''
 import * as e from "%s/site/js/ephemeris.js";
@@ -326,7 +355,7 @@ const w = e.applyMatrix(s.matrix, ...e.eqjUnit(p[0], p[1]));
 const polaris = e.altAz(w);
 const trails = e.bodyTrails(new Date("2026-10-04T18:00:00Z"), obs, ["Saturn"], 60, 30);
 console.log(JSON.stringify({ saturn: s.planets.find((x) => x.name === "Saturn"), polaris, trail: Array.from(trails[0]) }));
-''' % (ROOT, ROOT, ROOT)
+''' % (ROOT.as_uri(), ROOT.as_posix(), ROOT.as_posix())
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)/'check.mjs'
             path.write_text(script)

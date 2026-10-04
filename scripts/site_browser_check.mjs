@@ -13,6 +13,7 @@ fs.mkdirSync(out, { recursive: true });
 const NIGHT = '2026-10-04T23:30:00%2B05:30', SATURN = '2026-10-05T00:30:00%2B05:30', DAY = '2026-10-04T12:00:00%2B05:30';
 const problems = [];
 const report = {};
+function check(value, description) { if (!value) problems.push(`assertion: ${description}`); }
 
 const browser = await chromium.launch({
   args: ['--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'],
@@ -47,6 +48,8 @@ const desktop = { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 }
     weather: document.getElementById('hud-weather').textContent,
   }));
   await page.screenshot({ path: `${out}/site-night.png` });
+  await page.keyboard.press('KeyE');
+  check(await page.locator('#readout').isHidden(), 'telescope requires proximity');
   // click the telescope: the readout appears with RA/Dec/alt/az
   await page.evaluate(() => window.__obs.setPosition(-3, 4));
   await page.evaluate(() => window.__obs.setView(-58, 8));
@@ -54,14 +57,45 @@ const desktop = { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 }
   await page.keyboard.press('KeyE');
   await page.waitForTimeout(400);
   report.readout = await page.evaluate(() => document.getElementById('readout').hidden ? null : document.getElementById('readout-body').textContent);
+  check(!!report.readout, 'E opens nearby telescope');
+  report.eyepiece = await page.evaluate(() => {
+    const pixels=document.getElementById('eyepiece-canvas').getContext('2d').getImageData(0,0,192,192).data;
+    let lit=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i]+pixels[i+1]+pixels[i+2]>100)lit++;
+    return {lit,status:document.getElementById('eyepiece-status').textContent,inert:document.getElementById('view').inert};
+  });
+  check(report.eyepiece.lit > 100, 'visible nightly object has a pixel-art eyepiece');
+  check(report.eyepiece.inert, 'modal makes background inert');
+  await page.keyboard.press('Tab');
+  check(await page.evaluate(()=>document.activeElement.id==='btn-close-eyepiece'), 'modal traps keyboard focus');
+  const paused=await page.evaluate(()=>window.__obs.position);
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(250); await page.keyboard.up('KeyW');
+  check(await page.evaluate(p=>Math.hypot(window.__obs.position.x-p.x,window.__obs.position.z-p.z)<.01,paused), 'walking pauses in eyepiece');
   await page.screenshot({ path: `${out}/site-telescope.png` });
+  await page.keyboard.press('KeyE');
+  check(await page.locator('#readout').isHidden(), 'E closes eyepiece');
+  await page.locator('#btn-telescope').click();
+  await page.keyboard.press('Escape');
+  check(await page.locator('#readout').isHidden(), 'Escape returns to world');
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(250); await page.keyboard.up('KeyW');
+  check(await page.evaluate(p=>Math.hypot(window.__obs.position.x-p.x,window.__obs.position.z-p.z)>.05,paused), 'walking resumes after modal');
+  await page.locator('#btn-telescope').click();
+  await page.locator('#btn-close-eyepiece').click();
+  check(await page.locator('#readout').isHidden(), 'close button returns to world');
   await context.close();
 }
 // 2. Saturn near 00:30 IST on 5 October: due south, high up
 {
   const { context, page } = await open('saturn', desktop, `?time=${SATURN}&heading=180&pitch=55`);
   report.saturn = await page.evaluate(() => ({ saturn: window.__obs.body('Saturn'), target: window.__obs.target }));
+  report.guides = await page.evaluate(()=>[...document.querySelectorAll('.planet-guide')].filter(n=>!n.hidden).map(n=>({name:n.querySelector('.planet-tag').textContent,x:parseFloat(n.style.left),y:parseFloat(n.style.top)})));
+  const saturnGuide=report.guides.find(g=>g.name==='Saturn');
+  check(saturnGuide && Math.hypot(saturnGuide.x-report.saturn.saturn.screen.x,saturnGuide.y-report.saturn.saturn.screen.y)<2,'planet ring follows real body projection');
   await page.screenshot({ path: `${out}/site-saturn.png` });
+  await page.locator('#btn-guides').click();
+  check(await page.locator('#planet-guides').isHidden(),'guide toggle hides rings');
+  await page.locator('#btn-guides').click();
+  await page.evaluate(()=>window.__obs.setView(0,9));await page.waitForTimeout(500);
+  check(await page.evaluate(()=>[...document.querySelectorAll('.planet-guide')].every(n=>n.hidden)),'offscreen planets have no rings');
   await context.close();
 }
 // 2b. night looking south-east: Saturn and its three-hour trail
@@ -76,6 +110,9 @@ const desktop = { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 }
   const { context, page } = await open('day', desktop, `?time=${DAY}&heading=20`);
   report.day = await page.evaluate(() => ({ sun: window.__obs.body('Sun'), calls: window.__obs.calls, sky: [...document.querySelectorAll('#hud-sky li')].map((l) => l.textContent) }));
   await page.screenshot({ path: `${out}/site-day.png` });
+  await page.evaluate(()=>window.__obs.setPosition(-3,4));await page.waitForTimeout(300);
+  await page.locator('#btn-telescope').click();
+  check((await page.locator('#eyepiece-status').textContent()).includes('Daylight'),'daylight telescope status is explicit');
   await context.close();
 }
 // 4. phone, with touch
@@ -83,6 +120,13 @@ const desktop = { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 }
   const { context, page } = await open('mobile', { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true }, `?time=${NIGHT}`);
   report.mobile = await page.evaluate(() => ({ pixelRatio: window.__obs.pixelRatio, renderSize: window.__obs.renderSize, touch: document.documentElement.classList.contains('touch'), scrollW: document.documentElement.scrollWidth }));
   await page.screenshot({ path: `${out}/site-mobile.png` });
+  await page.evaluate(()=>window.__obs.setPosition(-3,4));await page.waitForTimeout(350);
+  await page.locator('#btn-telescope').click();
+  check(await page.locator('#readout').isVisible(),'mobile telescope button opens eyepiece');
+  check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'mobile modal has no horizontal overflow');
+  await page.screenshot({path:`${out}/site-mobile-eyepiece.png`});
+  await page.locator('#btn-close-eyepiece').click();
+  check(await page.locator('#readout').isHidden(),'mobile close button works');
   await context.close();
 }
 // 5. golden hour, mid-morning haze: another sky colour
