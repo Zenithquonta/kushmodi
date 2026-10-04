@@ -18,14 +18,14 @@ export const WALK_RADIUS = 70;        // soft boundary (fence)
 export const FAR = 2600;
 
 export const LOCATIONS = [
-  { id: 'profile', name: 'Start camp', x: 0, z: 28, r: 9, ground: '#7d6a48' },
+  { id: 'profile', name: 'Start camp', x: 0, z: 28, r: 8, ground: '#7d6a48' },
   { id: 'workshop', name: 'Engineering workshop', x: 0, z: 2, r: 11, ground: '#7a6f58' },
   { id: 'robotics', name: 'Robotics field', x: -36, z: 4, r: 14, ground: '#8a7048' },
   { id: 'uav', name: 'UAV / NETRA test field', x: 36, z: 4, r: 15, ground: '#8f8a60' },
   { id: 'research', name: 'Research lab', x: 0, z: -26, r: 9, ground: '#6e6a58' },
   { id: 'observatory', name: 'Observatory', x: 0, z: -48, r: 12, ground: '#6a6e70' },
 ];
-export const CENTRE = { id: 'hub', name: 'Crossroads', x: 0, z: 17, r: 5 };
+export const CENTRE = { id: 'hub', name: 'Crossroads', x: 0, z: 17, r: 4 };
 export const SPAWN = { x: 0, z: 40 };
 
 const byId = Object.fromEntries(LOCATIONS.map((l) => [l.id, l]));
